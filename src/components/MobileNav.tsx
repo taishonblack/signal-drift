@@ -33,9 +33,9 @@ const MobileNav = () => {
       {/* Mobile top header */}
       <header className="flex md:hidden items-center justify-between h-12 px-4 border-b border-border/20">
         <button
-          onClick={() => (isHome ? null : navigate("/"))}
+          onClick={() => navigate("/")}
           className="flex items-center gap-1.5 transition-colors"
-          aria-label={isHome ? "MAKO home" : "Back to Sessions"}
+          aria-label="Go to Home"
         >
           {isHome || !isDeepPage ? (
             <MakoFinMark
