@@ -1,5 +1,7 @@
-import { Monitor, Plus, LogIn, Settings, LayoutDashboard } from "lucide-react";
+import { Plus, LogIn, Settings, LayoutDashboard } from "lucide-react";
+import { Link } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
+import MakoFinMark from "@/components/MakoFinMark";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
   Sidebar,
@@ -24,14 +26,20 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="border-r-0 mako-glass-solid" collapsible="icon">
-      <div className="flex items-center gap-2 px-4 py-4">
-        <Monitor className="h-5 w-5 text-primary shrink-0" />
+      <Link
+        to="/sessions"
+        className="flex items-center gap-2.5 px-4 py-4 group"
+      >
+        <MakoFinMark
+          size={22}
+          className="text-[rgba(230,246,255,0.85)] transition-colors group-hover:text-[hsl(var(--primary))]"
+        />
         {!collapsed && (
           <span className="text-sm font-semibold tracking-[0.15em] uppercase text-foreground">
             MAKO
           </span>
         )}
-      </div>
+      </Link>
 
       <SidebarContent>
         <SidebarGroup>
