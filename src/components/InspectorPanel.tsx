@@ -1,17 +1,19 @@
 import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import { generateMetricHistory, type StreamInput } from "@/lib/mock-data";
+import type { LiveMetrics } from "@/hooks/use-live-metrics";
 
 interface InspectorPanelProps {
   input: StreamInput;
   inputs: StreamInput[];
   selectedId: string;
   onSelect: (id: string) => void;
+  liveMetrics?: LiveMetrics;
 }
 
 const metricHistory = generateMetricHistory();
 
-const InspectorPanel = ({ input, inputs, selectedId, onSelect }: InspectorPanelProps) => {
-  const m = input.metrics;
+const InspectorPanel = ({ input, inputs, selectedId, onSelect, liveMetrics }: InspectorPanelProps) => {
+  const m = liveMetrics ?? input.metrics;
 
   return (
     <div className="w-72 shrink-0 mako-glass-solid rounded-lg p-4 space-y-4 overflow-auto hidden lg:block">
@@ -34,14 +36,14 @@ const InspectorPanel = ({ input, inputs, selectedId, onSelect }: InspectorPanelP
 
       {/* Codec / format */}
       <div className="grid grid-cols-2 gap-3 text-xs">
-        <MetricItem label="Codec" value={m.codec} />
-        <MetricItem label="Resolution" value={m.resolution} />
-        <MetricItem label="Frame Rate" value={`${m.fps} fps`} />
+        <MetricItem label="Codec" value={input.metrics.codec} />
+        <MetricItem label="Resolution" value={input.metrics.resolution} />
+        <MetricItem label="Frame Rate" value={`${input.metrics.fps} fps`} />
         <MetricItem label="Bitrate" value={`${m.bitrate.toFixed(1)} Mbps`} />
-        <MetricItem label="Packet Loss" value={`${m.packetLoss}%`} warn={m.packetLoss > 1} />
-        <MetricItem label="RTT" value={`${m.rtt} ms`} warn={m.rtt > 60} />
-        <MetricItem label="Audio" value={`${m.audioChannels}ch ${m.audioSampleRate / 1000}kHz`} />
-        <MetricItem label="Loudness" value={`${m.lufs} LUFS`} />
+        <MetricItem label="Packet Loss" value={`${m.packetLoss.toFixed(2)}%`} warn={m.packetLoss > 1} />
+        <MetricItem label="RTT" value={`${m.rtt.toFixed(0)} ms`} warn={m.rtt > 60} />
+        <MetricItem label="Audio" value={`${input.metrics.audioChannels}ch ${input.metrics.audioSampleRate / 1000}kHz`} />
+        <MetricItem label="Loudness" value={`${m.lufs.toFixed(1)} LUFS`} />
       </div>
 
       {/* Mini charts */}
@@ -57,7 +59,7 @@ const InspectorPanel = ({ input, inputs, selectedId, onSelect }: InspectorPanelP
 const MetricItem = ({ label, value, warn }: { label: string; value: string; warn?: boolean }) => (
   <div>
     <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</div>
-    <div className={`font-medium ${warn ? "text-warning" : "text-foreground"}`}>{value}</div>
+    <div className={`font-medium font-mono ${warn ? "text-warning" : "text-foreground"}`}>{value}</div>
   </div>
 );
 
