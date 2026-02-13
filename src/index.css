@@ -2,95 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* MAKO is dark-only — define everything here */
+    --background: 210 50% 3.5%;
+    --foreground: 200 60% 94%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 205 55% 7%;
+    --card-foreground: 200 60% 94%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 205 55% 7%;
+    --popover-foreground: 200 60% 94%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 195 100% 50%;
+    --primary-foreground: 210 50% 3.5%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 200 40% 10%;
+    --secondary-foreground: 200 40% 80%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 200 25% 12%;
+    --muted-foreground: 200 25% 50%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 200 40% 10%;
+    --accent-foreground: 200 60% 94%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 200 60% 94%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --warning: 37 91% 55%;
+
+    --border: 200 30% 12%;
+    --input: 200 30% 14%;
+    --ring: 195 100% 50%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
+    --sidebar-background: 205 55% 5%;
+    --sidebar-foreground: 200 40% 80%;
+    --sidebar-primary: 195 100% 50%;
+    --sidebar-primary-foreground: 210 50% 3.5%;
+    --sidebar-accent: 200 30% 10%;
+    --sidebar-accent-foreground: 200 60% 94%;
+    --sidebar-border: 200 20% 10%;
+    --sidebar-ring: 195 100% 50%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* MAKO custom tokens */
+    --mako-deep: 205 55% 4%;
+    --mako-layer: 205 55% 7%;
+    --mako-surface: 205 50% 9%;
+    --mako-signal: 195 100% 50%;
+    --mako-signal-soft: 198 100% 53%;
+    --mako-text-primary: 200 60% 94%;
+    --mako-text-secondary: 200 30% 70%;
+    --mako-text-muted: 200 20% 47%;
+    --mako-glass-bg: 205 55% 8%;
+    --mako-glass-border: 200 30% 20%;
   }
 }
 
@@ -100,6 +66,79 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
+}
+
+/* MAKO Glass Panel */
+.mako-glass {
+  background: hsla(205, 55%, 8%, 0.75);
+  backdrop-filter: blur(16px);
+  border: 1px solid hsla(200, 30%, 100%, 0.04);
+  box-shadow: 0 0 0 1px hsla(195, 100%, 50%, 0.05) inset;
+}
+
+.mako-glass-solid {
+  background: hsla(205, 55%, 8%, 0.82);
+  backdrop-filter: blur(18px);
+  border: 1px solid hsla(200, 30%, 100%, 0.035);
+}
+
+/* Ambient light streak animation */
+@keyframes light-streak {
+  0% { transform: translateX(-100%); opacity: 0; }
+  20% { opacity: 0.06; }
+  80% { opacity: 0.06; }
+  100% { transform: translateX(200%); opacity: 0; }
+}
+
+@keyframes subtle-pulse {
+  0%, 100% { opacity: 0.04; }
+  50% { opacity: 0.08; }
+}
+
+.mako-streak {
+  animation: light-streak 20s linear infinite;
+}
+
+.mako-pulse {
+  animation: subtle-pulse 8s ease-in-out infinite;
+}
+
+/* Signal accent lines */
+.signal-line-live {
+  border-top: 2px solid hsl(195, 100%, 50%);
+}
+
+.signal-line-warning {
+  border-top: 2px solid hsl(37, 91%, 55%);
+}
+
+.signal-line-error {
+  border-top: 2px solid hsl(0, 72%, 51%);
+}
+
+/* Vignette overlay */
+.mako-vignette {
+  box-shadow: inset 0 0 120px 40px hsla(210, 50%, 3.5%, 0.5);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsla(200, 30%, 30%, 0.4);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsla(200, 30%, 40%, 0.6);
 }
