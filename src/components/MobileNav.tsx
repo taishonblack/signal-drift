@@ -7,7 +7,7 @@ const items = [
   { title: "Sessions", url: "/sessions", icon: LayoutDashboard },
   { title: "Create", url: "/create", icon: Plus },
   { title: "Join", url: "/join", icon: LogIn },
-  { title: "Settings", url: "/settings", icon: Settings },
+  { title: "Account", url: "/account", icon: Settings },
 ];
 
 /** Derive a short page title from the current path */
@@ -15,7 +15,7 @@ const pageTitles: Record<string, string> = {
   "/sessions": "Sessions",
   "/create": "Create",
   "/join": "Join",
-  "/settings": "Settings",
+  "/account": "Account",
 };
 
 const MobileNav = () => {
@@ -30,7 +30,7 @@ const MobileNav = () => {
       {/* Mobile top header */}
       <header className="flex md:hidden items-center justify-between h-12 px-4 border-b border-border/20">
         <button
-          onClick={() => (isHome ? null : navigate("/sessions"))}
+          onClick={() => (isHome ? null : navigate("/"))}
           className="flex items-center gap-1.5 transition-colors"
           aria-label={isHome ? "MAKO home" : "Back to Sessions"}
         >

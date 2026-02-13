@@ -8,7 +8,7 @@ import Sessions from "./pages/Sessions";
 import CreateSession from "./pages/CreateSession";
 import SessionRoom from "./pages/SessionRoom";
 import JoinSession from "./pages/JoinSession";
-import SettingsPage from "./pages/SettingsPage";
+import AccountPage from "./pages/AccountPage";
 import AppLayout from "./components/AppLayout";
 import NotFound from "./pages/NotFound";
 
@@ -29,7 +29,7 @@ const App = () => (
           <Route path="/create" element={<AppLayout><CreateSession /></AppLayout>} />
           <Route path="/session/:id" element={<AppLayout><SessionRoom /></AppLayout>} />
           <Route path="/join" element={<AppLayout><JoinSession /></AppLayout>} />
-          <Route path="/settings" element={<AppLayout><SettingsPage /></AppLayout>} />
+          <Route path="/account" element={<AppLayout><AccountPage /></AppLayout>} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>
