@@ -41,15 +41,36 @@ const SessionRoom = () => {
   const activeInputs = session.inputs.filter((i) => i.enabled);
   const { metrics, getMetrics } = useLiveMetrics(session.inputs);
 
-  // ESC to exit fullscreen
+  // Keyboard shortcuts: ESC fullscreen, 1-4 Program, Shift+1-4 Preview
   useEffect(() => {
-    if (!fullscreenId) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setFullscreenId(null);
+      if (e.key === "Escape" && fullscreenId) {
+        setFullscreenId(null);
+        return;
+      }
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= 4) {
+        const input = activeInputs[num - 1];
+        if (!input) return;
+        if (e.shiftKey) {
+          // Shift+N → set Preview
+          setTallyMap((prev) => ({ ...prev, [input.id]: prev[input.id] === "preview" ? "none" : "preview" }));
+        } else {
+          // N → set Program (exclusive)
+          setTallyMap((prev) => {
+            const cleaned: Record<string, TallyState> = {};
+            for (const [k, v] of Object.entries(prev)) {
+              cleaned[k] = v === "program" ? "preview" : v;
+            }
+            cleaned[input.id] = prev[input.id] === "program" ? "none" : "program";
+            return cleaned;
+          });
+        }
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [fullscreenId]);
+  }, [fullscreenId, activeInputs]);
 
   const addMarker = () => {
     if (!markerNote.trim()) return;
