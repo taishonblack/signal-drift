@@ -1,7 +1,8 @@
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
-import { LayoutDashboard, Plus, LogIn, Settings, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, Plus, LogIn, Settings, ArrowLeft, User } from "lucide-react";
 import MakoFinMark from "@/components/MakoFinMark";
+import { useAuth } from "@/hooks/useAuth";
 
 const items = [
   { title: "Sessions", url: "/sessions", icon: LayoutDashboard },
@@ -19,11 +20,13 @@ const pageTitles: Record<string, string> = {
 };
 
 const MobileNav = () => {
+  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const isHome = location.pathname === "/" || location.pathname === "/sessions";
   const pageTitle = pageTitles[location.pathname] || "";
   const isDeepPage = !isHome && !pageTitle;
+  const initials = user?.email?.slice(0, 2).toUpperCase() ?? "";
 
   return (
     <>
@@ -46,8 +49,9 @@ const MobileNav = () => {
         <span className="text-xs font-medium text-foreground tracking-wide uppercase">
           {isDeepPage ? "" : pageTitle || "Sessions"}
         </span>
-        {/* Placeholder for account icon slot */}
-        <div className="w-5" />
+        <Link to="/account" className="flex items-center justify-center h-6 w-6 rounded-full bg-primary/20 text-primary text-[10px] font-semibold">
+          {user ? initials : <User className="h-3.5 w-3.5 text-muted-foreground" />}
+        </Link>
       </header>
 
       {/* Bottom tab bar */}
