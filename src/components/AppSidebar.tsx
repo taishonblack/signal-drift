@@ -17,7 +17,7 @@ const navItems = [
   { title: "Sessions", url: "/sessions", icon: LayoutDashboard },
   { title: "Create", url: "/create", icon: Plus },
   { title: "Join", url: "/join", icon: LogIn },
-  { title: "Settings", url: "/settings", icon: Settings },
+  { title: "Account", url: "/account", icon: Settings },
 ];
 
 export function AppSidebar() {
@@ -27,7 +27,7 @@ export function AppSidebar() {
   return (
     <Sidebar className="border-r-0 mako-glass-solid" collapsible="icon">
       <Link
-        to="/sessions"
+        to="/"
         className="flex items-center gap-2.5 px-4 py-4 group"
       >
         <MakoFinMark
