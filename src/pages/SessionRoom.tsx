@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import SignalTile from "@/components/SignalTile";
 import InspectorPanel from "@/components/InspectorPanel";
 import { mockSessions, mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
+import { useLiveMetrics } from "@/hooks/use-live-metrics";
 import { toast } from "@/hooks/use-toast";
 
 type Layout = "1" | "2" | "3" | "4";
@@ -30,16 +31,13 @@ const SessionRoom = () => {
   const [markers, setMarkers] = useState<QCMarker[]>(mockMarkers);
   const [markerNote, setMarkerNote] = useState("");
   const [selectedInput, setSelectedInput] = useState(session.inputs[0]?.id);
-
-  // Fullscreen state
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
-
-  // Edit SRT modal state
   const [editInput, setEditInput] = useState<StreamInput | null>(null);
   const [editAddress, setEditAddress] = useState("");
   const [editPassphrase, setEditPassphrase] = useState("");
 
   const activeInputs = session.inputs.filter((i) => i.enabled);
+  const { metrics, getMetrics } = useLiveMetrics(session.inputs);
 
   // ESC to exit fullscreen
   useEffect(() => {
@@ -77,11 +75,7 @@ const SessionRoom = () => {
 
   const applyEdit = () => {
     if (!editInput) return;
-    // In mock mode, just show toast — real backend would restart that line
-    toast({
-      title: `${editInput.label} updated`,
-      description: "Reconnecting with new SRT address...",
-    });
+    toast({ title: `${editInput.label} updated`, description: "Reconnecting with new SRT address..." });
     setEditInput(null);
   };
 
@@ -93,6 +87,7 @@ const SessionRoom = () => {
   };
 
   const fullscreenInput = fullscreenId ? activeInputs.find((i) => i.id === fullscreenId) : null;
+  const fullscreenLive = fullscreenId ? getMetrics(fullscreenId) : undefined;
 
   return (
     <>
@@ -100,18 +95,14 @@ const SessionRoom = () => {
       {fullscreenInput && (
         <div className="fixed inset-0 z-50 bg-background flex flex-col">
           <div className="absolute top-4 right-4 z-10">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setFullscreenId(null)}
-              className="h-9 w-9 bg-background/60 hover:bg-background/80 text-foreground"
-            >
+            <Button variant="ghost" size="icon" onClick={() => setFullscreenId(null)} className="h-9 w-9 bg-background/60 hover:bg-background/80 text-foreground">
               <X className="h-4 w-4" />
             </Button>
           </div>
           <div className="flex-1 p-4">
             <SignalTile
               input={fullscreenInput}
+              liveMetrics={fullscreenLive}
               isAudioSource={audioSource === fullscreenInput.id}
               onSelectAudio={() => setAudioSource(fullscreenInput.id)}
               onEdit={() => openEdit(fullscreenInput)}
@@ -119,8 +110,8 @@ const SessionRoom = () => {
             />
           </div>
           <div className="px-4 pb-4 flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">
-              {fullscreenInput.label} · {fullscreenInput.metrics.bitrate.toFixed(1)} Mbps · {fullscreenInput.metrics.packetLoss}% loss
+            <span className="text-xs text-muted-foreground font-mono">
+              {fullscreenInput.label} · {(fullscreenLive?.bitrate ?? fullscreenInput.metrics.bitrate).toFixed(1)} Mbps · {(fullscreenLive?.packetLoss ?? fullscreenInput.metrics.packetLoss).toFixed(2)}% loss · RTT {(fullscreenLive?.rtt ?? fullscreenInput.metrics.rtt).toFixed(0)}ms
             </span>
             <span className="text-[10px] text-muted-foreground/50">Press ESC to exit</span>
           </div>
@@ -131,29 +122,16 @@ const SessionRoom = () => {
       <Dialog open={!!editInput} onOpenChange={(open) => !open && setEditInput(null)}>
         <DialogContent className="mako-glass-solid border-border/20 sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-foreground text-sm">
-              Edit Input — {editInput?.label}
-            </DialogTitle>
+            <DialogTitle className="text-foreground text-sm">Edit Input — {editInput?.label}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1">
               <label className="text-[10px] uppercase tracking-wider text-muted-foreground">SRT Address</label>
-              <Input
-                value={editAddress}
-                onChange={(e) => setEditAddress(e.target.value)}
-                placeholder="srt://ip:port?mode=caller"
-                className="bg-muted/20 border-border/20 text-sm text-foreground placeholder:text-muted-foreground/40"
-              />
+              <Input value={editAddress} onChange={(e) => setEditAddress(e.target.value)} placeholder="srt://ip:port?mode=caller" className="bg-muted/20 border-border/20 text-sm text-foreground placeholder:text-muted-foreground/40" />
             </div>
             <div className="space-y-1">
               <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Passphrase</label>
-              <Input
-                type="password"
-                value={editPassphrase}
-                onChange={(e) => setEditPassphrase(e.target.value)}
-                placeholder="Optional"
-                className="bg-muted/20 border-border/20 text-sm text-foreground placeholder:text-muted-foreground/40"
-              />
+              <Input type="password" value={editPassphrase} onChange={(e) => setEditPassphrase(e.target.value)} placeholder="Optional" className="bg-muted/20 border-border/20 text-sm text-foreground placeholder:text-muted-foreground/40" />
             </div>
             <div className="flex gap-2 justify-end">
               <Button variant="ghost" size="sm" onClick={() => setEditInput(null)}>Cancel</Button>
@@ -173,25 +151,16 @@ const SessionRoom = () => {
               {session.status === "live" ? "LIVE" : "ENDED"}
             </span>
           </div>
-
           <div className="flex items-center gap-1">
             {(Object.keys(layoutIcons) as Layout[]).map((l) => {
               const Icon = layoutIcons[l];
               return (
-                <Button
-                  key={l}
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setLayout(l)}
-                  className={`h-8 w-8 ${layout === l ? "text-primary bg-muted/30" : "text-muted-foreground"}`}
-                >
+                <Button key={l} variant="ghost" size="icon" onClick={() => setLayout(l)} className={`h-8 w-8 ${layout === l ? "text-primary bg-muted/30" : "text-muted-foreground"}`}>
                   <Icon className="h-3.5 w-3.5" />
                 </Button>
               );
             })}
-
             <div className="w-px h-5 bg-border/30 mx-1" />
-
             <Button variant="ghost" size="icon" onClick={() => setShowNotes(!showNotes)} className="h-8 w-8 text-muted-foreground hover:text-foreground">
               <FileText className="h-3.5 w-3.5" />
             </Button>
@@ -212,6 +181,7 @@ const SessionRoom = () => {
                 <div className="col-span-2 row-span-1">
                   <SignalTile
                     input={activeInputs[0]}
+                    liveMetrics={getMetrics(activeInputs[0]?.id)}
                     isAudioSource={audioSource === activeInputs[0]?.id}
                     onSelectAudio={() => setAudioSource(activeInputs[0]?.id)}
                     onFullscreen={() => setFullscreenId(activeInputs[0]?.id)}
@@ -222,6 +192,7 @@ const SessionRoom = () => {
                   <SignalTile
                     key={input.id}
                     input={input}
+                    liveMetrics={getMetrics(input.id)}
                     isAudioSource={audioSource === input.id}
                     onSelectAudio={() => setAudioSource(input.id)}
                     onFullscreen={() => setFullscreenId(input.id)}
@@ -234,6 +205,7 @@ const SessionRoom = () => {
                 <SignalTile
                   key={input.id}
                   input={input}
+                  liveMetrics={getMetrics(input.id)}
                   isAudioSource={audioSource === input.id}
                   onSelectAudio={() => setAudioSource(input.id)}
                   onFullscreen={() => setFullscreenId(input.id)}
@@ -249,6 +221,7 @@ const SessionRoom = () => {
               inputs={session.inputs}
               selectedId={selectedInput}
               onSelect={setSelectedInput}
+              liveMetrics={getMetrics(selectedInput)}
             />
           )}
         </div>
@@ -259,20 +232,9 @@ const SessionRoom = () => {
             <div className="flex items-center justify-between">
               <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">QC Notes</span>
             </div>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Shared session notes..."
-              className="bg-muted/20 border-border/20 text-sm min-h-[60px] text-foreground placeholder:text-muted-foreground/40"
-            />
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Shared session notes..." className="bg-muted/20 border-border/20 text-sm min-h-[60px] text-foreground placeholder:text-muted-foreground/40" />
             <div className="flex gap-2">
-              <Input
-                value={markerNote}
-                onChange={(e) => setMarkerNote(e.target.value)}
-                placeholder="Add QC marker..."
-                className="bg-muted/20 border-border/20 text-sm text-foreground placeholder:text-muted-foreground/40"
-                onKeyDown={(e) => e.key === "Enter" && addMarker()}
-              />
+              <Input value={markerNote} onChange={(e) => setMarkerNote(e.target.value)} placeholder="Add QC marker..." className="bg-muted/20 border-border/20 text-sm text-foreground placeholder:text-muted-foreground/40" onKeyDown={(e) => e.key === "Enter" && addMarker()} />
               <Button size="sm" onClick={addMarker} className="shrink-0">Mark</Button>
             </div>
             <div className="space-y-1">

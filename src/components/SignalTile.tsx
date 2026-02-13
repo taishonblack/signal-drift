@@ -1,6 +1,7 @@
 import { Maximize2, Edit3, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { StreamInput } from "@/lib/mock-data";
+import type { LiveMetrics } from "@/hooks/use-live-metrics";
 
 const statusAccent: Record<string, string> = {
   live: "signal-line-live",
@@ -20,6 +21,7 @@ const statusBadge: Record<string, { label: string; cls: string }> = {
 
 interface SignalTileProps {
   input: StreamInput;
+  liveMetrics?: LiveMetrics;
   isAudioSource?: boolean;
   isFullscreen?: boolean;
   onFullscreen?: () => void;
@@ -27,8 +29,35 @@ interface SignalTileProps {
   onSelectAudio?: () => void;
 }
 
-const SignalTile = ({ input, isAudioSource, isFullscreen, onFullscreen, onEdit, onSelectAudio }: SignalTileProps) => {
+/** Vertical audio meter bar */
+const AudioMeter = ({ peakL, peakR }: { peakL: number; peakR: number }) => {
+  const barColor = (level: number) => {
+    if (level > 0.85) return "bg-destructive/80";
+    if (level > 0.65) return "bg-warning/70";
+    return "bg-primary/60";
+  };
+
+  return (
+    <div className="absolute right-2 top-2 bottom-2 flex gap-px items-end">
+      {[peakL, peakR].map((peak, i) => (
+        <div key={i} className="w-1 h-full bg-muted/10 rounded-full overflow-hidden flex flex-col-reverse">
+          <div
+            className={`w-full rounded-full transition-all duration-150 ${barColor(peak)}`}
+            style={{ height: `${Math.min(peak * 100, 100)}%` }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const SignalTile = ({ input, liveMetrics, isAudioSource, isFullscreen, onFullscreen, onEdit, onSelectAudio }: SignalTileProps) => {
   const badge = statusBadge[input.status];
+  const bitrate = liveMetrics?.bitrate ?? input.metrics.bitrate;
+  const loss = liveMetrics?.packetLoss ?? input.metrics.packetLoss;
+  const peakL = liveMetrics?.audioPeakL ?? 0;
+  const peakR = liveMetrics?.audioPeakR ?? 0;
+  const isActive = input.status !== "idle";
 
   return (
     <div className={`mako-glass rounded-lg overflow-hidden flex flex-col h-full ${statusAccent[input.status]}`}>
@@ -38,8 +67,11 @@ const SignalTile = ({ input, isAudioSource, isFullscreen, onFullscreen, onEdit, 
           {input.status === "idle" ? "No Signal" : input.label}
         </div>
 
+        {/* Audio meters — always visible when active */}
+        {isActive && <AudioMeter peakL={peakL} peakR={peakR} />}
+
         {/* Overlay controls */}
-        {input.status !== "idle" && (
+        {isActive && (
           <div className="absolute inset-0 flex items-end justify-between p-2 opacity-0 hover:opacity-100 transition-opacity">
             <div className="flex gap-1">
               {!isFullscreen && (
@@ -59,8 +91,8 @@ const SignalTile = ({ input, isAudioSource, isFullscreen, onFullscreen, onEdit, 
                 <Volume2 className="h-3.5 w-3.5" />
               </Button>
             </div>
-            <div className="text-[10px] text-foreground/70 bg-background/60 px-1.5 py-0.5 rounded">
-              {input.metrics.bitrate.toFixed(1)} Mbps · {input.metrics.packetLoss}% loss
+            <div className="text-[10px] text-foreground/70 bg-background/60 px-1.5 py-0.5 rounded font-mono">
+              {bitrate.toFixed(1)} Mbps · {loss.toFixed(2)}% loss
             </div>
           </div>
         )}
@@ -69,7 +101,14 @@ const SignalTile = ({ input, isAudioSource, isFullscreen, onFullscreen, onEdit, 
       {/* Footer */}
       {!isFullscreen && (
         <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-xs text-muted-foreground truncate">{input.label}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs text-muted-foreground truncate">{input.label}</span>
+            {isActive && (
+              <span className="text-[9px] text-muted-foreground/60 font-mono shrink-0">
+                {bitrate.toFixed(1)}M
+              </span>
+            )}
+          </div>
           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${badge.cls}`}>
             {badge.label}
           </span>
