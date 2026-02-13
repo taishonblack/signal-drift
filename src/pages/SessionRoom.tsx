@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { Grid2X2, Square, Columns2, LayoutDashboard, PanelRightClose, PanelRightOpen, Copy, FileText, X } from "lucide-react";
+import type { TallyState } from "@/components/SignalTile";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -35,6 +36,7 @@ const SessionRoom = () => {
   const [editInput, setEditInput] = useState<StreamInput | null>(null);
   const [editAddress, setEditAddress] = useState("");
   const [editPassphrase, setEditPassphrase] = useState("");
+  const [tallyMap, setTallyMap] = useState<Record<string, TallyState>>({});
 
   const activeInputs = session.inputs.filter((i) => i.enabled);
   const { metrics, getMetrics } = useLiveMetrics(session.inputs);
@@ -79,6 +81,23 @@ const SessionRoom = () => {
     setEditInput(null);
   };
 
+  const cycleTally = useCallback((inputId: string) => {
+    setTallyMap((prev) => {
+      const current = prev[inputId] || "none";
+      const next: TallyState = current === "none" ? "program" : current === "program" ? "preview" : "none";
+      // If setting to program, clear any other program
+      if (next === "program") {
+        const cleaned: Record<string, TallyState> = {};
+        for (const [k, v] of Object.entries(prev)) {
+          cleaned[k] = v === "program" ? "preview" : v;
+        }
+        cleaned[inputId] = "program";
+        return cleaned;
+      }
+      return { ...prev, [inputId]: next };
+    });
+  }, []);
+
   const gridClass: Record<Layout, string> = {
     "1": "grid-cols-1",
     "2": "grid-cols-1 sm:grid-cols-2",
@@ -103,6 +122,8 @@ const SessionRoom = () => {
             <SignalTile
               input={fullscreenInput}
               liveMetrics={fullscreenLive}
+              tally={tallyMap[fullscreenInput.id] || "none"}
+              onTallyClick={() => cycleTally(fullscreenInput.id)}
               isAudioSource={audioSource === fullscreenInput.id}
               onSelectAudio={() => setAudioSource(fullscreenInput.id)}
               onEdit={() => openEdit(fullscreenInput)}
@@ -182,6 +203,8 @@ const SessionRoom = () => {
                   <SignalTile
                     input={activeInputs[0]}
                     liveMetrics={getMetrics(activeInputs[0]?.id)}
+                    tally={tallyMap[activeInputs[0]?.id] || "none"}
+                    onTallyClick={() => cycleTally(activeInputs[0]?.id)}
                     isAudioSource={audioSource === activeInputs[0]?.id}
                     onSelectAudio={() => setAudioSource(activeInputs[0]?.id)}
                     onFullscreen={() => setFullscreenId(activeInputs[0]?.id)}
@@ -193,6 +216,8 @@ const SessionRoom = () => {
                     key={input.id}
                     input={input}
                     liveMetrics={getMetrics(input.id)}
+                    tally={tallyMap[input.id] || "none"}
+                    onTallyClick={() => cycleTally(input.id)}
                     isAudioSource={audioSource === input.id}
                     onSelectAudio={() => setAudioSource(input.id)}
                     onFullscreen={() => setFullscreenId(input.id)}
@@ -206,6 +231,8 @@ const SessionRoom = () => {
                   key={input.id}
                   input={input}
                   liveMetrics={getMetrics(input.id)}
+                  tally={tallyMap[input.id] || "none"}
+                  onTallyClick={() => cycleTally(input.id)}
                   isAudioSource={audioSource === input.id}
                   onSelectAudio={() => setAudioSource(input.id)}
                   onFullscreen={() => setFullscreenId(input.id)}
