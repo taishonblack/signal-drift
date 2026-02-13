@@ -33,11 +33,11 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           <header className="hidden md:flex items-center h-12 px-4 border-b border-border/20">
             <SidebarTrigger data-sidebar="trigger" className="text-muted-foreground hover:text-foreground" />
           </header>
+          <MobileNav />
           <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6 overflow-auto">
             {children}
           </main>
         </div>
-        <MobileNav />
       </div>
     </SidebarProvider>
   );
