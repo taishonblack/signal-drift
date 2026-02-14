@@ -9,6 +9,7 @@ import EditInputModal from "@/components/session/EditInputModal";
 import { mockSessions, mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
 import { useLiveMetrics } from "@/hooks/use-live-metrics";
 import { useSessionFocus } from "@/hooks/use-session-focus";
+import { loadTimePrefs, saveTimePrefs, type TimeDisplayPrefs } from "@/lib/time-utils";
 import { toast } from "@/hooks/use-toast";
 
 const gridClass = (layout: Layout, compareMode: CompareMode): string => {
@@ -40,12 +41,27 @@ const SessionRoom = () => {
   const [editAddress, setEditAddress] = useState("");
   const [editPassphrase, setEditPassphrase] = useState("");
 
+  // Time display preferences (persisted per session)
+  const [timePrefs, setTimePrefs] = useState<TimeDisplayPrefs>(() => loadTimePrefs(session.id));
+  const handleTimePrefsChange = useCallback((p: TimeDisplayPrefs) => {
+    setTimePrefs(p);
+    saveTimePrefs(session.id, p);
+  }, [session.id]);
+
   // Shared Focus state via realtime
   const { focusedId, focusedBy, setFocus } = useSessionFocus(session.id, activeInputs[0]?.id ?? "");
   const { getMetrics } = useLiveMetrics(session.inputs);
 
   const focusedInput = activeInputs.find((i) => i.id === focusedId);
   const focusedLabel = focusedInput?.label ?? "Unknown";
+
+  // Resolve origin TZ for the focused line (mock: use session default or "UTC")
+  const getOriginTZ = useCallback((_inputId: string) => {
+    // In a real implementation, each input would have its own originTimeZone
+    // For now, use a sensible default per mock input
+    return "America/Los_Angeles";
+  }, []);
+  const focusedOriginTZ = getOriginTZ(focusedId);
 
   // Keyboard shortcuts: ESC fullscreen, 1-4 set Focus
   useEffect(() => {
@@ -101,6 +117,10 @@ const SessionRoom = () => {
       onSelectAudio={() => setAudioSource(input.id)}
       onFullscreen={() => setFullscreenId(input.id)}
       onEdit={() => openEdit(input)}
+      timePrefs={timePrefs}
+      tileOriginTZ={getOriginTZ(input.id)}
+      focusedOriginTZ={focusedOriginTZ}
+      sessionStartedAt={session.createdAt}
     />
   );
 
@@ -139,6 +159,8 @@ const SessionRoom = () => {
           onLayoutChange={setLayout}
           compareMode={compareMode}
           onCompareModeChange={setCompareMode}
+          timePrefs={timePrefs}
+          onTimePrefsChange={handleTimePrefsChange}
           showNotes={showNotes}
           onToggleNotes={() => setShowNotes(!showNotes)}
           showInspector={showInspector}

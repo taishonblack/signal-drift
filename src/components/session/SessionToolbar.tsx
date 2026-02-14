@@ -2,6 +2,8 @@ import { Grid2X2, Square, Columns2, LayoutDashboard, PanelRightClose, PanelRight
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/hooks/use-toast";
+import TimeDisplayPopover from "@/components/session/TimeDisplayPopover";
+import type { TimeDisplayPrefs } from "@/lib/time-utils";
 
 export type Layout = "1" | "2" | "3" | "4";
 export type CompareMode = "stacked" | "side-by-side";
@@ -22,6 +24,8 @@ interface SessionToolbarProps {
   onLayoutChange: (l: Layout) => void;
   compareMode: CompareMode;
   onCompareModeChange: (m: CompareMode) => void;
+  timePrefs: TimeDisplayPrefs;
+  onTimePrefsChange: (p: TimeDisplayPrefs) => void;
   showNotes: boolean;
   onToggleNotes: () => void;
   showInspector: boolean;
@@ -42,6 +46,8 @@ const SessionToolbar = ({
   onLayoutChange,
   compareMode,
   onCompareModeChange,
+  timePrefs,
+  onTimePrefsChange,
   showNotes,
   onToggleNotes,
   showInspector,
@@ -84,6 +90,7 @@ const SessionToolbar = ({
           </>
         )}
         <div className="w-px h-5 bg-border/30 mx-1" />
+        <TimeDisplayPopover prefs={timePrefs} onChange={onTimePrefsChange} />
         <Button variant="ghost" size="icon" onClick={onToggleNotes} className="h-8 w-8 text-muted-foreground hover:text-foreground">
           <FileText className="h-3.5 w-3.5" />
         </Button>
