@@ -29,8 +29,7 @@ interface SessionToolbarProps {
 }
 
 const SHORTCUTS = [
-  { keys: "1 – 4", desc: "Toggle Program (PGM)" },
-  { keys: "⇧1 – ⇧4", desc: "Toggle Preview (PVW)" },
+  { keys: "1 – 4", desc: "Set Focus to Line 1–4" },
   { keys: "ESC", desc: "Exit fullscreen" },
 ];
 

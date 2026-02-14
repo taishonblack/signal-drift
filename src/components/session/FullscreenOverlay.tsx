@@ -1,22 +1,21 @@
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SignalTile from "@/components/SignalTile";
-import type { TallyState } from "@/components/SignalTile";
 import type { StreamInput } from "@/lib/mock-data";
 import type { LiveMetrics } from "@/hooks/use-live-metrics";
 
 interface FullscreenOverlayProps {
   input: StreamInput;
   liveMetrics?: LiveMetrics;
-  tally: TallyState;
+  isFocused: boolean;
   isAudioSource: boolean;
   onClose: () => void;
-  onTallyClick: () => void;
+  onFocusClick: () => void;
   onSelectAudio: () => void;
   onEdit: () => void;
 }
 
-const FullscreenOverlay = ({ input, liveMetrics, tally, isAudioSource, onClose, onTallyClick, onSelectAudio, onEdit }: FullscreenOverlayProps) => {
+const FullscreenOverlay = ({ input, liveMetrics, isFocused, isAudioSource, onClose, onFocusClick, onSelectAudio, onEdit }: FullscreenOverlayProps) => {
   const bitrate = liveMetrics?.bitrate ?? input.metrics.bitrate;
   const loss = liveMetrics?.packetLoss ?? input.metrics.packetLoss;
   const rtt = liveMetrics?.rtt ?? input.metrics.rtt;
@@ -32,8 +31,8 @@ const FullscreenOverlay = ({ input, liveMetrics, tally, isAudioSource, onClose, 
         <SignalTile
           input={input}
           liveMetrics={liveMetrics}
-          tally={tally}
-          onTallyClick={onTallyClick}
+          isFocused={isFocused}
+          onFocusClick={onFocusClick}
           isAudioSource={isAudioSource}
           onSelectAudio={onSelectAudio}
           onEdit={onEdit}
