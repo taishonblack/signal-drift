@@ -95,8 +95,8 @@ const SignalTile = ({ input, liveMetrics, tally = "none", isAudioSource, isFulls
       {tally === "none" && input.status === "warning" && <div className="h-0.5 bg-warning" />}
       {tally === "none" && input.status === "error" && <div className="h-0.5 bg-destructive" />}
 
-      {/* Video placeholder */}
-      <div className={`relative flex-1 bg-mako-deep flex items-center justify-center ${isFullscreen ? "" : "aspect-video"}`}>
+      {/* Video placeholder – always 16:9 */}
+      <div className={`relative bg-mako-deep flex items-center justify-center ${isFullscreen ? "flex-1" : "aspect-video w-full"}`}>
         <div className="text-muted-foreground/30 text-xs uppercase tracking-widest">
           {input.status === "idle" ? "No Signal" : input.label}
         </div>
