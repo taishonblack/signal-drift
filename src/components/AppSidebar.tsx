@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
 import MakoFinMark from "@/components/MakoFinMark";
 import { useSidebar } from "@/components/ui/sidebar";
+import RecentSessionsPanel from "@/components/RecentSessionsPanel";
 import {
   Sidebar,
   SidebarContent,
@@ -42,7 +43,7 @@ export function AppSidebar() {
         )}
       </Link>
 
-      <SidebarContent>
+      <SidebarContent className="flex flex-col">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -64,6 +65,8 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        <RecentSessionsPanel sidebarCollapsed={collapsed} />
       </SidebarContent>
     </Sidebar>
   );
