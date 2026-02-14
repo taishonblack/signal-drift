@@ -8,6 +8,7 @@ export interface StreamInput {
   passphrase?: string;
   status: StreamStatus;
   metrics: StreamMetrics;
+  videoSrc?: string;
 }
 
 export interface StreamMetrics {
@@ -52,6 +53,10 @@ const makeMetrics = (overrides?: Partial<StreamMetrics>): StreamMetrics => ({
   ...overrides,
 });
 
+import mockFeed1 from "@/assets/mock-feed-1.mp4";
+import mockFeed2 from "@/assets/mock-feed-2.mp4";
+import mockFeed3 from "@/assets/mock-feed-3.mp4";
+
 export const mockInputs: StreamInput[] = [
   {
     id: "line-1",
@@ -60,6 +65,7 @@ export const mockInputs: StreamInput[] = [
     srtAddress: "srt://ingest.example.com:9000?streamid=cam-a",
     status: "live",
     metrics: makeMetrics(),
+    videoSrc: mockFeed1,
   },
   {
     id: "line-2",
@@ -68,6 +74,7 @@ export const mockInputs: StreamInput[] = [
     srtAddress: "srt://ingest.example.com:9001?streamid=cam-b",
     status: "live",
     metrics: makeMetrics({ bitrate: 12.1, resolution: "3840×2160", codec: "H.265 Main" }),
+    videoSrc: mockFeed2,
   },
   {
     id: "line-3",
@@ -76,6 +83,7 @@ export const mockInputs: StreamInput[] = [
     srtAddress: "srt://ingest.example.com:9002?streamid=pgm",
     status: "warning",
     metrics: makeMetrics({ packetLoss: 1.8, rtt: 85, bitrate: 6.2 }),
+    videoSrc: mockFeed3,
   },
   {
     id: "line-4",

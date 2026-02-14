@@ -88,9 +88,20 @@ const SignalTile = ({
 
       {/* Video placeholder – always 16:9 */}
       <div className={`relative bg-mako-deep flex items-center justify-center ${isFullscreen ? "flex-1" : "aspect-video w-full"}`}>
-        <div className="text-muted-foreground/30 text-xs uppercase tracking-widest">
-          {input.status === "idle" ? "No Signal" : input.label}
-        </div>
+        {input.videoSrc && isActive ? (
+          <video
+            src={input.videoSrc}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        ) : (
+          <div className="text-muted-foreground/30 text-xs uppercase tracking-widest">
+            {input.status === "idle" ? "No Signal" : input.label}
+          </div>
+        )}
 
         {/* Focus badge */}
         {isFocused && (
