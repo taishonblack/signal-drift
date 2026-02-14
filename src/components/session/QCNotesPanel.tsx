@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import type { QCMarker } from "@/lib/mock-data";
 
 interface QCNotesPanelProps {
+  focusedLabel: string;
   notes: string;
   onNotesChange: (val: string) => void;
   markerNote: string;
@@ -12,14 +13,16 @@ interface QCNotesPanelProps {
   onAddMarker: () => void;
 }
 
-const QCNotesPanel = ({ notes, onNotesChange, markerNote, onMarkerNoteChange, markers, onAddMarker }: QCNotesPanelProps) => (
+const QCNotesPanel = ({ focusedLabel, notes, onNotesChange, markerNote, onMarkerNoteChange, markers, onAddMarker }: QCNotesPanelProps) => (
   <div className="mako-glass rounded-lg p-4 space-y-3 max-h-60 overflow-auto">
     <div className="flex items-center justify-between">
-      <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">QC Notes</span>
+      <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
+        Notes for: <span className="text-primary">{focusedLabel}</span>
+      </span>
     </div>
-    <Textarea value={notes} onChange={(e) => onNotesChange(e.target.value)} placeholder="Shared session notes..." className="bg-muted/20 border-border/20 text-sm min-h-[60px] text-foreground placeholder:text-muted-foreground/40" />
+    <Textarea value={notes} onChange={(e) => onNotesChange(e.target.value)} placeholder={`Notes about ${focusedLabel}…`} className="bg-muted/20 border-border/20 text-sm min-h-[60px] text-foreground placeholder:text-muted-foreground/40" />
     <div className="flex gap-2">
-      <Input value={markerNote} onChange={(e) => onMarkerNoteChange(e.target.value)} placeholder="Add QC marker..." className="bg-muted/20 border-border/20 text-sm text-foreground placeholder:text-muted-foreground/40" onKeyDown={(e) => e.key === "Enter" && onAddMarker()} />
+      <Input value={markerNote} onChange={(e) => onMarkerNoteChange(e.target.value)} placeholder="Add QC marker…" className="bg-muted/20 border-border/20 text-sm text-foreground placeholder:text-muted-foreground/40" onKeyDown={(e) => e.key === "Enter" && onAddMarker()} />
       <Button size="sm" onClick={onAddMarker} className="shrink-0">Mark</Button>
     </div>
     <div className="space-y-1">
