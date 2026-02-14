@@ -9,6 +9,7 @@ import CreateSession from "./pages/CreateSession";
 import SessionRoom from "./pages/SessionRoom";
 import JoinSession from "./pages/JoinSession";
 import AccountPage from "./pages/AccountPage";
+import OpsDashboard from "./pages/OpsDashboard";
 import AppLayout from "./components/AppLayout";
 import NotFound from "./pages/NotFound";
 
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/session/:id" element={<AppLayout><SessionRoom /></AppLayout>} />
           <Route path="/join" element={<AppLayout><JoinSession /></AppLayout>} />
           <Route path="/account" element={<AppLayout><AccountPage /></AppLayout>} />
+          <Route path="/ops" element={<AppLayout><OpsDashboard /></AppLayout>} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>

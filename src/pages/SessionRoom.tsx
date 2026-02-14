@@ -6,11 +6,15 @@ import SessionToolbar, { type Layout, type CompareMode } from "@/components/sess
 import FullscreenOverlay from "@/components/session/FullscreenOverlay";
 import QCNotesPanel from "@/components/session/QCNotesPanel";
 import EditInputModal from "@/components/session/EditInputModal";
+import QuinnPanel from "@/components/quinn/QuinnPanel";
 import { mockSessions, mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
 import { useLiveMetrics } from "@/hooks/use-live-metrics";
 import { useSessionFocus } from "@/hooks/use-session-focus";
 import { loadTimePrefs, saveTimePrefs, type TimeDisplayPrefs } from "@/lib/time-utils";
 import { toast } from "@/hooks/use-toast";
+import { Bot } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { getUnackedAlertCountForSession, getCurrentUser, isHost } from "@/lib/quinn-store";
 
 const gridClass = (layout: Layout, compareMode: CompareMode): string => {
   const map: Record<Layout, string> = {
@@ -40,6 +44,11 @@ const SessionRoom = () => {
   const [editInput, setEditInput] = useState<StreamInput | null>(null);
   const [editAddress, setEditAddress] = useState("");
   const [editPassphrase, setEditPassphrase] = useState("");
+  const [showQuinn, setShowQuinn] = useState(false);
+
+  const user = getCurrentUser();
+  const isHostUser = isHost("u1"); // mock host user id
+  const alertCount = getUnackedAlertCountForSession(session.id, user.id);
 
   // Time display preferences (persisted per session)
   const [timePrefs, setTimePrefs] = useState<TimeDisplayPrefs>(() => loadTimePrefs(session.id));
@@ -167,6 +176,24 @@ const SessionRoom = () => {
           onToggleInspector={() => setShowInspector(!showInspector)}
         />
 
+        {/* Quinn toggle + alert badge */}
+        <div className="flex items-center gap-2 -mt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowQuinn(!showQuinn)}
+            className={`h-7 gap-1.5 text-xs relative ${showQuinn ? "text-primary bg-muted/30" : "text-muted-foreground"}`}
+          >
+            <Bot className="h-3.5 w-3.5" />
+            Quinn
+            {isHostUser && alertCount > 0 && (
+              <span className="h-4 min-w-[16px] px-1 rounded-full bg-destructive text-[9px] text-destructive-foreground flex items-center justify-center font-bold">
+                {alertCount}
+              </span>
+            )}
+          </Button>
+        </div>
+
         {/* Focus indicator */}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>Focused:</span>
@@ -194,6 +221,12 @@ const SessionRoom = () => {
               onSelect={setSelectedInput}
               liveMetrics={getMetrics(selectedInput)}
             />
+          )}
+
+          {showQuinn && (
+            <div className="w-72 shrink-0 mako-glass rounded-lg overflow-hidden flex flex-col">
+              <QuinnPanel sessionId={session.id} sessionHostUserId="u1" />
+            </div>
           )}
         </div>
 
