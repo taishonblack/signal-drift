@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import type { TallyState } from "@/components/SignalTile";
 import SignalTile from "@/components/SignalTile";
 import InspectorPanel from "@/components/InspectorPanel";
-import SessionToolbar, { type Layout } from "@/components/session/SessionToolbar";
+import SessionToolbar, { type Layout, type CompareMode } from "@/components/session/SessionToolbar";
 import FullscreenOverlay from "@/components/session/FullscreenOverlay";
 import QCNotesPanel from "@/components/session/QCNotesPanel";
 import EditInputModal from "@/components/session/EditInputModal";
@@ -11,17 +11,21 @@ import { mockSessions, mockMarkers, type QCMarker, type StreamInput } from "@/li
 import { useLiveMetrics } from "@/hooks/use-live-metrics";
 import { toast } from "@/hooks/use-toast";
 
-const gridClass: Record<Layout, string> = {
-  "1": "grid-cols-1",
-  "2": "grid-cols-1",
-  "3": "grid-cols-1 md:grid-cols-3",
-  "4": "grid-cols-1 sm:grid-cols-2",
+const gridClass = (layout: Layout, compareMode: CompareMode): string => {
+  const map: Record<Layout, string> = {
+    "1": "grid-cols-1",
+    "2": compareMode === "side-by-side" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1",
+    "3": "grid-cols-1 md:grid-cols-3",
+    "4": "grid-cols-1 sm:grid-cols-2",
+  };
+  return map[layout];
 };
 
 const SessionRoom = () => {
   const { id } = useParams();
   const session = mockSessions.find((s) => s.id === id) || mockSessions[0];
   const [layout, setLayout] = useState<Layout>("4");
+  const [compareMode, setCompareMode] = useState<CompareMode>("stacked");
   const [audioSource, setAudioSource] = useState(session.inputs[0]?.id);
   const [showInspector, setShowInspector] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
@@ -157,6 +161,8 @@ const SessionRoom = () => {
           sessionPin={session.pin}
           layout={layout}
           onLayoutChange={setLayout}
+          compareMode={compareMode}
+          onCompareModeChange={setCompareMode}
           showNotes={showNotes}
           onToggleNotes={() => setShowNotes(!showNotes)}
           showInspector={showInspector}
@@ -164,7 +170,7 @@ const SessionRoom = () => {
         />
 
         <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
-          <div className={`flex-1 grid ${gridClass[layout]} gap-3 overflow-y-auto`}>
+          <div className={`flex-1 grid ${gridClass(layout, compareMode)} gap-3 overflow-y-auto`}>
             {layout === "3" ? (
               <>
                 <div className="md:col-span-2">{activeInputs[0] && renderTile(activeInputs[0])}</div>

@@ -1,9 +1,10 @@
-import { Grid2X2, Square, Columns2, LayoutDashboard, PanelRightClose, PanelRightOpen, Copy, FileText, Keyboard } from "lucide-react";
+import { Grid2X2, Square, Columns2, LayoutDashboard, PanelRightClose, PanelRightOpen, Copy, FileText, Keyboard, Rows2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/hooks/use-toast";
 
 export type Layout = "1" | "2" | "3" | "4";
+export type CompareMode = "stacked" | "side-by-side";
 
 const layoutIcons: Record<Layout, typeof Square> = {
   "1": Square,
@@ -19,6 +20,8 @@ interface SessionToolbarProps {
   sessionPin: string;
   layout: Layout;
   onLayoutChange: (l: Layout) => void;
+  compareMode: CompareMode;
+  onCompareModeChange: (m: CompareMode) => void;
   showNotes: boolean;
   onToggleNotes: () => void;
   showInspector: boolean;
@@ -38,6 +41,8 @@ const SessionToolbar = ({
   sessionPin,
   layout,
   onLayoutChange,
+  compareMode,
+  onCompareModeChange,
   showNotes,
   onToggleNotes,
   showInspector,
@@ -65,6 +70,20 @@ const SessionToolbar = ({
             </Button>
           );
         })}
+        {layout === "2" && (
+          <>
+            <div className="w-px h-5 bg-border/30 mx-1" />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onCompareModeChange(compareMode === "stacked" ? "side-by-side" : "stacked")}
+              className={`h-8 w-8 ${compareMode === "side-by-side" ? "text-primary bg-muted/30" : "text-muted-foreground"}`}
+              title={compareMode === "stacked" ? "Switch to Side-by-Side" : "Switch to Stacked"}
+            >
+              {compareMode === "stacked" ? <Columns2 className="h-3.5 w-3.5" /> : <Rows2 className="h-3.5 w-3.5" />}
+            </Button>
+          </>
+        )}
         <div className="w-px h-5 bg-border/30 mx-1" />
         <Button variant="ghost" size="icon" onClick={onToggleNotes} className="h-8 w-8 text-muted-foreground hover:text-foreground">
           <FileText className="h-3.5 w-3.5" />
