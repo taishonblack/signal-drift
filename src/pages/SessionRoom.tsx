@@ -17,11 +17,11 @@ import { Button } from "@/components/ui/button";
 import { getUnackedAlertCountForSession, getCurrentUser, isHost } from "@/lib/quinn-store";
 
 /** Grid style for each effective layout mode */
-const gridStyles: Record<string, string> = {
-  "1": "grid-cols-1",
-  "2": "grid-cols-1 grid-rows-2",
-  "3": "grid-cols-[2fr_1fr] grid-rows-2",
-  "4": "grid-cols-2 grid-rows-2",
+const gridStyles: Record<string, { cls: string; style: React.CSSProperties }> = {
+  "1": { cls: "grid-cols-1", style: { gridTemplateRows: "minmax(0, 1fr)" } },
+  "2": { cls: "grid-cols-1", style: { gridTemplateRows: "minmax(0, 1fr) minmax(0, 1fr)" } },
+  "3": { cls: "grid-cols-[2fr_1fr]", style: { gridTemplateRows: "minmax(0, 1fr) minmax(0, 1fr)" } },
+  "4": { cls: "grid-cols-2", style: { gridTemplateRows: "minmax(0, 1fr) minmax(0, 1fr)" } },
 };
 
 const SessionRoom = () => {
@@ -205,10 +205,10 @@ const SessionRoom = () => {
           {(() => {
             const effectiveMode = Math.min(parseInt(layout), activeInputs.length).toString();
             const visibleInputs = activeInputs.slice(0, parseInt(effectiveMode));
-            const gridCls = gridStyles[effectiveMode] || gridStyles["1"];
+            const grid = gridStyles[effectiveMode] || gridStyles["1"];
 
             return (
-              <div className={`flex-1 grid ${gridCls} gap-3 min-h-0`}>
+              <div className={`flex-1 grid ${grid.cls} gap-3 min-h-0`} style={grid.style}>
                 {effectiveMode === "3" ? (
                   <>
                     <div className="row-span-2">{visibleInputs[0] && renderTile(visibleInputs[0])}</div>
