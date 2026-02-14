@@ -70,7 +70,7 @@ const SignalTile = ({
   return (
     <div
       className={cn(
-        "rounded-lg overflow-hidden flex flex-col h-full border-2 transition-all cursor-pointer",
+        "rounded-lg overflow-hidden flex flex-col border-2 transition-all cursor-pointer w-full",
         isFocused ? "border-primary" : "border-transparent",
         !isFocused && "opacity-[0.92]"
       )}
