@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from "react";
+import ReactMarkdown from "react-markdown";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -199,11 +200,36 @@ export default function QuinnPanel({ sessionId, sessionHostUserId }: Props) {
           <ScrollArea className="flex-1 min-h-0">
             <div className="space-y-3 py-2" ref={scrollRef}>
               {messages.map((m, i) => (
-                <div key={i} className={`text-xs leading-relaxed whitespace-pre-wrap ${m.role === "assistant" ? "text-muted-foreground" : "text-foreground"}`}>
+                <div key={i} className={`text-xs leading-relaxed ${m.role === "assistant" ? "text-muted-foreground" : "text-foreground"}`}>
                   <span className={`font-medium ${m.role === "assistant" ? "text-primary" : "text-foreground"}`}>
                     {m.role === "assistant" ? "Quinn" : "You"}:
                   </span>{" "}
-                  {m.content}
+                  {m.role === "assistant" ? (
+                    <ReactMarkdown
+                      components={{
+                        p: ({ children }) => <span className="inline">{children}</span>,
+                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                        ul: ({ children }) => <ul className="list-disc list-inside mt-1 space-y-0.5">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal list-inside mt-1 space-y-0.5">{children}</ol>,
+                        li: ({ children }) => <li className="text-xs">{children}</li>,
+                        code: ({ children, className }) => {
+                          const isBlock = className?.includes("language-");
+                          return isBlock ? (
+                            <pre className="mt-1 p-2 rounded bg-muted/30 overflow-x-auto text-[11px] font-mono text-foreground"><code>{children}</code></pre>
+                          ) : (
+                            <code className="px-1 py-0.5 rounded bg-muted/30 text-[11px] font-mono text-foreground">{children}</code>
+                          );
+                        },
+                        h1: ({ children }) => <span className="font-semibold text-foreground block mt-1">{children}</span>,
+                        h2: ({ children }) => <span className="font-semibold text-foreground block mt-1">{children}</span>,
+                        h3: ({ children }) => <span className="font-semibold text-foreground block mt-1">{children}</span>,
+                      }}
+                    >
+                      {m.content}
+                    </ReactMarkdown>
+                  ) : (
+                    m.content
+                  )}
                 </div>
               ))}
               {isLoading && messages[messages.length - 1]?.role === "user" && (
