@@ -1,54 +1,33 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Send, Bell } from "lucide-react";
+import { Bot, Send, Bell, Loader2 } from "lucide-react";
 import IncidentList from "@/components/quinn/IncidentList";
 import IncidentDetailDrawer from "@/components/quinn/IncidentDetailDrawer";
 import {
   type Incident,
   getIncidentsForSession,
   getIncidents,
+  getEvents,
   getUnackedAlertCountForSession,
   getCurrentUser,
   isHost as checkIsHost,
 } from "@/lib/quinn-store";
 import { useQuinnSimulator } from "@/hooks/use-quinn-simulator";
+import { toast } from "@/hooks/use-toast";
+
+const QUINN_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/quinn-chat`;
 
 interface QuinnMessage {
-  role: "user" | "quinn";
+  role: "user" | "assistant";
   content: string;
 }
 
-// Mock Quinn responses based on incident data
-function mockQuinnResponse(query: string, incidents: Incident[]): string {
-  const q = query.toLowerCase();
-  const open = incidents.filter((i) => i.status === "open");
-  const critical = incidents.filter((i) => i.severity === "critical" && i.status !== "resolved");
-
-  if (q.includes("unstable") || q.includes("worst") || q.includes("critical")) {
-    if (critical.length === 0) return "All sessions are stable. No critical incidents at this time.";
-    const c = critical[0];
-    return `⚠️ Most critical: **${c.sessionName}** — ${c.summary} (Incident ${c.id}, started ${new Date(c.startedAtUtc).toLocaleTimeString()})`;
-  }
-
-  if (q.includes("incident") || q.includes("log") || q.includes("show")) {
-    if (open.length === 0) return "No open incidents. All systems nominal. ✅";
-    return `Currently **${open.length} open incident(s)**:\n${open.map((i) => `• ${i.severity.toUpperCase()}: ${i.summary} (${i.primaryLineLabel})`).join("\n")}`;
-  }
-
-  if (q.includes("status") || q.includes("summary") || q.includes("how")) {
-    const active = incidents.filter((i) => i.status !== "resolved");
-    return `Session health: **${active.length}** active incident(s), **${critical.length}** critical. ${critical.length === 0 ? "Systems looking good." : "Recommend reviewing critical alerts."}`;
-  }
-
-  return `I found **${incidents.length}** incidents in scope. ${open.length} open, ${critical.length} critical. Ask me about specific incidents, line issues, or "show incident log" for details.`;
-}
-
 interface Props {
-  sessionId?: string; // If provided, scoped to session; otherwise global
+  sessionId?: string;
   sessionHostUserId?: string;
 }
 
@@ -61,24 +40,135 @@ export default function QuinnPanel({ sessionId, sessionHostUserId }: Props) {
   );
   const [selected, setSelected] = useState<Incident | null>(null);
   const [messages, setMessages] = useState<QuinnMessage[]>([
-    { role: "quinn", content: sessionId ? "Quinn is watching this session. Ask me about incidents, line health, or say \"show incident log.\"" : "Quinn Ops online. Ask about active sessions, incidents, or system health." },
+    { role: "assistant", content: sessionId ? "Quinn is watching this session. Ask me about incidents, line health, or say \"show incident log.\"" : "Quinn Ops online. Ask about active sessions, incidents, or system health." },
   ]);
   const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const alertCount = sessionId ? getUnackedAlertCountForSession(sessionId, user.id) : 0;
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(() => {
     setIncidents(sessionId ? getIncidentsForSession(sessionId) : getIncidents());
   }, [sessionId]);
 
-  // Live simulation
   useQuinnSimulator(refresh);
 
-  const send = () => {
-    if (!input.trim()) return;
+  const buildContext = () => {
+    const inc = sessionId ? getIncidentsForSession(sessionId) : getIncidents();
+    const allEvents = getEvents();
+    const relevantEvents = sessionId
+      ? allEvents.filter((e) => e.sessionId === sessionId)
+      : allEvents.slice(0, 30);
+    return {
+      incidents: inc.slice(0, 20),
+      events: relevantEvents.slice(0, 40),
+      sessionName: sessionId ? inc[0]?.sessionName : undefined,
+    };
+  };
+
+  const send = async () => {
+    if (!input.trim() || isLoading) return;
     const userMsg: QuinnMessage = { role: "user", content: input };
-    const response = mockQuinnResponse(input, incidents);
-    setMessages((prev) => [...prev, userMsg, { role: "quinn", content: response }]);
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
     setInput("");
+    setIsLoading(true);
+
+    // Build chat history for API (skip system greeting)
+    const apiMessages = newMessages
+      .slice(1)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    let assistantSoFar = "";
+
+    try {
+      const resp = await fetch(QUINN_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: apiMessages,
+          context: buildContext(),
+        }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: "Unknown error" }));
+        toast({ title: "Quinn error", description: err.error || `HTTP ${resp.status}`, variant: "destructive" });
+        setIsLoading(false);
+        return;
+      }
+
+      if (!resp.body) throw new Error("No response body");
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = "";
+      let streamDone = false;
+
+      const upsertAssistant = (chunk: string) => {
+        assistantSoFar += chunk;
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && prev.length > newMessages.length) {
+            return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantSoFar } : m));
+          }
+          return [...prev, { role: "assistant", content: assistantSoFar }];
+        });
+      };
+
+      while (!streamDone) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (line.startsWith(":") || line.trim() === "") continue;
+          if (!line.startsWith("data: ")) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === "[DONE]") { streamDone = true; break; }
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) upsertAssistant(content);
+          } catch {
+            textBuffer = line + "\n" + textBuffer;
+            break;
+          }
+        }
+      }
+
+      // Final flush
+      if (textBuffer.trim()) {
+        for (let raw of textBuffer.split("\n")) {
+          if (!raw) continue;
+          if (raw.endsWith("\r")) raw = raw.slice(0, -1);
+          if (raw.startsWith(":") || raw.trim() === "") continue;
+          if (!raw.startsWith("data: ")) continue;
+          const jsonStr = raw.slice(6).trim();
+          if (jsonStr === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
+            if (content) upsertAssistant(content);
+          } catch { /* ignore */ }
+        }
+      }
+    } catch (e) {
+      console.error("Quinn stream error:", e);
+      toast({ title: "Quinn unavailable", description: "Could not reach Quinn AI. Try again.", variant: "destructive" });
+    }
+
+    setIsLoading(false);
   };
 
   return (
@@ -107,15 +197,20 @@ export default function QuinnPanel({ sessionId, sessionHostUserId }: Props) {
 
         <TabsContent value="chat" className="flex-1 flex flex-col min-h-0 px-2 pb-2">
           <ScrollArea className="flex-1 min-h-0">
-            <div className="space-y-3 py-2">
+            <div className="space-y-3 py-2" ref={scrollRef}>
               {messages.map((m, i) => (
-                <div key={i} className={`text-xs leading-relaxed ${m.role === "quinn" ? "text-muted-foreground" : "text-foreground"}`}>
-                  <span className={`font-medium ${m.role === "quinn" ? "text-primary" : "text-foreground"}`}>
-                    {m.role === "quinn" ? "Quinn" : "You"}:
+                <div key={i} className={`text-xs leading-relaxed whitespace-pre-wrap ${m.role === "assistant" ? "text-muted-foreground" : "text-foreground"}`}>
+                  <span className={`font-medium ${m.role === "assistant" ? "text-primary" : "text-foreground"}`}>
+                    {m.role === "assistant" ? "Quinn" : "You"}:
                   </span>{" "}
                   {m.content}
                 </div>
               ))}
+              {isLoading && messages[messages.length - 1]?.role === "user" && (
+                <div className="flex items-center gap-1.5 text-xs text-primary">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Quinn is thinking…
+                </div>
+              )}
             </div>
           </ScrollArea>
           <div className="flex gap-1.5 mt-2">
@@ -125,9 +220,10 @@ export default function QuinnPanel({ sessionId, sessionHostUserId }: Props) {
               onKeyDown={(e) => e.key === "Enter" && send()}
               placeholder="Ask Quinn…"
               className="h-8 text-xs bg-muted/20 border-border/20"
+              disabled={isLoading}
             />
-            <Button size="icon" className="h-8 w-8 shrink-0" onClick={send}>
-              <Send className="h-3 w-3" />
+            <Button size="icon" className="h-8 w-8 shrink-0" onClick={send} disabled={isLoading}>
+              {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
             </Button>
           </div>
         </TabsContent>
