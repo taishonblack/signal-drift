@@ -1,7 +1,8 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Download, CheckCircle2, AlertTriangle, Info, Zap } from "lucide-react";
+import { Download, CheckCircle2, AlertTriangle, Info, Zap, FileText } from "lucide-react";
+import { generateIncidentPDF } from "@/lib/quinn-pdf";
 import {
   type Incident,
   type QuinnEvent,
@@ -53,7 +54,7 @@ export default function IncidentDetailDrawer({ incident, open, onClose, canManag
     if (status === "resolved") onClose();
   };
 
-  const handleExport = () => {
+  const handleExportJson = () => {
     const json = exportIncidentReport(incident.id);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -62,6 +63,10 @@ export default function IncidentDetailDrawer({ incident, open, onClose, canManag
     a.download = `incident-${incident.id}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleExportPdf = () => {
+    generateIncidentPDF(incident);
   };
 
   const ts = (utc: string) => {
@@ -130,8 +135,11 @@ export default function IncidentDetailDrawer({ incident, open, onClose, canManag
                 <CheckCircle2 className="h-3 w-3" /> Resolve
               </Button>
             )}
-            <Button size="sm" variant="ghost" className="text-xs gap-1 ml-auto" onClick={handleExport}>
-              <Download className="h-3 w-3" /> Export
+            <Button size="sm" variant="ghost" className="text-xs gap-1 ml-auto" onClick={handleExportPdf}>
+              <FileText className="h-3 w-3" /> PDF
+            </Button>
+            <Button size="sm" variant="ghost" className="text-xs gap-1" onClick={handleExportJson}>
+              <Download className="h-3 w-3" /> JSON
             </Button>
           </div>
         </div>
