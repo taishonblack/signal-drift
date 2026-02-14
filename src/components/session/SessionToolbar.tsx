@@ -1,4 +1,4 @@
-import { Grid2X2, Square, Columns2, LayoutDashboard, PanelRightClose, PanelRightOpen, Copy, FileText, Keyboard, Rows2, ScanLine } from "lucide-react";
+import { Grid2X2, Square, LayoutDashboard, PanelRightClose, PanelRightOpen, Copy, FileText, Keyboard, Rows2, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/hooks/use-toast";
@@ -6,11 +6,11 @@ import TimeDisplayPopover from "@/components/session/TimeDisplayPopover";
 import type { TimeDisplayPrefs } from "@/lib/time-utils";
 
 export type Layout = "1" | "2" | "3" | "4";
-export type CompareMode = "stacked" | "side-by-side";
+export type CompareMode = "stacked"; // kept for type compat
 
 const layoutIcons: Record<Layout, typeof Square> = {
   "1": Square,
-  "2": Columns2,
+  "2": Rows2,
   "3": LayoutDashboard,
   "4": Grid2X2,
 };
@@ -22,8 +22,6 @@ interface SessionToolbarProps {
   sessionPin: string;
   layout: Layout;
   onLayoutChange: (l: Layout) => void;
-  compareMode: CompareMode;
-  onCompareModeChange: (m: CompareMode) => void;
   timePrefs: TimeDisplayPrefs;
   onTimePrefsChange: (p: TimeDisplayPrefs) => void;
   showNotes: boolean;
@@ -46,8 +44,6 @@ const SessionToolbar = ({
   sessionPin,
   layout,
   onLayoutChange,
-  compareMode,
-  onCompareModeChange,
   timePrefs,
   onTimePrefsChange,
   showNotes,
@@ -79,20 +75,6 @@ const SessionToolbar = ({
             </Button>
           );
         })}
-        {layout === "2" && (
-          <>
-            <div className="w-px h-5 bg-border/30 mx-1" />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onCompareModeChange(compareMode === "stacked" ? "side-by-side" : "stacked")}
-              className={`h-8 w-8 ${compareMode === "side-by-side" ? "text-primary bg-muted/30" : "text-muted-foreground"}`}
-              title={compareMode === "stacked" ? "Switch to Side-by-Side" : "Switch to Stacked"}
-            >
-              {compareMode === "stacked" ? <Columns2 className="h-3.5 w-3.5" /> : <Rows2 className="h-3.5 w-3.5" />}
-            </Button>
-          </>
-        )}
         <div className="w-px h-5 bg-border/30 mx-1" />
         <TimeDisplayPopover prefs={timePrefs} onChange={onTimePrefsChange} />
         <Button
