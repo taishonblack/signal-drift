@@ -13,9 +13,9 @@ import { toast } from "@/hooks/use-toast";
 
 const gridClass: Record<Layout, string> = {
   "1": "grid-cols-1",
-  "2": "grid-cols-1 sm:grid-cols-2",
-  "3": "grid-cols-2 grid-rows-2",
-  "4": "grid-cols-2",
+  "2": "grid-cols-1",
+  "3": "grid-cols-1 md:grid-cols-3",
+  "4": "grid-cols-1 sm:grid-cols-2",
 };
 
 const SessionRoom = () => {
@@ -164,10 +164,10 @@ const SessionRoom = () => {
         />
 
         <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
-          <div className={`flex-1 grid ${gridClass[layout]} gap-3 auto-rows-fr`}>
+          <div className={`flex-1 grid ${gridClass[layout]} gap-3 overflow-y-auto`}>
             {layout === "3" ? (
               <>
-                <div className="col-span-2 row-span-1">{activeInputs[0] && renderTile(activeInputs[0])}</div>
+                <div className="md:col-span-2">{activeInputs[0] && renderTile(activeInputs[0])}</div>
                 {activeInputs.slice(1, 3).map(renderTile)}
               </>
             ) : (
