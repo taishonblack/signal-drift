@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import AddressBookModal from "@/components/AddressBookModal";
 import {
@@ -13,6 +14,7 @@ import {
   generateSessionId, generatePin, exportSessionLog,
   saveDraft,
 } from "@/lib/session-store";
+import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 
 type HistoryFilter = "all" | "active" | "expired";
 type LineStatus = "empty" | "configured" | "error";
@@ -35,6 +37,7 @@ const statusDot: Record<LineStatus, string> = {
 const CreateSession = () => {
   const navigate = useNavigate();
   const [name, setName] = useState("");
+  const [defaultOriginTimeZone, setDefaultOriginTimeZone] = useState("UTC");
   const [lines, setLines] = useState<SrtLine[]>([
     createDefaultLine(1),
     createDefaultLine(2),
@@ -68,6 +71,7 @@ const CreateSession = () => {
       createdAt: new Date().toISOString(),
       host: "You",
       hostUserId: "u1",
+      defaultOriginTimeZone,
       lines,
       pin: generatePin(),
       notes: [],
@@ -93,6 +97,7 @@ const CreateSession = () => {
       bitrate: "",
       mode: "caller",
       notes: "",
+      originTimeZone: "",
     });
   };
 
@@ -156,6 +161,26 @@ const CreateSession = () => {
             <p className="text-[10px] text-muted-foreground/60">
               If left blank, MAKO will name the session using the first SRT
               address.
+            </p>
+          </div>
+
+          {/* Default Event Time Zone */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+              Default Event Time Zone
+            </label>
+            <Select value={defaultOriginTimeZone} onValueChange={setDefaultOriginTimeZone}>
+              <SelectTrigger className="bg-muted/20 border-border/20 text-foreground">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="mako-glass-solid border-border/20">
+                {COMMON_TIMEZONES.map((tz) => (
+                  <SelectItem key={tz} value={tz}>{tzLabel(tz)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground/60">
+              Used as the origin clock for all lines unless overridden per-line.
             </p>
           </div>
 
@@ -303,6 +328,30 @@ const CreateSession = () => {
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Origin Time Zone override */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Origin Time Zone
+                    </label>
+                    <Select
+                      value={activeLine.originTimeZone || "__default__"}
+                      onValueChange={(v) => updateLine({ originTimeZone: v === "__default__" ? "" : v })}
+                    >
+                      <SelectTrigger className="bg-muted/15 border-border/15 text-sm text-foreground">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="mako-glass-solid border-border/20">
+                        <SelectItem value="__default__">Use session default</SelectItem>
+                        {COMMON_TIMEZONES.map((tz) => (
+                          <SelectItem key={tz} value={tz}>{tzLabel(tz)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-muted-foreground/60">
+                      Override the session default for this line's event clock.
+                    </p>
                   </div>
 
                   {/* Notes */}

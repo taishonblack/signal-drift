@@ -11,6 +11,7 @@ export interface SrtLine {
   bitrate: string;
   mode: SrtMode;
   notes: string;
+  originTimeZone: string; // IANA e.g. "America/New_York", empty = use session default
 }
 
 export interface SessionDraft {
@@ -28,6 +29,7 @@ export interface SessionRecord {
   endedAt?: string;
   host: string;
   hostUserId: string;
+  defaultOriginTimeZone: string; // IANA e.g. "Europe/London"
   lines: SrtLine[];
   pin: string;
   notes: string[];
@@ -51,6 +53,7 @@ export const createDefaultLine = (n: number): SrtLine => ({
   bitrate: "",
   mode: "caller",
   notes: "",
+  originTimeZone: "",
 });
 
 // ─── localStorage helpers ───
@@ -76,16 +79,16 @@ function write<T>(key: string, value: T) {
 // ─── Sessions ───
 
 const seedSessions: SessionRecord[] = [
-  { id: "sess-001", name: "Super Bowl LVIII — Main Feed", status: "active", createdAt: "2026-02-13T14:30:00Z", host: "You", hostUserId: "u1", pin: "7284", lines: [createDefaultLine(1)], notes: [], markers: [] },
-  { id: "sess-002", name: "Champions League Semi — QC", status: "active", createdAt: "2026-02-13T12:00:00Z", host: "You", hostUserId: "u1", pin: "3910", lines: [createDefaultLine(1)], notes: [], markers: [] },
-  { id: "sess-003", name: "Concert Livestream — Audio", status: "expired", createdAt: "2026-02-12T20:00:00Z", endedAt: "2026-02-12T23:00:00Z", host: "You", hostUserId: "u1", pin: "5561", lines: [createDefaultLine(1)], notes: [], markers: [] },
-  { id: "sess-004", name: "News Broadcast — Pre-flight", status: "expired", createdAt: "2026-02-11T08:00:00Z", endedAt: "2026-02-11T10:00:00Z", host: "You", hostUserId: "u1", pin: "1122", lines: [createDefaultLine(1)], notes: [], markers: [] },
-  { id: "sess-005", name: "F1 Onboard — Camera Check", status: "expired", createdAt: "2026-02-10T15:00:00Z", endedAt: "2026-02-10T17:00:00Z", host: "You", hostUserId: "u1", pin: "8833", lines: [createDefaultLine(1)], notes: [], markers: [] },
-  { id: "sess-006", name: "Olympics Ceremony — Rehearsal", status: "expired", createdAt: "2026-02-09T09:00:00Z", endedAt: "2026-02-09T12:00:00Z", host: "You", hostUserId: "u1", pin: "4421", lines: [createDefaultLine(1)], notes: [], markers: [] },
-  { id: "sess-007", name: "NBA Finals — Remote Review", status: "expired", createdAt: "2026-02-08T19:00:00Z", endedAt: "2026-02-08T22:00:00Z", host: "You", hostUserId: "u1", pin: "6650", lines: [createDefaultLine(1)], notes: [], markers: [] },
-  { id: "sess-008", name: "Festival Main Stage — Audio QC", status: "expired", createdAt: "2026-02-07T14:00:00Z", endedAt: "2026-02-07T18:00:00Z", host: "You", hostUserId: "u1", pin: "2290", lines: [createDefaultLine(1)], notes: [], markers: [] },
-  { id: "sess-009", name: "Rugby World Cup — Backup Feed", status: "expired", createdAt: "2026-02-06T10:00:00Z", endedAt: "2026-02-06T13:00:00Z", host: "You", hostUserId: "u1", pin: "7713", lines: [createDefaultLine(1)], notes: [], markers: [] },
-  { id: "sess-010", name: "Esports Finals — Stream Test", status: "expired", createdAt: "2026-02-05T16:00:00Z", endedAt: "2026-02-05T18:00:00Z", host: "You", hostUserId: "u1", pin: "9901", lines: [createDefaultLine(1)], notes: [], markers: [] },
+  { id: "sess-001", name: "Super Bowl LVIII — Main Feed", status: "active", createdAt: "2026-02-13T14:30:00Z", host: "You", hostUserId: "u1", pin: "7284", defaultOriginTimeZone: "America/Los_Angeles", lines: [createDefaultLine(1)], notes: [], markers: [] },
+  { id: "sess-002", name: "Champions League Semi — QC", status: "active", createdAt: "2026-02-13T12:00:00Z", host: "You", hostUserId: "u1", pin: "3910", defaultOriginTimeZone: "Europe/London", lines: [createDefaultLine(1)], notes: [], markers: [] },
+  { id: "sess-003", name: "Concert Livestream — Audio", status: "expired", createdAt: "2026-02-12T20:00:00Z", endedAt: "2026-02-12T23:00:00Z", host: "You", hostUserId: "u1", pin: "5561", defaultOriginTimeZone: "America/New_York", lines: [createDefaultLine(1)], notes: [], markers: [] },
+  { id: "sess-004", name: "News Broadcast — Pre-flight", status: "expired", createdAt: "2026-02-11T08:00:00Z", endedAt: "2026-02-11T10:00:00Z", host: "You", hostUserId: "u1", pin: "1122", defaultOriginTimeZone: "Europe/London", lines: [createDefaultLine(1)], notes: [], markers: [] },
+  { id: "sess-005", name: "F1 Onboard — Camera Check", status: "expired", createdAt: "2026-02-10T15:00:00Z", endedAt: "2026-02-10T17:00:00Z", host: "You", hostUserId: "u1", pin: "8833", defaultOriginTimeZone: "Europe/Paris", lines: [createDefaultLine(1)], notes: [], markers: [] },
+  { id: "sess-006", name: "Olympics Ceremony — Rehearsal", status: "expired", createdAt: "2026-02-09T09:00:00Z", endedAt: "2026-02-09T12:00:00Z", host: "You", hostUserId: "u1", pin: "4421", defaultOriginTimeZone: "Asia/Tokyo", lines: [createDefaultLine(1)], notes: [], markers: [] },
+  { id: "sess-007", name: "NBA Finals — Remote Review", status: "expired", createdAt: "2026-02-08T19:00:00Z", endedAt: "2026-02-08T22:00:00Z", host: "You", hostUserId: "u1", pin: "6650", defaultOriginTimeZone: "America/Chicago", lines: [createDefaultLine(1)], notes: [], markers: [] },
+  { id: "sess-008", name: "Festival Main Stage — Audio QC", status: "expired", createdAt: "2026-02-07T14:00:00Z", endedAt: "2026-02-07T18:00:00Z", host: "You", hostUserId: "u1", pin: "2290", defaultOriginTimeZone: "Europe/Berlin", lines: [createDefaultLine(1)], notes: [], markers: [] },
+  { id: "sess-009", name: "Rugby World Cup — Backup Feed", status: "expired", createdAt: "2026-02-06T10:00:00Z", endedAt: "2026-02-06T13:00:00Z", host: "You", hostUserId: "u1", pin: "7713", defaultOriginTimeZone: "Europe/London", lines: [createDefaultLine(1)], notes: [], markers: [] },
+  { id: "sess-010", name: "Esports Finals — Stream Test", status: "expired", createdAt: "2026-02-05T16:00:00Z", endedAt: "2026-02-05T18:00:00Z", host: "You", hostUserId: "u1", pin: "9901", defaultOriginTimeZone: "Asia/Seoul", lines: [createDefaultLine(1)], notes: [], markers: [] },
 ];
 
 export function getSessions(): SessionRecord[] {

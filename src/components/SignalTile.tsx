@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { StreamInput } from "@/lib/mock-data";
 import type { LiveMetrics } from "@/hooks/use-live-metrics";
+import TimeOverlay from "@/components/session/TimeOverlay";
+import type { TimeDisplayPrefs } from "@/lib/time-utils";
 
 interface SignalTileProps {
   input: StreamInput;
@@ -14,6 +16,10 @@ interface SignalTileProps {
   onFullscreen?: () => void;
   onEdit?: () => void;
   onSelectAudio?: () => void;
+  timePrefs?: TimeDisplayPrefs;
+  tileOriginTZ?: string;
+  focusedOriginTZ?: string;
+  sessionStartedAt?: string;
 }
 
 const statusBadge: Record<string, { label: string; cls: string }> = {
@@ -46,7 +52,11 @@ const AudioMeter = ({ peakL, peakR }: { peakL: number; peakR: number }) => {
   );
 };
 
-const SignalTile = ({ input, liveMetrics, isFocused = false, isAudioSource, isFullscreen, onFocusClick, onFullscreen, onEdit, onSelectAudio }: SignalTileProps) => {
+const SignalTile = ({
+  input, liveMetrics, isFocused = false, isAudioSource, isFullscreen,
+  onFocusClick, onFullscreen, onEdit, onSelectAudio,
+  timePrefs, tileOriginTZ = "UTC", focusedOriginTZ = "UTC", sessionStartedAt = "",
+}: SignalTileProps) => {
   const badge = statusBadge[input.status];
   const bitrate = liveMetrics?.bitrate ?? input.metrics.bitrate;
   const loss = liveMetrics?.packetLoss ?? input.metrics.packetLoss;
@@ -87,6 +97,16 @@ const SignalTile = ({ input, liveMetrics, isFocused = false, isAudioSource, isFu
           <div className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider bg-primary/70 text-primary-foreground uppercase">
             Focus
           </div>
+        )}
+
+        {/* Time overlay */}
+        {timePrefs && isActive && (
+          <TimeOverlay
+            prefs={timePrefs}
+            tileOriginTZ={tileOriginTZ}
+            focusedOriginTZ={focusedOriginTZ}
+            sessionStartedAt={sessionStartedAt}
+          />
         )}
 
         {/* Audio meters */}
