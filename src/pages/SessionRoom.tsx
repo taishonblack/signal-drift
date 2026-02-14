@@ -19,9 +19,9 @@ import { getUnackedAlertCountForSession, getCurrentUser, isHost } from "@/lib/qu
 /** Grid style for each effective layout mode */
 const gridStyles: Record<string, string> = {
   "1": "grid-cols-1",
-  "2": "grid-cols-1",
-  "3": "grid-cols-[2fr_1fr]",
-  "4": "grid-cols-2",
+  "2": "grid-cols-1 grid-rows-2",
+  "3": "grid-cols-[2fr_1fr] grid-rows-2",
+  "4": "grid-cols-2 grid-rows-2",
 };
 
 const SessionRoom = () => {
@@ -208,7 +208,7 @@ const SessionRoom = () => {
             const gridCls = gridStyles[effectiveMode] || gridStyles["1"];
 
             return (
-              <div className={`flex-1 grid ${gridCls} gap-3 min-h-0 items-start content-start overflow-y-auto`}>
+              <div className={`flex-1 grid ${gridCls} gap-3 min-h-0`}>
                 {effectiveMode === "3" ? (
                   <>
                     <div className="row-span-2">{visibleInputs[0] && renderTile(visibleInputs[0])}</div>
