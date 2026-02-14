@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   getCurrentUser,
   isHost as checkIsHost,
 } from "@/lib/quinn-store";
+import { useQuinnSimulator } from "@/hooks/use-quinn-simulator";
 
 interface QuinnMessage {
   role: "user" | "quinn";
@@ -68,6 +69,9 @@ export default function QuinnPanel({ sessionId, sessionHostUserId }: Props) {
   const refresh = useCallback(() => {
     setIncidents(sessionId ? getIncidentsForSession(sessionId) : getIncidents());
   }, [sessionId]);
+
+  // Live simulation
+  useQuinnSimulator(refresh);
 
   const send = () => {
     if (!input.trim()) return;

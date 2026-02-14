@@ -15,6 +15,7 @@ import {
   getCurrentUser,
 } from "@/lib/quinn-store";
 import { mockSessions } from "@/lib/mock-data";
+import { useQuinnSimulator } from "@/hooks/use-quinn-simulator";
 
 export default function OpsDashboard() {
   const user = getCurrentUser();
@@ -22,6 +23,9 @@ export default function OpsDashboard() {
   const [selected, setSelected] = useState<Incident | null>(null);
 
   const refresh = useCallback(() => setIncidents(getIncidents()), []);
+
+  // Live simulation — refresh dashboard when new incidents arrive
+  useQuinnSimulator(refresh);
 
   if (!isOps()) {
     return (
