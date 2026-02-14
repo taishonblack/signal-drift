@@ -90,7 +90,7 @@ const SignalTile = ({
       {!isFocused && input.status === "error" && <div className="h-0.5 bg-destructive" />}
 
       {/* Video placeholder – always 16:9 */}
-      <div className={`relative flex items-center justify-center ${isFullscreen ? "flex-1" : "aspect-video w-full"}`} style={{ background: "black" }}>
+      <div className={`relative flex items-center justify-center ${isFullscreen ? "flex-1" : "w-full"}`} style={{ background: "black", aspectRatio: "16 / 9" }}>
         {input.videoSrc && isActive ? (
           <video
             src={input.videoSrc}
