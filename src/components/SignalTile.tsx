@@ -70,7 +70,7 @@ const SignalTile = ({
   return (
     <div
       className={cn(
-        "rounded-lg overflow-hidden flex flex-col h-full border-2 transition-all cursor-pointer",
+        "rounded-lg overflow-hidden flex flex-col h-full min-h-0 border-2 transition-all cursor-pointer",
         isFocused ? "border-primary" : "border-transparent",
         !isFocused && "opacity-[0.92]"
       )}
@@ -90,7 +90,7 @@ const SignalTile = ({
       {!isFocused && input.status === "error" && <div className="h-0.5 bg-destructive" />}
 
       {/* Video placeholder – always 16:9 */}
-      <div className={`relative flex items-center justify-center ${isFullscreen ? "flex-1" : "w-full"}`} style={{ background: "black", aspectRatio: "16 / 9" }}>
+      <div className={`relative flex items-center justify-center ${isFullscreen ? "flex-1" : "flex-1 min-h-0 w-full"}`} style={{ background: "black" }}>
         {input.videoSrc && isActive ? (
           <video
             src={input.videoSrc}
