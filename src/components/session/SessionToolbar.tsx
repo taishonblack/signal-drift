@@ -1,4 +1,4 @@
-import { Grid2X2, Square, Columns2, LayoutDashboard, PanelRightClose, PanelRightOpen, Copy, FileText, Keyboard, Rows2 } from "lucide-react";
+import { Grid2X2, Square, Columns2, LayoutDashboard, PanelRightClose, PanelRightOpen, Copy, FileText, Keyboard, Rows2, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/hooks/use-toast";
@@ -30,6 +30,8 @@ interface SessionToolbarProps {
   onToggleNotes: () => void;
   showInspector: boolean;
   onToggleInspector: () => void;
+  showSafeArea: boolean;
+  onToggleSafeArea: () => void;
 }
 
 const SHORTCUTS = [
@@ -52,6 +54,8 @@ const SessionToolbar = ({
   onToggleNotes,
   showInspector,
   onToggleInspector,
+  showSafeArea,
+  onToggleSafeArea,
 }: SessionToolbarProps) => {
   const copyInvite = () => {
     navigator.clipboard.writeText(`${window.location.origin}/join?session=${sessionId}&pin=${sessionPin}`);
@@ -91,6 +95,15 @@ const SessionToolbar = ({
         )}
         <div className="w-px h-5 bg-border/30 mx-1" />
         <TimeDisplayPopover prefs={timePrefs} onChange={onTimePrefsChange} />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggleSafeArea}
+          className={`h-8 w-8 ${showSafeArea ? "text-primary bg-muted/30" : "text-muted-foreground"}`}
+          title="Safe area overlay"
+        >
+          <ScanLine className="h-3.5 w-3.5" />
+        </Button>
         <Button variant="ghost" size="icon" onClick={onToggleNotes} className="h-8 w-8 text-muted-foreground hover:text-foreground">
           <FileText className="h-3.5 w-3.5" />
         </Button>

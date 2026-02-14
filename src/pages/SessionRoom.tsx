@@ -45,6 +45,7 @@ const SessionRoom = () => {
   const [editAddress, setEditAddress] = useState("");
   const [editPassphrase, setEditPassphrase] = useState("");
   const [showQuinn, setShowQuinn] = useState(false);
+  const [showSafeArea, setShowSafeArea] = useState(false);
 
   const user = getCurrentUser();
   const isHostUser = isHost("u1"); // mock host user id
@@ -130,6 +131,7 @@ const SessionRoom = () => {
       tileOriginTZ={getOriginTZ(input.id)}
       focusedOriginTZ={focusedOriginTZ}
       sessionStartedAt={session.createdAt}
+      showSafeArea={showSafeArea}
     />
   );
 
@@ -174,6 +176,8 @@ const SessionRoom = () => {
           onToggleNotes={() => setShowNotes(!showNotes)}
           showInspector={showInspector}
           onToggleInspector={() => setShowInspector(!showInspector)}
+          showSafeArea={showSafeArea}
+          onToggleSafeArea={() => setShowSafeArea(!showSafeArea)}
         />
 
         {/* Quinn toggle + alert badge */}
