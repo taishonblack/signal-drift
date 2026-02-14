@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import type { StreamInput } from "@/lib/mock-data";
 import type { LiveMetrics } from "@/hooks/use-live-metrics";
 import TimeOverlay from "@/components/session/TimeOverlay";
+import SafeAreaOverlay from "@/components/session/SafeAreaOverlay";
 import type { TimeDisplayPrefs } from "@/lib/time-utils";
 
 interface SignalTileProps {
@@ -20,6 +21,7 @@ interface SignalTileProps {
   tileOriginTZ?: string;
   focusedOriginTZ?: string;
   sessionStartedAt?: string;
+  showSafeArea?: boolean;
 }
 
 const statusBadge: Record<string, { label: string; cls: string }> = {
@@ -56,6 +58,7 @@ const SignalTile = ({
   input, liveMetrics, isFocused = false, isAudioSource, isFullscreen,
   onFocusClick, onFullscreen, onEdit, onSelectAudio,
   timePrefs, tileOriginTZ = "UTC", focusedOriginTZ = "UTC", sessionStartedAt = "",
+  showSafeArea = false,
 }: SignalTileProps) => {
   const badge = statusBadge[input.status];
   const bitrate = liveMetrics?.bitrate ?? input.metrics.bitrate;
@@ -119,6 +122,9 @@ const SignalTile = ({
             sessionStartedAt={sessionStartedAt}
           />
         )}
+
+        {/* Safe area overlay */}
+        {isActive && showSafeArea && <SafeAreaOverlay />}
 
         {/* Audio meters */}
         {isActive && <AudioMeter peakL={peakL} peakR={peakR} />}
