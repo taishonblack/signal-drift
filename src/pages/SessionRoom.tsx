@@ -8,6 +8,7 @@ import QCNotesPanel from "@/components/session/QCNotesPanel";
 import EditInputModal from "@/components/session/EditInputModal";
 import { mockSessions, mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
 import { useLiveMetrics } from "@/hooks/use-live-metrics";
+import { useSessionFocus } from "@/hooks/use-session-focus";
 import { toast } from "@/hooks/use-toast";
 
 const gridClass = (layout: Layout, compareMode: CompareMode): string => {
@@ -23,6 +24,8 @@ const gridClass = (layout: Layout, compareMode: CompareMode): string => {
 const SessionRoom = () => {
   const { id } = useParams();
   const session = mockSessions.find((s) => s.id === id) || mockSessions[0];
+  const activeInputs = session.inputs.filter((i) => i.enabled);
+
   const [layout, setLayout] = useState<Layout>("4");
   const [compareMode, setCompareMode] = useState<CompareMode>("stacked");
   const [audioSource, setAudioSource] = useState(session.inputs[0]?.id);
@@ -37,9 +40,8 @@ const SessionRoom = () => {
   const [editAddress, setEditAddress] = useState("");
   const [editPassphrase, setEditPassphrase] = useState("");
 
-  // Focus state — single focused feed for collaboration
-  const activeInputs = session.inputs.filter((i) => i.enabled);
-  const [focusedId, setFocusedId] = useState(activeInputs[0]?.id ?? "");
+  // Shared Focus state via realtime
+  const { focusedId, focusedBy, setFocus } = useSessionFocus(session.id, activeInputs[0]?.id ?? "");
   const { getMetrics } = useLiveMetrics(session.inputs);
 
   const focusedInput = activeInputs.find((i) => i.id === focusedId);
@@ -55,12 +57,12 @@ const SessionRoom = () => {
       const num = parseInt(e.key);
       if (num >= 1 && num <= 4 && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
         const input = activeInputs[num - 1];
-        if (input) setFocusedId(input.id);
+        if (input) setFocus(input.id);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [fullscreenId, activeInputs]);
+  }, [fullscreenId, activeInputs, setFocus]);
 
   const addMarker = () => {
     if (!markerNote.trim()) return;
@@ -94,7 +96,7 @@ const SessionRoom = () => {
       input={input}
       liveMetrics={getMetrics(input.id)}
       isFocused={focusedId === input.id}
-      onFocusClick={() => setFocusedId(input.id)}
+      onFocusClick={() => setFocus(input.id)}
       isAudioSource={audioSource === input.id}
       onSelectAudio={() => setAudioSource(input.id)}
       onFullscreen={() => setFullscreenId(input.id)}
@@ -111,7 +113,7 @@ const SessionRoom = () => {
           isFocused={focusedId === fullscreenInput.id}
           isAudioSource={audioSource === fullscreenInput.id}
           onClose={() => setFullscreenId(null)}
-          onFocusClick={() => setFocusedId(fullscreenInput.id)}
+          onFocusClick={() => setFocus(fullscreenInput.id)}
           onSelectAudio={() => setAudioSource(fullscreenInput.id)}
           onEdit={() => openEdit(fullscreenInput)}
         />
@@ -147,7 +149,7 @@ const SessionRoom = () => {
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>Focused:</span>
           <span className="text-primary font-medium">{focusedLabel}</span>
-          <span className="text-muted-foreground/50">· Focused by: You</span>
+          <span className="text-muted-foreground/50">· Focused by: {focusedBy}</span>
         </div>
 
         <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
