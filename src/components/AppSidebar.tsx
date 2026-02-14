@@ -1,4 +1,4 @@
-import { Plus, LogIn, Settings, LayoutDashboard } from "lucide-react";
+import { Plus, LogIn, Settings, LayoutDashboard, Activity } from "lucide-react";
 import { Link } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
 import MakoFinMark from "@/components/MakoFinMark";
@@ -17,6 +17,7 @@ const navItems = [
   { title: "Sessions", url: "/sessions", icon: LayoutDashboard },
   { title: "Create", url: "/create", icon: Plus },
   { title: "Join", url: "/join", icon: LogIn },
+  { title: "Ops", url: "/ops", icon: Activity },
   { title: "Account", url: "/account", icon: Settings },
 ];
 
