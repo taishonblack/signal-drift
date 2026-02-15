@@ -71,14 +71,15 @@ const Sessions = () => {
                 key={session.id}
                 to={isEnded ? "#" : `/session/${session.id}`}
                 onClick={(e) => handleSessionClick(e, session)}
-                className={`mako-glass rounded-lg p-4 flex items-center justify-between gap-4 transition-all group ${
+                className={`mako-glass rounded-lg p-4 pr-3 transition-all group ${
                   isEnded
                     ? "hover:bg-muted/10 cursor-pointer"
                     : "hover:bg-muted/20 hover:translate-y-[-1px]"
                 }`}
               >
-                <div className="flex items-center gap-4 min-w-0">
-                  <div className="flex items-center gap-1.5 text-xs font-medium">
+                {/* Row 1: Badge + Title */}
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="shrink-0">
                     {isLive ? (
                       <Badge variant="default" className="gap-1 text-[10px] px-1.5 py-0 h-5 font-semibold">
                         <Radio className="h-3 w-3" /> Live
@@ -93,34 +94,35 @@ const Sessions = () => {
                       </Badge>
                     )}
                   </div>
-                  <div className="min-w-0">
-                    <p className={`text-sm font-medium truncate transition-colors ${
-                      isEnded
-                        ? "text-muted-foreground group-hover:text-foreground/80"
-                        : "text-foreground group-hover:text-primary"
-                    }`}>
-                      {session.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {session.inputCount} input{session.inputCount !== 1 ? "s" : ""} · PIN {session.pin}
-                    </p>
-                  </div>
+                  <p className={`text-sm font-medium truncate min-w-0 transition-colors ${
+                    isEnded
+                      ? "text-muted-foreground group-hover:text-foreground/80"
+                      : "text-foreground group-hover:text-primary"
+                  }`}>
+                    {session.name}
+                  </p>
                 </div>
 
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(session.createdAt).toLocaleDateString()}
-                  </span>
-                  {isEnded && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 transition-colors">
-                          <Download className="h-3.5 w-3.5" />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>Download report</TooltipContent>
-                    </Tooltip>
-                  )}
+                {/* Row 2: Metadata left + Date right */}
+                <div className="flex items-center justify-between gap-2 mt-1.5 min-w-0">
+                  <p className="text-xs text-muted-foreground truncate min-w-0">
+                    {session.inputCount} input{session.inputCount !== 1 ? "s" : ""} · PIN {session.pin}
+                  </p>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      {new Date(session.createdAt).toLocaleDateString()}
+                    </span>
+                    {isEnded && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 transition-colors">
+                            <Download className="h-3 w-3" />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>Download report</TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
                 </div>
               </Link>
             );
