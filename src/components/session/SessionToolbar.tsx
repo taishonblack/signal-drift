@@ -59,14 +59,14 @@ const SessionToolbar = ({
   };
 
   return (
-    <div className="flex items-center justify-between gap-2 flex-wrap">
-      <div className="flex items-center gap-3 min-w-0">
-        <h1 className="text-sm font-medium text-foreground truncate">{sessionName}</h1>
+    <div className="flex items-center justify-between gap-2 flex-wrap w-full min-w-0 overflow-hidden">
+      <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+        <h1 className="text-sm font-medium text-foreground truncate min-w-0">{sessionName}</h1>
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary font-medium shrink-0">
           {sessionStatus === "live" ? "LIVE" : "ENDED"}
         </span>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 min-w-0 flex-shrink-0 overflow-hidden">
         {(Object.keys(layoutIcons) as Layout[]).map((l) => {
           const Icon = layoutIcons[l];
           return (

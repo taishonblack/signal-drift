@@ -24,7 +24,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full">
+      <div className="flex min-h-screen w-full max-w-full overflow-x-hidden">
         <MakoBackground />
         <div className="hidden md:block">
           <AppSidebar />
@@ -34,7 +34,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
             <SidebarTrigger data-sidebar="trigger" className="text-muted-foreground hover:text-foreground" />
           </header>
           <MobileNav />
-          <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6 overflow-auto">
+          <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6 overflow-x-hidden overflow-y-auto">
             {children}
           </main>
         </div>
