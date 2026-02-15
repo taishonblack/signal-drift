@@ -142,3 +142,8 @@
 ::-webkit-scrollbar-thumb:hover {
   background: hsla(200, 30%, 40%, 0.6);
 }
+
+/* Prevent horizontal overflow / rubber-banding on mobile */
+html, body {
+  overflow-x: hidden;
+}

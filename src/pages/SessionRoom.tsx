@@ -216,7 +216,7 @@ const SessionRoom = () => {
         onApply={applyEdit}
       />
 
-      <div className="flex flex-col h-[calc(100vh-3rem-2rem)] md:h-[calc(100vh-3rem-3rem)] gap-4">
+      <div className="flex flex-col h-[calc(100vh-3rem-2rem)] md:h-[calc(100vh-3rem-3rem)] gap-4 w-full max-w-full overflow-x-hidden" style={{ touchAction: "pan-y" }}>
         <SessionToolbar
           sessionName={session.name}
           sessionStatus={session.status}
