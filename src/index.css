@@ -147,3 +147,9 @@
 html, body {
   overflow-x: hidden;
 }
+
+/* Double-tap cycle flash — subtle radial glow that fades out */
+@keyframes cycle-flash {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}

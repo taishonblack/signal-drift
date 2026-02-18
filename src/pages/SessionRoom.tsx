@@ -60,6 +60,7 @@ const SessionRoom = () => {
   const [showQuinn, setShowQuinn] = useState(false);
   const [showSafeArea, setShowSafeArea] = useState(false);
   const [activeDragSlot, setActiveDragSlot] = useState<SlotId | null>(null);
+  const [cycleFlash, setCycleFlash] = useState(false);
 
   const user = getCurrentUser();
   const isHostUser = isHost("u1");
@@ -292,15 +293,17 @@ const SessionRoom = () => {
                 if (!input) return null;
 
                 const handleDoubleTap = () => {
-                  if (!isMobile) return;
+                  if (!isMobile || activeLineIds.length < 2) return;
                   const idx = activeLineIds.indexOf(focusedId);
                   const nextIdx = (idx + 1) % activeLineIds.length;
                   setFocus(activeLineIds[nextIdx]);
+                  setCycleFlash(true);
+                  setTimeout(() => setCycleFlash(false), 350);
                 };
 
                 return (
                   <div
-                    className={`flex-1 grid ${grid.cls} gap-3 min-h-0`}
+                    className={`flex-1 grid ${grid.cls} gap-3 min-h-0 relative`}
                     style={grid.style}
                     onDoubleClick={handleDoubleTap}
                   >
@@ -321,6 +324,16 @@ const SessionRoom = () => {
                       showSafeArea={showSafeArea}
                       canDrag={false}
                     />
+                    {/* Double-tap cycle flash */}
+                    {cycleFlash && (
+                      <div
+                        className="absolute inset-0 rounded-lg pointer-events-none z-20"
+                        style={{
+                          background: "radial-gradient(ellipse at center, hsla(var(--primary), 0.18) 0%, transparent 70%)",
+                          animation: "cycle-flash 350ms ease-out forwards",
+                        }}
+                      />
+                    )}
                   </div>
                 );
               }
