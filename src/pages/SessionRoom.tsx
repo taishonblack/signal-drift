@@ -290,8 +290,20 @@ const SessionRoom = () => {
               if (effectiveMode === 1) {
                 const input = focusedInput ?? activeInputs[0];
                 if (!input) return null;
+
+                const handleDoubleTap = () => {
+                  if (!isMobile) return;
+                  const idx = activeLineIds.indexOf(focusedId);
+                  const nextIdx = (idx + 1) % activeLineIds.length;
+                  setFocus(activeLineIds[nextIdx]);
+                };
+
                 return (
-                  <div className={`flex-1 grid ${grid.cls} gap-3 min-h-0`} style={grid.style}>
+                  <div
+                    className={`flex-1 grid ${grid.cls} gap-3 min-h-0`}
+                    style={grid.style}
+                    onDoubleClick={handleDoubleTap}
+                  >
                     <DraggableSignalTile
                       slotId="A"
                       input={input}
