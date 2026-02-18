@@ -286,6 +286,33 @@ const SessionRoom = () => {
               const grid = gridMap[effectiveStr] || gridMap["1"];
               const slots = SLOT_IDS.slice(0, effectiveMode);
 
+              // In 1-up mode, show the focused input directly (keyboard shortcut driven)
+              if (effectiveMode === 1) {
+                const input = focusedInput ?? activeInputs[0];
+                if (!input) return null;
+                return (
+                  <div className={`flex-1 grid ${grid.cls} gap-3 min-h-0`} style={grid.style}>
+                    <DraggableSignalTile
+                      slotId="A"
+                      input={input}
+                      liveMetrics={getMetrics(input.id)}
+                      isFocused={true}
+                      onFocusClick={() => setFocus(input.id)}
+                      isAudioSource={audioSource === input.id}
+                      onSelectAudio={() => setAudioSource(input.id)}
+                      onFullscreen={() => setFullscreenId(input.id)}
+                      onEdit={() => openEdit(input)}
+                      timePrefs={timePrefs}
+                      tileOriginTZ={getOriginTZ(input.id)}
+                      focusedOriginTZ={focusedOriginTZ}
+                      sessionStartedAt={session.createdAt}
+                      showSafeArea={showSafeArea}
+                      canDrag={false}
+                    />
+                  </div>
+                );
+              }
+
               return (
                 <SortableContext items={slots}>
                   <div className={`flex-1 grid ${grid.cls} gap-3 min-h-0`} style={grid.style}>
