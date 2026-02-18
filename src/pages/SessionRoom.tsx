@@ -16,6 +16,7 @@ import { useSessionFocus } from "@/hooks/use-session-focus";
 import { loadTimePrefs, saveTimePrefs, type TimeDisplayPrefs } from "@/lib/time-utils";
 import { toast } from "@/hooks/use-toast";
 import { Bot, RotateCcw } from "lucide-react";
+import { useSessionKeyboardShortcuts } from "@/hooks/use-session-keyboard-shortcuts";
 import { Button } from "@/components/ui/button";
 import { getUnackedAlertCountForSession, getCurrentUser, isHost } from "@/lib/quinn-store";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -96,22 +97,22 @@ const SessionRoom = () => {
   }, []);
   const focusedOriginTZ = getOriginTZ(focusedId);
 
-  // Keyboard shortcuts
+  // Escape to exit fullscreen
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && fullscreenId) {
-        setFullscreenId(null);
-        return;
-      }
-      const num = parseInt(e.key);
-      if (num >= 1 && num <= 4 && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-        const input = activeInputs[num - 1];
-        if (input) setFocus(input.id);
-      }
+      if (e.key === "Escape" && fullscreenId) setFullscreenId(null);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [fullscreenId, activeInputs, setFocus]);
+  }, [fullscreenId]);
+
+  // Global keyboard shortcuts (1-4 jump + arrow cycling) — single-stream mode only
+  useSessionKeyboardShortcuts({
+    enabled: layout === "1",
+    activeLineIds: activeLineIds,
+    focusedLineId: focusedId,
+    setFocusedLineId: setFocus,
+  });
 
   const addMarker = () => {
     if (!markerNote.trim()) return;
