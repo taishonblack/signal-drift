@@ -84,7 +84,7 @@ export default function FeedbackModal({ collapsed }: FeedbackModalProps) {
   ) : (
     <button
       onClick={() => setOpen(true)}
-      className="flex items-center gap-2 px-3 py-2 w-full rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/30"
+      className="flex items-center gap-2 px-3 py-2 w-full rounded-md text-xs font-medium text-muted-foreground transition-colors hover:text-foreground hover:bg-muted/30"
     >
       <Pencil className="h-4 w-4 shrink-0" />
       <span>Feedback</span>
