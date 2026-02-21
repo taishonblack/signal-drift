@@ -4,6 +4,7 @@ import { NavLink } from "@/components/NavLink";
 import MakoFinMark from "@/components/MakoFinMark";
 import { useSidebar } from "@/components/ui/sidebar";
 import RecentSessionsPanel from "@/components/RecentSessionsPanel";
+import FeedbackModal from "@/components/FeedbackModal";
 import {
   Sidebar,
   SidebarContent,
@@ -67,6 +68,10 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <RecentSessionsPanel sidebarCollapsed={collapsed} />
+
+        <div className="mt-auto px-2 pb-4">
+          <FeedbackModal collapsed={collapsed} />
+        </div>
       </SidebarContent>
     </Sidebar>
   );
