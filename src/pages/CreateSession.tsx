@@ -723,56 +723,65 @@ const CreateSession = () => {
         </p>
       </div>
 
-      {/* ─── Right: Recent Sessions ─── */}
+      {/* ─── Right: Change log (configure) or Recent Sessions (create) ─── */}
       <div className="lg:flex-[3] min-w-0">
-        <div className="mako-glass-solid rounded-lg p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-foreground">Recent Sessions</h2>
-            <span className="text-[10px] text-muted-foreground/60">{recentSessions.length}</span>
+        {mode === "configure" && existing ? (
+          <div className="mako-glass-solid rounded-lg p-5">
+            <SessionChangeLogPanel
+              entries={existing.changeLog ?? []}
+              emptyLabel="No changes recorded yet. Every save is logged here."
+            />
           </div>
+        ) : (
+          <div className="mako-glass-solid rounded-lg p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-medium text-foreground">Recent Sessions</h2>
+              <span className="text-[10px] text-muted-foreground/60">{recentSessions.length}</span>
+            </div>
 
-          <div className="space-y-1">
-            {recentSessions.length === 0 && (
-              <p className="text-xs text-muted-foreground/60 text-center py-6">
-                No sessions yet
-              </p>
-            )}
-            {recentSessions.map((session) => {
-              const canOpen = session.status === "active";
-              return (
-                <button
-                  key={session.id}
-                  onClick={() => canOpen && navigate(`/session/${session.id}`)}
-                  className="w-full text-left p-3 rounded-md hover:bg-muted/15 transition-colors group"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-medium text-foreground truncate group-hover:text-primary transition-colors">
-                      {session.name}
-                    </p>
-                    <SessionStatusBadge status={session.status} />
-                  </div>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="text-[10px] text-muted-foreground">
-                      {new Date(session.createdAt).toLocaleDateString()}{" "}
-                      {new Date(session.createdAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                    {session.purpose && (
-                      <span className="text-[10px] text-muted-foreground/60">
-                        · {session.purpose}
+            <div className="space-y-1">
+              {recentSessions.length === 0 && (
+                <p className="text-xs text-muted-foreground/60 text-center py-6">
+                  No sessions yet
+                </p>
+              )}
+              {recentSessions.map((session) => {
+                const canOpen = session.status === "active";
+                return (
+                  <button
+                    key={session.id}
+                    onClick={() => canOpen && navigate(`/session/${session.id}`)}
+                    className="w-full text-left p-3 rounded-md hover:bg-muted/15 transition-colors group"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                        {session.name}
+                      </p>
+                      <SessionStatusBadge status={session.status} />
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-[10px] text-muted-foreground">
+                        {new Date(session.createdAt).toLocaleDateString()}{" "}
+                        {new Date(session.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </span>
-                    )}
-                    <span className="text-[10px] text-muted-foreground/50">
-                      · {session.host}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
+                      {session.purpose && (
+                        <span className="text-[10px] text-muted-foreground/60">
+                          · {session.purpose}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-muted-foreground/50">
+                        · {session.host}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <SwitchActiveSessionDialog
