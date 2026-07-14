@@ -45,8 +45,13 @@ const ViewersPanel = ({
   // Live-read requests/owner from store so approvals refresh immediately.
   const record = sessionId ? getSessionById(sessionId) : undefined;
   const ownerId = record?.ownerUserId ?? record?.hostUserId;
-  const pending: SessionOwnershipRequest[] =
-    (record?.ownershipRequests ?? []).filter((r) => r.status === "pending");
+  const allRequests: SessionOwnershipRequest[] = record?.ownershipRequests ?? [];
+  const pending: SessionOwnershipRequest[] = allRequests.filter((r) => r.status === "pending");
+  const latestRequestFor = (userId: string): SessionOwnershipRequest | undefined => {
+    const forUser = allRequests.filter((r) => r.userId === userId);
+    if (forUser.length === 0) return undefined;
+    return [...forUser].sort((a, b) => (a.requestedAt < b.requestedAt ? 1 : -1))[0];
+  };
 
   const me = viewers.find((v) => v.userId === currentUserId);
   const isOwner = !!currentUserId && ownerId === currentUserId;
