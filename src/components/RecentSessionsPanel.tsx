@@ -78,7 +78,8 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
           <div className="px-2 pb-2 space-y-0.5 max-h-56 overflow-y-auto">
             {recentSessions.map((session) => {
               const isEnded = session.status === "ended";
-              const isLive = session.status === "live";
+
+
 
               return (
                 <Link
