@@ -49,7 +49,6 @@ const statusDot: Record<LineStatus, string> = {
   error: "bg-destructive",
 };
 
-const CURRENT_USER_ID = "u1";
 
 const CreateSession = () => {
   const navigate = useNavigate();
