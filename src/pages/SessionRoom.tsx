@@ -453,7 +453,13 @@ const SessionRoom = () => {
           <span className="text-muted-foreground/50">· Focused by: {focusedBy}</span>
           <div className="ml-auto flex items-center gap-2">
             {isOwner && <span className="text-[10px] uppercase tracking-wider text-primary/80 font-semibold">Owner</span>}
-            <ViewersPanel viewers={viewers} />
+            <ViewersPanel
+              viewers={viewers}
+              sessionId={id}
+              currentUserId={currentUserRef.id}
+              onChange={() => id && setRecord(getSessionById(id))}
+            />
+
           </div>
         </div>
 
