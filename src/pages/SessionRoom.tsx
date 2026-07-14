@@ -88,7 +88,12 @@ const SessionRoom = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Poll for viewer/ownership updates (mock realtime).
+  // Track last-seen change-log entry to fire toasts for new configuration changes.
+  const [lastSeenChangeId, setLastSeenChangeId] = useState<string | undefined>(
+    () => record?.changeLog?.[record.changeLog.length - 1]?.id,
+  );
+
+  // Poll for viewer/ownership + config-change updates (mock realtime).
   useEffect(() => {
     if (!id) return;
     const t = window.setInterval(() => {
@@ -97,12 +102,37 @@ const SessionRoom = () => {
       if (next && !next.ownerUserId && (next.viewers ?? []).some((v) => v.userId === currentUserRef.id)) {
         setOwnershipDialogOpen(true);
       }
+      // Change log deltas → toast for changes by other users.
+      const log = next?.changeLog ?? [];
+      if (log.length > 0) {
+        const lastIdx = lastSeenChangeId
+          ? log.findIndex((e) => e.id === lastSeenChangeId)
+          : -1;
+        const fresh: SessionChangeEntry[] = log.slice(lastIdx + 1);
+        const foreign = fresh.filter((e) => e.userId !== currentUserRef.id);
+        if (foreign.length === 1) {
+          toast({
+            title: `${foreign[0].userName} updated the session`,
+            description: foreign[0].summary,
+          });
+        } else if (foreign.length > 1) {
+          const actor = foreign[foreign.length - 1].userName;
+          toast({
+            title: `${actor} made ${foreign.length} configuration changes`,
+            description: foreign[foreign.length - 1].summary,
+          });
+        }
+        if (fresh.length > 0) {
+          setLastSeenChangeId(log[log.length - 1].id);
+        }
+      }
     }, 2000);
     return () => window.clearInterval(t);
-  }, [id, currentUserRef.id]);
+  }, [id, currentUserRef.id, lastSeenChangeId]);
 
   const viewers = record?.viewers ?? [];
   const isOwner = (record?.ownerUserId ?? record?.hostUserId) === currentUserRef.id;
+  const canConfigure = canConfigureSession(record, currentUserRef.id);
 
 
   const [layout, setLayout] = useState<Layout>("4");
