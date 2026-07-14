@@ -148,6 +148,28 @@ const SessionRoom = () => {
   const focusedInput = activeInputs.find((i) => i.id === focusedId);
   const focusedLabel = focusedInput?.label ?? "Unknown";
 
+  // Presence: write focused label into current viewer entry.
+  useEffect(() => {
+    if (!id || !focusedInput) return;
+    updateViewerFocus(id, currentUserRef.id, focusedInput.label);
+  }, [id, focusedInput, currentUserRef.id]);
+
+  const handleBecomeOwner = useCallback(() => {
+    if (!id) return;
+    transferOwnership(id, currentUserRef.id);
+    setRecord(getSessionById(id));
+    setOwnershipDialogOpen(false);
+    toast({ title: "You are now the session owner" });
+  }, [id, currentUserRef.id]);
+
+  const handleLeaveAsViewer = useCallback(() => {
+    if (!id) return;
+    leaveSession(id, currentUserRef.id);
+    setOwnershipDialogOpen(false);
+    navigate("/sessions");
+  }, [id, currentUserRef.id, navigate]);
+
+
   const getOriginTZ = useCallback((_inputId: string) => {
     return "America/Los_Angeles";
   }, []);
