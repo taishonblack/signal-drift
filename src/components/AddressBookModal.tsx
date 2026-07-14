@@ -5,8 +5,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   getAddressBook, saveAddressBook, isLoggedIn,
+  parseSrtInput,
   type AddressBookEntry,
 } from "@/lib/session-store";
 
@@ -22,16 +24,22 @@ const AddressBookModal = ({ onSelect }: Props) => {
   const [editId, setEditId] = useState<string | null>(null);
   const [editTag, setEditTag] = useState("");
   const [editAddr, setEditAddr] = useState("");
+  const [editPort, setEditPort] = useState("");
+  const [editDesc, setEditDesc] = useState("");
   const [addMode, setAddMode] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const filtered = useMemo(
     () =>
-      entries.filter(
-        (e) =>
-          e.tag.toLowerCase().includes(search.toLowerCase()) ||
-          e.address.toLowerCase().includes(search.toLowerCase())
-      ),
+      entries.filter((e) => {
+        const q = search.toLowerCase();
+        return (
+          e.tag.toLowerCase().includes(q) ||
+          e.address.toLowerCase().includes(q) ||
+          (e.port || "").includes(q) ||
+          (e.description || "").toLowerCase().includes(q)
+        );
+      }),
     [entries, search]
   );
 
@@ -40,8 +48,15 @@ const AddressBookModal = ({ onSelect }: Props) => {
     saveAddressBook(next);
   };
 
-  const handleSelect = (addr: string) => {
-    onSelect(addr);
+  const displayAddress = (e: AddressBookEntry) => {
+    if (e.port) return `${e.address}:${e.port}`;
+    return e.address;
+  };
+
+  const handleSelect = (e: AddressBookEntry) => {
+    // Compose a value CreateSession's parseSrtInput can split.
+    const value = e.port ? `${e.address}:${e.port}` : e.address;
+    onSelect(value);
     setOpen(false);
   };
 
@@ -49,31 +64,40 @@ const AddressBookModal = ({ onSelect }: Props) => {
     setAddMode(true);
     setEditTag("");
     setEditAddr("");
+    setEditPort("");
+    setEditDesc("");
     setEditId(null);
   };
 
   const startEdit = (e: AddressBookEntry) => {
+    // Support legacy entries that stored the full srt:// URL in `address`.
+    const parsed = parseSrtInput(e.address);
     setEditId(e.id);
     setEditTag(e.tag);
-    setEditAddr(e.address);
+    setEditAddr(e.port ? e.address : parsed.host || e.address);
+    setEditPort(e.port || parsed.port || "");
+    setEditDesc(e.description || "");
     setAddMode(false);
   };
 
   const saveEntry = () => {
     if (!editTag.trim() || !editAddr.trim()) return;
+    const clean = {
+      tag: editTag.trim(),
+      address: editAddr.trim(),
+      port: editPort.trim() || undefined,
+      description: editDesc.trim() || undefined,
+    };
     if (addMode) {
       const newEntry: AddressBookEntry = {
         id: `ab-${Date.now()}`,
-        tag: editTag.trim(),
-        address: editAddr.trim(),
+        ...clean,
         lastUsed: new Date().toISOString(),
       };
       persist([newEntry, ...entries]);
     } else if (editId) {
       persist(
-        entries.map((e) =>
-          e.id === editId ? { ...e, tag: editTag.trim(), address: editAddr.trim() } : e
-        )
+        entries.map((e) => (e.id === editId ? { ...e, ...clean } : e))
       );
     }
     setEditId(null);
@@ -84,6 +108,7 @@ const AddressBookModal = ({ onSelect }: Props) => {
     persist(entries.filter((e) => e.id !== id));
     setConfirmDelete(null);
   };
+
 
   // Not logged in → show sign-in prompt
   if (!loggedIn) {
@@ -137,14 +162,39 @@ const AddressBookModal = ({ onSelect }: Props) => {
             <Input
               value={editTag}
               onChange={(e) => setEditTag(e.target.value)}
-              placeholder="Tag name"
+              placeholder="Friendly name (e.g. NBC Program)"
               className="h-7 text-xs bg-muted/20 border-border/20"
             />
-            <Input
-              value={editAddr}
-              onChange={(e) => setEditAddr(e.target.value)}
-              placeholder="srt://ip:port"
-              className="h-7 text-xs bg-muted/20 border-border/20"
+            <div className="grid grid-cols-[1fr_5rem] gap-2">
+              <Input
+                value={editAddr}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (/[:/?]/.test(v) || /^srt:\/\//i.test(v)) {
+                    const p = parseSrtInput(v);
+                    setEditAddr(p.host);
+                    if (p.port) setEditPort(p.port);
+                  } else {
+                    setEditAddr(v);
+                  }
+                }}
+                placeholder="host or ip"
+                className="h-7 text-xs bg-muted/20 border-border/20 font-mono"
+              />
+              <Input
+                value={editPort}
+                onChange={(e) => setEditPort(e.target.value.replace(/\D/g, ""))}
+                placeholder="port"
+                inputMode="numeric"
+                className="h-7 text-xs bg-muted/20 border-border/20 font-mono"
+              />
+            </div>
+            <Textarea
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              placeholder="Description (optional)"
+              rows={2}
+              className="text-xs bg-muted/20 border-border/20 min-h-0"
             />
             <div className="flex gap-2 justify-end">
               <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => { setEditId(null); setAddMode(false); }}>Cancel</Button>
@@ -163,11 +213,16 @@ const AddressBookModal = ({ onSelect }: Props) => {
               className="flex items-center justify-between gap-2 p-2 rounded-md hover:bg-muted/15 transition-colors group"
             >
               <button
-                onClick={() => handleSelect(entry.address)}
+                onClick={() => handleSelect(entry)}
                 className="flex-1 text-left min-w-0"
               >
                 <p className="text-xs font-medium text-foreground truncate">{entry.tag}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{entry.address}</p>
+                <p className="text-[10px] text-muted-foreground truncate font-mono">
+                  {displayAddress(entry)}
+                </p>
+                {entry.description && (
+                  <p className="text-[10px] text-muted-foreground/60 truncate">{entry.description}</p>
+                )}
               </button>
               {confirmDelete === entry.id ? (
                 <div className="flex gap-1">
@@ -187,6 +242,7 @@ const AddressBookModal = ({ onSelect }: Props) => {
             </div>
           ))}
         </div>
+
       </DialogContent>
     </Dialog>
   );

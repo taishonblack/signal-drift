@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Plus, LogIn, Radio, Clock, FileText, Download } from "lucide-react";
+import { Plus, LogIn, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { mockSessions, type Session } from "@/lib/mock-data";
+import SessionStatusBadge from "@/components/session/SessionStatusBadge";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
 
 const PAGE_SIZE = 10;
@@ -64,7 +64,8 @@ const Sessions = () => {
         <div className="grid gap-3">
           {visibleSessions.map((session) => {
             const isEnded = session.status === "ended";
-            const isLive = session.status === "live";
+
+
 
             return (
               <Link
@@ -80,19 +81,7 @@ const Sessions = () => {
                 {/* Row 1: Badge + Title */}
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="shrink-0">
-                    {isLive ? (
-                      <Badge variant="default" className="gap-1 text-[10px] px-1.5 py-0 h-5 font-semibold">
-                        <Radio className="h-3 w-3" /> Live
-                      </Badge>
-                    ) : session.status === "scheduled" ? (
-                      <Badge variant="outline" className="gap-1 text-[10px] px-1.5 py-0 h-5 font-semibold text-[hsl(var(--warning))] border-[hsl(var(--warning))]/30">
-                        <Clock className="h-3 w-3" /> Scheduled
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary" className="gap-1 text-[10px] px-1.5 py-0 h-5 font-semibold text-muted-foreground">
-                        <FileText className="h-3 w-3" /> Report
-                      </Badge>
-                    )}
+                    <SessionStatusBadge status={session.status} />
                   </div>
                   <p className={`text-sm font-medium truncate min-w-0 transition-colors ${
                     isEnded

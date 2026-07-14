@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ChevronRight, Radio, FileText, Clock, Download } from "lucide-react";
+import { ChevronRight, Download } from "lucide-react";
 import { mockSessions, type Session } from "@/lib/mock-data";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import SessionStatusBadge from "@/components/session/SessionStatusBadge";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
 
 const LS_KEY = "mako_recent_sessions_collapsed";
@@ -78,7 +78,8 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
           <div className="px-2 pb-2 space-y-0.5 max-h-56 overflow-y-auto">
             {recentSessions.map((session) => {
               const isEnded = session.status === "ended";
-              const isLive = session.status === "live";
+
+
 
               return (
                 <Link
@@ -91,13 +92,7 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
                       : "text-foreground/80 hover:bg-muted/20 hover:text-foreground"
                   }`}
                 >
-                  {isLive ? (
-                    <Radio className="h-2.5 w-2.5 text-primary shrink-0" />
-                  ) : session.status === "scheduled" ? (
-                    <Clock className="h-2.5 w-2.5 text-[hsl(var(--warning))] shrink-0" />
-                  ) : (
-                    <FileText className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
-                  )}
+                  <SessionStatusBadge status={session.status} className="shrink-0" />
                   <span className="truncate flex-1">{session.name}</span>
                   {isEnded && (
                     <Tooltip>

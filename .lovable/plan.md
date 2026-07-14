@@ -1,75 +1,83 @@
 
-# MAKO — Live Signal Intelligence Platform
+# Create Session → Mission Control
 
-## Overview
-Build the complete MAKO frontend with the cinematic "digital signal infrastructure" visual system, all core pages, and mock data — ready to connect to a real media backend later.
+Reframe Create Session from a form into the entry point of a live monitoring workspace. This plan is scoped to what can be built inside MAKO's current frontend (mock-store based), with hooks in place for the collaboration/ownership features that will later be wired to Lovable Cloud.
+
+## 1. Session Information (top of page)
+
+- **Session Name** — optional. If left blank at submit, auto-generate from first source's friendly name (e.g. "NBC Program — Feb 14").
+- **Purpose** (new) — chips: Review, QC, Troubleshooting, Replay Review, Engineering, Custom. Stored on the session for later filtering.
+- **Default Event Time Zone** — keep as-is; master clock for the session.
+- **Session Duration** (new):
+  - Preset chips: 30m, 1h, 2h, 4h, 6h, Custom
+  - OR "Ends at" date+time picker (toggle between the two modes)
+  - Persist `scheduledEndAt` on the session record.
+
+## 2. Sources (renamed from "SRT Inputs")
+
+Each source card asks only what MAKO cannot discover:
+
+- **Friendly Name** (e.g. "NBC Program", "Camera 3") — used everywhere in the UI; internal `Line N` id retained
+- **Address** (host/IP) + **Port** (numeric) as separate fields
+- **Smart paste**: pasting `srt://host:port`, `host:port`, or just `host` auto-splits into the two fields
+- **Advanced** disclosure → **Passphrase** only
+- Removed: Mode selector (always `caller` internally), Bitrate input, per-line timezone
+
+**Source state pill** replaces enable toggle:
+`No Source` → `Configured` → `Testing…` → `Connected` / `Failed` / `Disabled`
+
+**Test Connection** button → shows mocked discovery panel (Codec, Resolution, FPS, Bitrate, Latency, Packet Loss, Audio, Loudness, Clock Sync). Already partly in place — will be expanded and moved into the new state model.
+
+**Address Book**
+- "+" **Save Source** action beside the Address field saves { name, address, port, passphrase?, description } into the existing address book
+- Selecting an entry populates the current source panel (name/address/port/passphrase)
+
+## 3. Lifecycle & rules
+
+- **Session status enum** extended: `draft | scheduled | active | paused | completed | archived` (Recent Sessions renders a colored badge per status; today only draft/active/completed will actually be produced by the UI).
+- **Save Draft** → status `draft`, appears in Recent Sessions with a pencil/gray badge.
+- **One active session per user** — creating or joining a new active session while one exists shows a confirm dialog:
+  > "You already have an active monitoring session. Switching sessions will end your current monitoring session." — [Cancel] [Switch Session]
+  Enforced client-side against the mock store; the losing session is marked `completed`.
+- **Scheduled end reached** (client timer while a session room is open): modal "This session is scheduled to end. Are you still monitoring?" with [Extend 30 min] [Extend 1 hr] [End Session]. If no response in 15 minutes, auto-end.
+- **Ownership transfer** (scaffold only): if the current owner leaves a shared session, remaining participant sees "Become session owner?" prompt. Wired to a placeholder handler; real presence comes with the collaboration backend.
+
+## 4. Recent Sessions badges
+
+Update `RecentSessionsPanel` to render status badges: Draft (gray pencil), Scheduled (amber clock), Active (green radio), Paused (slate), Completed (muted check), Archived (dim box). Uses existing glass styling and cyan/warning tokens — no new palette.
+
+## 5. Account-level retention (Future — scaffolded)
+
+Add a read-only "Session Retention" row on `AccountPage` explaining the policy (30 / 90 / 365 / Indefinite). Selector is present but disabled with a "Team Admin only" hint. Real enforcement is deferred.
 
 ---
 
-## 1. Design System & Global Visual Foundation
-- **Deep layered navy backgrounds** (#050B12 → #081824) with restrained radial cyan glow (8% opacity max)
-- **Glass panel system** across all UI: translucent dark panels with backdrop blur, ultra-subtle borders, soft inner glow on active states
-- **Typography**: Inter font, uppercase MAKO wordmark with letter spacing, light-weight labels, medium-weight metrics
-- **Color palette**: Primary signal #00C2FF, text #E6F6FF / #9EC6DA / #5F7F91, warning #F5A623, error #FF3B3B
-- **Subtle CSS-animated light streaks** in backgrounds (very slow, low opacity, ambient only)
-- **Interaction feedback**: micro hover elevation, thin edge glow, no bouncing or dramatic animations
+## Technical notes
 
-## 2. Hero / Landing Page
-- Full-width cinematic scene using the uploaded light rail image as background reference art
-- Gradient overlay fading from opaque left to transparent right for text readability
-- "MAKO" wordmark + "Live Signal Intelligence" tagline, minimal and understated
-- CTA buttons: "Create Session" and "Join Session"
-- Visual continuity: light rails fade naturally into the app UI below (no hard section break)
+**Data model** (`src/lib/session-store.ts`)
+- Extend `SessionRecord`:
+  - `status: "draft" | "scheduled" | "active" | "paused" | "completed" | "archived"` (replacing `"active" | "expired"`; migrate on read)
+  - `purpose?: string`
+  - `scheduledEndAt?: string`
+  - `ownerUserId: string` (alias of existing `hostUserId`)
+- Extend `SrtLine`:
+  - `friendlyName?: string`
+  - `host?: string`, `port?: string` (kept alongside `srtAddress` — composed on save)
+- Extend `AddressBookEntry` with `port`, `passphrase?`, `description?`.
+- Helpers: `parseSrtInput(str)` returning `{ host, port }`; `composeSrtAddress({host, port})`; `getActiveSessionForUser()`; `endSession(id)`.
 
-## 3. Responsive Navigation
-- **Desktop**: Left sidebar, collapsible to icons-only, hideable with "B" keyboard shortcut. Preference saved to localStorage. Glass panel styling, near-invisible borders. Active item = thin vertical cyan light bar
-- **Mobile portrait**: Fixed bottom nav with icons + labels (Sessions, Create, Join, Settings) — transparent background, subtle under-glow on active
-- **Mobile landscape**: Collapsible left side rail
-- Small "MAKO" wordmark top-left of sidebar (14-16px), collapses to "M" mark
+**UI**
+- `src/pages/CreateSession.tsx` — reorganize into sections: Session Info, Sources, Actions. Introduce `SourceCard` sub-component for cleanliness.
+- New: `src/components/session/DurationPicker.tsx` (preset chips + "Ends at" toggle).
+- New: `src/components/session/PurposeSelect.tsx` (chip group).
+- Extend `AddressBookModal` save form with the additional fields.
+- `RecentSessionsPanel` + `Sessions.tsx` — status badge component `SessionStatusBadge`.
+- New: `src/components/session/ScheduledEndDialog.tsx` used inside `SessionRoom` when `scheduledEndAt` passes.
+- New confirm dialog `SwitchActiveSessionDialog` triggered from Create Session submit and from `Sessions.tsx` join clicks.
 
-## 4. Sessions Home Page
-- List of sessions displayed as glass panel cards with session name, status, date, input count
-- Mock session data (3-5 example sessions with various states)
-- "Create Review Session" and "Join Session" action buttons
-- Session cards show live/ended status with subtle accent indicators
+**Out of scope for this pass**
+- Real presence / multi-user ownership transfer (needs backend)
+- Account-level retention enforcement
+- Actual paused/archived transitions (only visualized)
 
-## 5. Create Review Session Page
-- Glass panel form with:
-  - Session name input
-  - 1–4 input lines, each with: enable toggle, editable label ("Line 1–4"), SRT address field, optional passphrase field
-  - Add/remove input lines dynamically
-- "Start Session" button navigates to Session Room
-- Clean, spacious form layout matching the restrained aesthetic
-
-## 6. Session Room (Core Workspace)
-- **Multiview player grid** with switchable layouts: 1-up, 2-up, 3-up (1 large + 2 small), 4-up (2×2)
-- Each stream tile ("Signal Bay"):
-  - Mock video placeholder with label overlay
-  - Status badge: Connecting / Live / Warning / Error
-  - 2px top accent line (cyan for live, amber for warning, red for error)
-  - Bitrate/loss overlay (mock data)
-  - Fullscreen button per tile (hides nav, ESC exits)
-  - Edit input button (swap SRT address mid-session via modal)
-- **Layout switcher** toolbar
-- **Audio source selector** (which tile provides audio)
-
-## 7. Inspector Panel (Collapsible)
-- Side panel or bottom drawer, collapsed by default
-- Shows per-stream technical details (all mock): codec, profile, resolution, frame rate, bitrate, packet loss, RTT, audio channels, sample rate
-- Thin signal-trace style metric visualizations using Recharts
-- Health indicators with subtle color coding
-
-## 8. Shared Notes & QC Markers
-- Notes panel within Session Room (collapsible)
-- Text area for shared session notes
-- "Add Marker" button that captures a timestamped QC note tied to the active stream
-- Marker list with timestamps and stream labels
-
-## 9. Invite / Join Flow
-- Session Room shows invite controls: copyable join link + session PIN
-- Join Session page: enter session ID or PIN to access a session room as a viewer
-- Mock flow (no real auth) — just navigates to a viewer version of the session room
-
-## 10. Settings Page
-- Minimal settings: display preferences, nav behavior, theme (dark only for now)
-- Placeholder sections for future account/auth settings
+Once approved I'll implement in this order: data model + helpers → CreateSession redesign → duration/purpose components → active-session rule → status badges → scheduled-end dialog wired into SessionRoom → account retention stub.

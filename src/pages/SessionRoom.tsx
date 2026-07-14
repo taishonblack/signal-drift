@@ -10,7 +10,10 @@ import FullscreenOverlay from "@/components/session/FullscreenOverlay";
 import QCNotesPanel from "@/components/session/QCNotesPanel";
 import EditInputModal from "@/components/session/EditInputModal";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
+import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
 import { mockSessions, mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
+import { getSessionById, updateSession, endSession as endSessionRecord } from "@/lib/session-store";
+import { useNavigate } from "react-router-dom";
 import { useLiveMetrics } from "@/hooks/use-live-metrics";
 import { useSessionFocus } from "@/hooks/use-session-focus";
 import { loadTimePrefs, saveTimePrefs, type TimeDisplayPrefs } from "@/lib/time-utils";
@@ -41,9 +44,16 @@ const gridStylesMobile: Record<string, { cls: string; style: React.CSSProperties
 
 const SessionRoom = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const session = mockSessions.find((s) => s.id === id) || mockSessions[0];
   const activeInputs = session.inputs.filter((i) => i.enabled);
   const isMobile = useIsMobile();
+
+  // Look up the persisted SessionRecord for lifecycle metadata (scheduled end).
+  const record = id ? getSessionById(id) : undefined;
+  const [scheduledEndAt, setScheduledEndAt] = useState<string | null>(
+    record?.scheduledEndAt || null,
+  );
 
   const [layout, setLayout] = useState<Layout>("4");
   const [audioSource, setAudioSource] = useState(session.inputs[0]?.id);
@@ -193,8 +203,31 @@ const SessionRoom = () => {
     );
   };
 
+  const handleExtendSession = useCallback(
+    (minutes: number) => {
+      const base = scheduledEndAt ? new Date(scheduledEndAt).getTime() : Date.now();
+      const nextIso = new Date(Math.max(base, Date.now()) + minutes * 60_000).toISOString();
+      setScheduledEndAt(nextIso);
+      if (id) updateSession(id, { scheduledEndAt: nextIso });
+      toast({ title: `Session extended ${minutes} minutes` });
+    },
+    [scheduledEndAt, id],
+  );
+
+  const handleEndSession = useCallback(() => {
+    if (id) endSessionRecord(id);
+    toast({ title: "Session ended" });
+    navigate("/sessions");
+  }, [id, navigate]);
+
   return (
     <>
+      <ScheduledEndDialog
+        scheduledEndAt={scheduledEndAt}
+        onExtend={handleExtendSession}
+        onEnd={handleEndSession}
+      />
+
       {fullscreenInput && (
         <FullscreenOverlay
           input={fullscreenInput}
