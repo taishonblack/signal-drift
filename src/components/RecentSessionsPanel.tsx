@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ChevronRight, Radio, FileText, Clock, Download } from "lucide-react";
+import { ChevronRight, Download } from "lucide-react";
 import { mockSessions, type Session } from "@/lib/mock-data";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import SessionStatusBadge from "@/components/session/SessionStatusBadge";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
 
 const LS_KEY = "mako_recent_sessions_collapsed";
