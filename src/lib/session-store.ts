@@ -109,7 +109,9 @@ export interface SessionRecord {
   markers: { timestamp: string; streamLabel: string; note: string }[];
   viewers?: SessionViewer[];
   changeLog?: SessionChangeEntry[];
+  ownershipRequests?: SessionOwnershipRequest[];
 }
+
 
 export interface AddressBookEntry {
   id: string;
