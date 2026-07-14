@@ -12,7 +12,19 @@ import EditInputModal from "@/components/session/EditInputModal";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
 import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
 import { mockSessions, mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
-import { getSessionById, updateSession, endSession as endSessionRecord } from "@/lib/session-store";
+import {
+  getSessionById,
+  updateSession,
+  endSession as endSessionRecord,
+  joinSession,
+  leaveSession,
+  transferOwnership,
+  updateViewerFocus,
+  getCurrentUserRef,
+  type SessionRecord,
+} from "@/lib/session-store";
+import ViewersPanel from "@/components/session/ViewersPanel";
+import OwnershipTransferDialog from "@/components/session/OwnershipTransferDialog";
 import { useNavigate } from "react-router-dom";
 import { useLiveMetrics } from "@/hooks/use-live-metrics";
 import { useSessionFocus } from "@/hooks/use-session-focus";
