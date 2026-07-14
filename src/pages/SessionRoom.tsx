@@ -366,12 +366,17 @@ const SessionRoom = () => {
           )}
         </div>
 
-        {/* Focus indicator */}
+        {/* Focus indicator + presence chip */}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>Focused:</span>
           <span className="text-primary font-medium">{focusedLabel}</span>
           <span className="text-muted-foreground/50">· Focused by: {focusedBy}</span>
+          <div className="ml-auto flex items-center gap-2">
+            {isOwner && <span className="text-[10px] uppercase tracking-wider text-primary/80 font-semibold">Owner</span>}
+            <ViewersPanel viewers={viewers} />
+          </div>
         </div>
+
 
         <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
           {/* Multiview grid with drag-and-drop */}
