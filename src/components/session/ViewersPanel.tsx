@@ -254,9 +254,27 @@ const ViewersPanel = ({
                 You have co-owner configuration access.
               </div>
             ) : hasPending ? (
-              <div className="text-[10px] text-muted-foreground px-2 py-1">
-                Request pending owner approval…
-              </div>
+              (() => {
+                const mine = currentUserId ? latestRequestFor(currentUserId) : undefined;
+                return (
+                  <div className="flex items-center justify-between gap-2 px-2 py-1">
+                    <span className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
+                      <Clock className="h-3 w-3 text-[hsl(var(--warning))]" />
+                      {mine?.kind === "full" ? "Full ownership" : "Co-ownership"} request pending…
+                    </span>
+                    {mine && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                        onClick={() => handleCancel(mine.id)}
+                      >
+                        Cancel request
+                      </Button>
+                    )}
+                  </div>
+                );
+              })()
             ) : !choosingKind ? (
               <Button
                 size="sm"
