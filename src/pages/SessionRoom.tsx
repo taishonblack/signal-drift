@@ -12,7 +12,19 @@ import EditInputModal from "@/components/session/EditInputModal";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
 import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
 import { mockSessions, mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
-import { getSessionById, updateSession, endSession as endSessionRecord } from "@/lib/session-store";
+import {
+  getSessionById,
+  updateSession,
+  endSession as endSessionRecord,
+  joinSession,
+  leaveSession,
+  transferOwnership,
+  updateViewerFocus,
+  getCurrentUserRef,
+  type SessionRecord,
+} from "@/lib/session-store";
+import ViewersPanel from "@/components/session/ViewersPanel";
+import OwnershipTransferDialog from "@/components/session/OwnershipTransferDialog";
 import { useNavigate } from "react-router-dom";
 import { useLiveMetrics } from "@/hooks/use-live-metrics";
 import { useSessionFocus } from "@/hooks/use-session-focus";
@@ -49,11 +61,44 @@ const SessionRoom = () => {
   const activeInputs = session.inputs.filter((i) => i.enabled);
   const isMobile = useIsMobile();
 
-  // Look up the persisted SessionRecord for lifecycle metadata (scheduled end).
-  const record = id ? getSessionById(id) : undefined;
+  // Persisted session record — updated via polling for viewers/ownership changes.
+  const currentUserRef = getCurrentUserRef();
+  const [record, setRecord] = useState<SessionRecord | undefined>(() =>
+    id ? getSessionById(id) : undefined,
+  );
   const [scheduledEndAt, setScheduledEndAt] = useState<string | null>(
     record?.scheduledEndAt || null,
   );
+  const [ownershipDialogOpen, setOwnershipDialogOpen] = useState(false);
+  const [previousOwnerName, setPreviousOwnerName] = useState<string | undefined>();
+
+  // Join on mount, leave on unmount.
+  useEffect(() => {
+    if (!id) return;
+    joinSession(id, currentUserRef);
+    setRecord(getSessionById(id));
+    return () => {
+      leaveSession(id, currentUserRef.id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // Poll for viewer/ownership updates (mock realtime).
+  useEffect(() => {
+    if (!id) return;
+    const t = window.setInterval(() => {
+      const next = getSessionById(id);
+      setRecord(next);
+      if (next && !next.ownerUserId && (next.viewers ?? []).some((v) => v.userId === currentUserRef.id)) {
+        setOwnershipDialogOpen(true);
+      }
+    }, 2000);
+    return () => window.clearInterval(t);
+  }, [id, currentUserRef.id]);
+
+  const viewers = record?.viewers ?? [];
+  const isOwner = (record?.ownerUserId ?? record?.hostUserId) === currentUserRef.id;
+
 
   const [layout, setLayout] = useState<Layout>("4");
   const [audioSource, setAudioSource] = useState(session.inputs[0]?.id);
@@ -102,6 +147,28 @@ const SessionRoom = () => {
 
   const focusedInput = activeInputs.find((i) => i.id === focusedId);
   const focusedLabel = focusedInput?.label ?? "Unknown";
+
+  // Presence: write focused label into current viewer entry.
+  useEffect(() => {
+    if (!id || !focusedInput) return;
+    updateViewerFocus(id, currentUserRef.id, focusedInput.label);
+  }, [id, focusedInput, currentUserRef.id]);
+
+  const handleBecomeOwner = useCallback(() => {
+    if (!id) return;
+    transferOwnership(id, currentUserRef.id);
+    setRecord(getSessionById(id));
+    setOwnershipDialogOpen(false);
+    toast({ title: "You are now the session owner" });
+  }, [id, currentUserRef.id]);
+
+  const handleLeaveAsViewer = useCallback(() => {
+    if (!id) return;
+    leaveSession(id, currentUserRef.id);
+    setOwnershipDialogOpen(false);
+    navigate("/sessions");
+  }, [id, currentUserRef.id, navigate]);
+
 
   const getOriginTZ = useCallback((_inputId: string) => {
     return "America/Los_Angeles";
@@ -228,6 +295,14 @@ const SessionRoom = () => {
         onEnd={handleEndSession}
       />
 
+      <OwnershipTransferDialog
+        open={ownershipDialogOpen}
+        previousOwner={previousOwnerName}
+        onBecomeOwner={handleBecomeOwner}
+        onLeave={handleLeaveAsViewer}
+      />
+
+
       {fullscreenInput && (
         <FullscreenOverlay
           input={fullscreenInput}
@@ -299,12 +374,17 @@ const SessionRoom = () => {
           )}
         </div>
 
-        {/* Focus indicator */}
+        {/* Focus indicator + presence chip */}
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>Focused:</span>
           <span className="text-primary font-medium">{focusedLabel}</span>
           <span className="text-muted-foreground/50">· Focused by: {focusedBy}</span>
+          <div className="ml-auto flex items-center gap-2">
+            {isOwner && <span className="text-[10px] uppercase tracking-wider text-primary/80 font-semibold">Owner</span>}
+            <ViewersPanel viewers={viewers} />
+          </div>
         </div>
+
 
         <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
           {/* Multiview grid with drag-and-drop */}
