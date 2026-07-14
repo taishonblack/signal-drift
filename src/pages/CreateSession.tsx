@@ -53,18 +53,54 @@ const CURRENT_USER_ID = "u1";
 
 const CreateSession = () => {
   const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const [purpose, setPurpose] = useState<string>("QC");
-  const [scheduledEndAt, setScheduledEndAt] = useState<string>(
-    new Date(Date.now() + 60 * 60_000).toISOString(),
+  const { id: routeId } = useParams<{ id: string }>();
+  const currentUser = getCurrentUserRef();
+
+  // Configure mode: session id in URL.
+  const existing = useMemo(
+    () => (routeId ? getSessionById(routeId) : undefined),
+    [routeId]
   );
-  const [defaultOriginTimeZone, setDefaultOriginTimeZone] = useState("UTC");
-  const [lines, setLines] = useState<SrtLine[]>([
-    createDefaultLine(1),
-    createDefaultLine(2),
-    createDefaultLine(3),
-    createDefaultLine(4),
-  ]);
+  const mode: "create" | "configure" = routeId ? "configure" : "create";
+  const isActiveConfigure = mode === "configure" && existing?.status === "active";
+  const isReadOnly =
+    mode === "configure" &&
+    !!existing &&
+    (existing.status === "completed" || existing.status === "archived");
+  const allowed =
+    mode === "create" || (existing ? canConfigureSession(existing, currentUser.id) : false);
+
+  // Redirect viewers who can't configure.
+  useEffect(() => {
+    if (mode === "configure" && existing && !allowed) {
+      toast("Only the session owner or admins can configure this session.");
+      navigate(`/session/${existing.id}`, { replace: true });
+    }
+  }, [mode, existing, allowed, navigate]);
+
+  const seedLines = (): SrtLine[] => {
+    if (existing) {
+      const base = [...existing.lines];
+      while (base.length < 4) base.push(createDefaultLine(base.length + 1));
+      return base.slice(0, 4);
+    }
+    return [
+      createDefaultLine(1),
+      createDefaultLine(2),
+      createDefaultLine(3),
+      createDefaultLine(4),
+    ];
+  };
+
+  const [name, setName] = useState(existing?.name ?? "");
+  const [purpose, setPurpose] = useState<string>((existing?.purpose as string) ?? "QC");
+  const [scheduledEndAt, setScheduledEndAt] = useState<string>(
+    existing?.scheduledEndAt ?? new Date(Date.now() + 60 * 60_000).toISOString(),
+  );
+  const [defaultOriginTimeZone, setDefaultOriginTimeZone] = useState(
+    existing?.defaultOriginTimeZone ?? "UTC"
+  );
+  const [lines, setLines] = useState<SrtLine[]>(() => seedLines());
   const [activeTab, setActiveTab] = useState(1);
   const [advancedOpen, setAdvancedOpen] = useState<Record<number, boolean>>({});
   const [tested, setTested] = useState<Record<number, boolean>>({});
