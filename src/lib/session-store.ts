@@ -71,7 +71,12 @@ export type SessionChangeKind =
   | "source_renamed"
   | "source_address_changed"
   | "source_notes_changed"
-  | "config_saved";
+  | "config_saved"
+  | "ownership_requested"
+  | "ownership_granted"
+  | "co_ownership_granted"
+  | "ownership_denied";
+
 
 export interface SessionChangeEntry {
   id: string;
