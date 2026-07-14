@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Play, Save, Eraser, User,
-  ChevronDown, ChevronRight, Zap, Circle, PlugZap, Plus, Radio,
+  ChevronDown, ChevronRight, Zap, Circle, PlugZap, Plus, Radio, Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,13 +14,16 @@ import PurposeSelect from "@/components/session/PurposeSelect";
 import DurationPicker from "@/components/session/DurationPicker";
 import SessionStatusBadge from "@/components/session/SessionStatusBadge";
 import SwitchActiveSessionDialog from "@/components/session/SwitchActiveSessionDialog";
+import SessionChangeLogPanel from "@/components/session/SessionChangeLogPanel";
 import {
   type SrtLine, type SessionRecord,
-  createDefaultLine, getSessions, addSession,
+  createDefaultLine, getSessions, addSession, getSessionById, updateSession,
   generateSessionId, generatePin, saveDraft,
   parseSrtInput, composeSrt,
   getActiveSessionForUser, endSession,
   getAddressBook, saveAddressBook,
+  canConfigureSession, getCurrentUserRef,
+  diffSessionConfig, appendChangeLog,
 } from "@/lib/session-store";
 import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 import { toast } from "@/components/ui/sonner";
