@@ -166,7 +166,7 @@ const Sessions = () => {
               session={grouped.yourActive}
               variant="hero"
               currentUserId={currentUser.id}
-              onClick={() => handleYourActiveClick(grouped.yourActive!)}
+              onClick={() => handleActiveCardClick(grouped.yourActive!)}
             />
           ) : (
             <div className="mako-glass rounded-lg p-5 border border-dashed border-border/30 text-center">
@@ -189,7 +189,7 @@ const Sessions = () => {
                   session={s}
                   variant="grid"
                   currentUserId={currentUser.id}
-                  onClick={() => handleTeamActiveClick(s)}
+                  onClick={() => handleActiveCardClick(s)}
                 />
               ))}
             </div>
@@ -258,10 +258,13 @@ const Sessions = () => {
           </section>
         )}
 
-        <JoinActiveSessionDialog
-          session={pendingJoin}
-          onCancel={() => setPendingJoin(null)}
-          onConfirm={confirmJoin}
+        <SessionActionsDialog
+          session={actionSession}
+          currentUserId={currentUser.id}
+          onClose={() => setActionSession(null)}
+          onJoin={handleJoinFromDialog}
+          onConfigure={handleConfigureFromDialog}
+          joinLabel={grouped.yourActive?.id === actionSession?.id ? "Return to Session" : "Join Live Session"}
         />
         <SwitchMonitoringSessionDialog
           currentSession={grouped.yourActive}
