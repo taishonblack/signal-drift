@@ -203,8 +203,31 @@ const SessionRoom = () => {
     );
   };
 
+  const handleExtendSession = useCallback(
+    (minutes: number) => {
+      const base = scheduledEndAt ? new Date(scheduledEndAt).getTime() : Date.now();
+      const nextIso = new Date(Math.max(base, Date.now()) + minutes * 60_000).toISOString();
+      setScheduledEndAt(nextIso);
+      if (id) updateSession(id, { scheduledEndAt: nextIso });
+      toast({ title: `Session extended ${minutes} minutes` });
+    },
+    [scheduledEndAt, id],
+  );
+
+  const handleEndSession = useCallback(() => {
+    if (id) endSessionRecord(id);
+    toast({ title: "Session ended" });
+    navigate("/sessions");
+  }, [id, navigate]);
+
   return (
     <>
+      <ScheduledEndDialog
+        scheduledEndAt={scheduledEndAt}
+        onExtend={handleExtendSession}
+        onEnd={handleEndSession}
+      />
+
       {fullscreenInput && (
         <FullscreenOverlay
           input={fullscreenInput}
