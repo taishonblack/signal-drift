@@ -199,27 +199,71 @@ const CreateSession = () => {
       purpose,
       scheduledEndAt: scheduledEndAt || undefined,
       createdAt: new Date().toISOString(),
-      host: "You",
-      hostUserId: CURRENT_USER_ID,
-      ownerUserId: CURRENT_USER_ID,
+      host: currentUser.name,
+      hostUserId: currentUser.id,
+      ownerUserId: currentUser.id,
       defaultOriginTimeZone,
       lines: normalized,
       pin: generatePin(),
       notes: [],
       markers: [],
+      viewers: [],
+      changeLog: [
+        {
+          id: `cl-${Date.now()}`,
+          at: new Date().toISOString(),
+          userId: currentUser.id,
+          userName: currentUser.name,
+          kind: "config_saved",
+          summary: "Started monitoring session",
+        },
+      ],
     };
     addSession(session);
     navigate(`/session/${session.id}`);
   };
 
+  const saveConfigureChanges = () => {
+    if (!existing) return;
+    const normalized = lines.map((l) => (l.enabled ? { ...l, mode: "caller" as const } : l));
+    const nextConfig = {
+      name: name.trim() || existing.name,
+      purpose,
+      scheduledEndAt: scheduledEndAt || undefined,
+      defaultOriginTimeZone,
+      lines: normalized,
+    };
+    const diffs = diffSessionConfig(existing, nextConfig, currentUser);
+    updateSession(existing.id, nextConfig);
+    diffs.forEach((d) => appendChangeLog(existing.id, d));
+    if (diffs.length === 0) {
+      toast("No changes to save.");
+    } else {
+      toast(
+        isActiveConfigure
+          ? `Saved — ${diffs.length} change${diffs.length === 1 ? "" : "s"} broadcast to viewers.`
+          : "Session configuration saved.",
+      );
+    }
+    if (isActiveConfigure) {
+      // Stay on configure page so operator can keep tweaking.
+      return;
+    }
+    navigate("/sessions");
+  };
+
   const handleStart = () => {
+    if (mode === "configure") {
+      saveConfigureChanges();
+      return;
+    }
     const enabledLines = lines.filter((l) => l.enabled && isConfigured(l));
     if (enabledLines.length === 0) return;
 
     // Enforce "one active session per user"
-    const existing = getActiveSessionForUser(CURRENT_USER_ID);
-    if (existing) {
-      setPendingActiveSession(existing);
+    const active = getActiveSessionForUser(currentUser.id);
+    if (active) {
+      setPendingActiveSession(active);
       setPendingStart(() => createAndNavigate);
       return;
     }
