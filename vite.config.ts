@@ -12,6 +12,13 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
+    proxy: {
+      "/mediamtx": {
+        target: "http://134.209.119.136:8889",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/mediamtx/, ""),
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger(), mcpPlugin()].filter(Boolean),
   resolve: {
