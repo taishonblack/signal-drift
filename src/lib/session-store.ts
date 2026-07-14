@@ -594,6 +594,30 @@ export function resolveOwnershipRequest(
   }
 }
 
+export function cancelOwnershipRequest(
+  sessionId: string,
+  requestId: string,
+  actor: { id: string; name: string }
+) {
+  const s = getSessionById(sessionId);
+  if (!s) return;
+  const requests = s.ownershipRequests ?? [];
+  const req = requests.find((r) => r.id === requestId);
+  if (!req || req.status !== "pending") return;
+  // Only requester can cancel their own request
+  if (req.userId !== actor.id) return;
+  const nextRequests = requests.filter((r) => r.id !== requestId);
+  updateSession(sessionId, { ownershipRequests: nextRequests });
+  appendChangeLog(sessionId, {
+    id: `cl-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+    at: new Date().toISOString(),
+    userId: actor.id,
+    userName: actor.name,
+    kind: "ownership_denied",
+    summary: `${actor.name} cancelled their ${req.kind === "full" ? "ownership" : "co-ownership"} request`,
+  });
+}
+
 
 
 // ─── Change log ───
