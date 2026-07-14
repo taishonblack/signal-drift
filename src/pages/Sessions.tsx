@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Plus, LogIn, Radio, Clock, FileText, Download } from "lucide-react";
+import { Plus, LogIn, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { mockSessions, type Session } from "@/lib/mock-data";
+import SessionStatusBadge from "@/components/session/SessionStatusBadge";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
 
 const PAGE_SIZE = 10;
