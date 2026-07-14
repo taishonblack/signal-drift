@@ -1,10 +1,21 @@
-import { useState, useEffect, useCallback } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { ChevronRight, Download } from "lucide-react";
-import { mockSessions, type Session } from "@/lib/mock-data";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
-import SessionStatusBadge from "@/components/session/SessionStatusBadge";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { ChevronRight } from "lucide-react";
+import {
+  getSessions,
+  groupSessions,
+  getCurrentUserRef,
+  joinSession,
+  leaveSession,
+  endSession,
+  type SessionRecord,
+} from "@/lib/session-store";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import SessionCard from "@/components/session/SessionCard";
+import JoinActiveSessionDialog from "@/components/session/JoinActiveSessionDialog";
+import SwitchMonitoringSessionDialog from "@/components/session/SwitchMonitoringSessionDialog";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
+import { mockSessions, type Session } from "@/lib/mock-data";
 
 const LS_KEY = "mako_recent_sessions_collapsed";
 
@@ -26,16 +37,25 @@ interface Props {
 
 const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const currentUser = getCurrentUserRef();
   const [collapsed, setCollapsed] = useState(() => readPref(location.pathname));
+  const [sessions, setSessions] = useState<SessionRecord[]>(() => getSessions());
+  const [pendingJoin, setPendingJoin] = useState<SessionRecord | null>(null);
+  const [pendingSwitch, setPendingSwitch] = useState<SessionRecord | null>(null);
   const [expiredSession, setExpiredSession] = useState<Session | null>(null);
 
-  // Auto-collapse when navigating into a session
   useEffect(() => {
     if (location.pathname.startsWith("/session/")) {
       setCollapsed(true);
       localStorage.setItem(LS_KEY, "true");
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setSessions(getSessions()), 2500);
+    return () => window.clearInterval(id);
+  }, []);
 
   const toggle = useCallback(() => {
     setCollapsed((prev) => {
@@ -45,21 +65,78 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
     });
   }, []);
 
-  const handleClick = useCallback((e: React.MouseEvent, session: Session) => {
-    if (session.status === "ended") {
-      e.preventDefault();
-      setExpiredSession(session);
+  const grouped = useMemo(() => groupSessions(sessions, currentUser.id), [sessions, currentUser.id]);
+
+  const handleActiveClick = (s: SessionRecord) => {
+    if (grouped.yourActive?.id === s.id) {
+      navigate(`/session/${s.id}`);
+    } else if (grouped.yourActive) {
+      setPendingSwitch(s);
+    } else {
+      setPendingJoin(s);
     }
-  }, []);
+  };
+
+  const confirmJoin = () => {
+    if (!pendingJoin) return;
+    joinSession(pendingJoin.id, currentUser);
+    const id = pendingJoin.id;
+    setPendingJoin(null);
+    navigate(`/session/${id}`);
+  };
+
+  const confirmSwitch = () => {
+    if (!pendingSwitch || !grouped.yourActive) return;
+    const current = grouped.yourActive;
+    const isOwner = (current.ownerUserId ?? current.hostUserId) === currentUser.id;
+    if (isOwner) endSession(current.id);
+    else leaveSession(current.id, currentUser.id);
+    joinSession(pendingSwitch.id, currentUser);
+    const id = pendingSwitch.id;
+    setPendingSwitch(null);
+    navigate(`/session/${id}`);
+  };
+
+  const handleCompletedClick = (s: SessionRecord) => {
+    const legacy = mockSessions.find((m) => m.id === s.id) ?? {
+      id: s.id, name: s.name, status: "ended" as const,
+      createdAt: s.createdAt, inputCount: s.lines.filter((l) => l.enabled).length,
+      pin: s.pin, inputs: [],
+    };
+    setExpiredSession(legacy as Session);
+  };
 
   if (sidebarCollapsed) return null;
 
-  const recentSessions = mockSessions.slice(0, 6);
+  const activeList = [
+    ...(grouped.yourActive ? [grouped.yourActive] : []),
+    ...grouped.teamActive,
+  ];
+  const total =
+    activeList.length + grouped.drafts.length + grouped.completed.slice(0, 5).length;
+
+  const Group = ({ title, items, onItemClick }: { title: string; items: SessionRecord[]; onItemClick: (s: SessionRecord) => void }) => (
+    items.length > 0 ? (
+      <div className="mt-1">
+        <p className="px-2 pt-1.5 text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold">
+          {title}
+        </p>
+        {items.map((s) => (
+          <SessionCard
+            key={s.id}
+            session={s}
+            variant="compact"
+            currentUserId={currentUser.id}
+            onClick={() => onItemClick(s)}
+          />
+        ))}
+      </div>
+    ) : null
+  );
 
   return (
     <TooltipProvider>
       <div className="border-t border-border/20 mt-auto">
-        {/* Toggle header */}
         <button
           onClick={toggle}
           className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
@@ -69,45 +146,29 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
           />
           <span>Recent</span>
           {collapsed && (
-            <span className="ml-auto text-[10px] text-muted-foreground/50">{recentSessions.length}</span>
+            <span className="ml-auto text-[10px] text-muted-foreground/50">{total}</span>
           )}
         </button>
 
-        {/* Expanded list */}
         {!collapsed && (
-          <div className="px-2 pb-2 space-y-0.5 max-h-56 overflow-y-auto">
-            {recentSessions.map((session) => {
-              const isEnded = session.status === "ended";
-
-
-
-              return (
-                <Link
-                  key={session.id}
-                  to={isEnded ? "#" : `/session/${session.id}`}
-                  onClick={(e) => handleClick(e, session)}
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors group ${
-                    isEnded
-                      ? "text-muted-foreground hover:bg-muted/15 hover:text-foreground/70"
-                      : "text-foreground/80 hover:bg-muted/20 hover:text-foreground"
-                  }`}
-                >
-                  <SessionStatusBadge status={session.status} className="shrink-0" />
-                  <span className="truncate flex-1">{session.name}</span>
-                  {isEnded && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Download className="h-2.5 w-2.5 text-muted-foreground/50 group-hover:text-primary shrink-0" />
-                      </TooltipTrigger>
-                      <TooltipContent side="right">Download report</TooltipContent>
-                    </Tooltip>
-                  )}
-                </Link>
-              );
-            })}
+          <div className="px-2 pb-2 space-y-0.5 max-h-72 overflow-y-auto">
+            <Group title="Active" items={activeList} onItemClick={handleActiveClick} />
+            <Group title="Draft" items={grouped.drafts} onItemClick={(s) => navigate(`/create?draft=${s.id}`)} />
+            <Group title="Completed" items={grouped.completed.slice(0, 5)} onItemClick={handleCompletedClick} />
           </div>
         )}
 
+        <JoinActiveSessionDialog
+          session={pendingJoin}
+          onCancel={() => setPendingJoin(null)}
+          onConfirm={confirmJoin}
+        />
+        <SwitchMonitoringSessionDialog
+          currentSession={grouped.yourActive}
+          newSession={pendingSwitch}
+          onCancel={() => setPendingSwitch(null)}
+          onConfirm={confirmSwitch}
+        />
         <ExpiredSessionDialog
           session={expiredSession}
           onClose={() => setExpiredSession(null)}

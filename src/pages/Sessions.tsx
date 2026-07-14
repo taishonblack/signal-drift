@@ -1,55 +1,147 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { Link } from "react-router-dom";
-import { Plus, LogIn, Download } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Plus, LogIn, ChevronDown, ChevronRight, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
-import { mockSessions, type Session } from "@/lib/mock-data";
-import SessionStatusBadge from "@/components/session/SessionStatusBadge";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  getSessions,
+  groupSessions,
+  getCurrentUserRef,
+  joinSession,
+  leaveSession,
+  endSession,
+  type SessionRecord,
+} from "@/lib/session-store";
+import SessionCard from "@/components/session/SessionCard";
+import JoinActiveSessionDialog from "@/components/session/JoinActiveSessionDialog";
+import SwitchMonitoringSessionDialog from "@/components/session/SwitchMonitoringSessionDialog";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
+import { mockSessions, type Session } from "@/lib/mock-data";
 
-const PAGE_SIZE = 10;
+interface SectionHeaderProps {
+  title: string;
+  count: number;
+  collapsible?: boolean;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  right?: React.ReactNode;
+}
+
+const SectionHeader = ({ title, count, collapsible, collapsed, onToggle, right }: SectionHeaderProps) => (
+  <div className="flex items-baseline justify-between mb-2 mt-4 first:mt-0">
+    <button
+      type="button"
+      onClick={collapsible ? onToggle : undefined}
+      className={`flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${collapsible ? "hover:text-foreground" : "cursor-default"}`}
+    >
+      {collapsible && (
+        collapsed
+          ? <ChevronRight className="h-3 w-3" />
+          : <ChevronDown className="h-3 w-3" />
+      )}
+      {title}
+      <span className="ml-1 text-muted-foreground/60 font-normal">({count})</span>
+    </button>
+    {right}
+  </div>
+);
 
 const Sessions = () => {
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [expiredSession, setExpiredSession] = useState<Session | null>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const currentUser = getCurrentUserRef();
 
-  const visibleSessions = mockSessions.slice(0, visibleCount);
-  const hasMore = visibleCount < mockSessions.length;
+  const [sessions, setSessions] = useState<SessionRecord[]>(() => getSessions());
+  const refresh = useCallback(() => setSessions(getSessions()), []);
 
-  // Infinite scroll observer
+  // Poll every 2s to reflect other-tab/mock changes (simulates realtime).
   useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel || !hasMore) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, mockSessions.length));
-        }
-      },
-      { threshold: 0.1 }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasMore, visibleCount]);
+    const id = window.setInterval(refresh, 2000);
+    const onFocus = () => refresh();
+    const onStorage = () => refresh();
+    window.addEventListener("focus", onFocus);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [refresh]);
 
-  const handleSessionClick = useCallback(
-    (e: React.MouseEvent, session: Session) => {
-      if (session.status === "ended") {
-        e.preventDefault();
-        setExpiredSession(session);
+  const grouped = useMemo(() => groupSessions(sessions, currentUser.id), [sessions, currentUser.id]);
+
+  // Dialog state
+  const [pendingJoin, setPendingJoin] = useState<SessionRecord | null>(null);
+  const [pendingSwitch, setPendingSwitch] = useState<SessionRecord | null>(null);
+  const [expiredSession, setExpiredSession] = useState<Session | null>(null);
+  const [archivedOpen, setArchivedOpen] = useState(false);
+
+  const handleYourActiveClick = useCallback(
+    (s: SessionRecord) => navigate(`/session/${s.id}`),
+    [navigate]
+  );
+
+  const handleTeamActiveClick = useCallback(
+    (s: SessionRecord) => {
+      if (grouped.yourActive && grouped.yourActive.id !== s.id) {
+        setPendingSwitch(s);
+      } else {
+        setPendingJoin(s);
       }
     },
-    []
+    [grouped.yourActive]
   );
+
+  const confirmJoin = useCallback(() => {
+    if (!pendingJoin) return;
+    joinSession(pendingJoin.id, currentUser);
+    const id = pendingJoin.id;
+    setPendingJoin(null);
+    navigate(`/session/${id}`);
+  }, [pendingJoin, currentUser, navigate]);
+
+  const confirmSwitch = useCallback(() => {
+    if (!pendingSwitch || !grouped.yourActive) return;
+    // Leave current, join new. If user is the owner of current, end it.
+    const current = grouped.yourActive;
+    const isOwner = (current.ownerUserId ?? current.hostUserId) === currentUser.id;
+    if (isOwner) {
+      endSession(current.id);
+    } else {
+      leaveSession(current.id, currentUser.id);
+    }
+    joinSession(pendingSwitch.id, currentUser);
+    const id = pendingSwitch.id;
+    setPendingSwitch(null);
+    navigate(`/session/${id}`);
+  }, [pendingSwitch, grouped.yourActive, currentUser, navigate]);
+
+  const handleCompletedClick = useCallback((s: SessionRecord) => {
+    // Map to legacy mock Session shape for ExpiredSessionDialog
+    const legacy = mockSessions.find((m) => m.id === s.id) ?? {
+      id: s.id,
+      name: s.name,
+      status: "ended" as const,
+      createdAt: s.createdAt,
+      inputCount: s.lines.filter((l) => l.enabled).length,
+      pin: s.pin,
+      inputs: [],
+    };
+    setExpiredSession(legacy as Session);
+  }, []);
+
+  const handleDraftClick = useCallback((s: SessionRecord) => {
+    navigate(`/create?draft=${s.id}`);
+  }, [navigate]);
 
   return (
     <TooltipProvider>
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-5xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold text-foreground">Sessions</h1>
-            <p className="text-sm text-muted-foreground">Review and monitor live signal sessions</p>
+            <p className="text-sm text-muted-foreground">
+              Live operations board — what's being monitored right now
+            </p>
           </div>
           <div className="flex gap-2">
             <Button asChild variant="outline" size="sm" className="gap-1.5 border-border/40">
@@ -61,75 +153,117 @@ const Sessions = () => {
           </div>
         </div>
 
-        <div className="grid gap-3">
-          {visibleSessions.map((session) => {
-            const isEnded = session.status === "ended";
+        {/* Your Active Session */}
+        <section>
+          <SectionHeader title="Your Active Session" count={grouped.yourActive ? 1 : 0} />
+          {grouped.yourActive ? (
+            <SessionCard
+              session={grouped.yourActive}
+              variant="hero"
+              currentUserId={currentUser.id}
+              onClick={() => handleYourActiveClick(grouped.yourActive!)}
+            />
+          ) : (
+            <div className="mako-glass rounded-lg p-5 border border-dashed border-border/30 text-center">
+              <Radio className="h-5 w-5 text-muted-foreground/60 mx-auto mb-1.5" />
+              <p className="text-xs text-muted-foreground">
+                You aren't monitoring a session right now. Create one, join a team session below, or resume a draft.
+              </p>
+            </div>
+          )}
+        </section>
 
-
-
-            return (
-              <Link
-                key={session.id}
-                to={isEnded ? "#" : `/session/${session.id}`}
-                onClick={(e) => handleSessionClick(e, session)}
-                className={`mako-glass rounded-lg p-4 pr-3 transition-all group ${
-                  isEnded
-                    ? "hover:bg-muted/10 cursor-pointer"
-                    : "hover:bg-muted/20 hover:translate-y-[-1px]"
-                }`}
-              >
-                {/* Row 1: Badge + Title */}
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="shrink-0">
-                    <SessionStatusBadge status={session.status} />
-                  </div>
-                  <p className={`text-sm font-medium truncate min-w-0 transition-colors ${
-                    isEnded
-                      ? "text-muted-foreground group-hover:text-foreground/80"
-                      : "text-foreground group-hover:text-primary"
-                  }`}>
-                    {session.name}
-                  </p>
-                </div>
-
-                {/* Row 2: Metadata left + Date right */}
-                <div className="flex items-center justify-between gap-2 mt-1.5 min-w-0">
-                  <p className="text-xs text-muted-foreground truncate min-w-0">
-                    {session.inputCount} input{session.inputCount !== 1 ? "s" : ""} · PIN {session.pin}
-                  </p>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">
-                      {new Date(session.createdAt).toLocaleDateString()}
-                    </span>
-                    {isEnded && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 transition-colors">
-                            <Download className="h-3 w-3" />
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>Download report</TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-
-        {hasMore && (
-          <div ref={sentinelRef} className="flex justify-center py-4">
-            <span className="text-xs text-muted-foreground animate-pulse">Loading more sessions…</span>
-          </div>
+        {/* Team Active */}
+        {grouped.teamActive.length > 0 && (
+          <section>
+            <SectionHeader title="Team Active Sessions" count={grouped.teamActive.length} />
+            <div className="grid gap-3 md:grid-cols-2">
+              {grouped.teamActive.map((s) => (
+                <SessionCard
+                  key={s.id}
+                  session={s}
+                  variant="grid"
+                  currentUserId={currentUser.id}
+                  onClick={() => handleTeamActiveClick(s)}
+                />
+              ))}
+            </div>
+          </section>
         )}
 
-        {!hasMore && mockSessions.length > PAGE_SIZE && (
-          <p className="text-center text-xs text-muted-foreground py-2">
-            All {mockSessions.length} sessions loaded
-          </p>
+        {/* Drafts */}
+        {grouped.drafts.length > 0 && (
+          <section>
+            <SectionHeader title="Drafts" count={grouped.drafts.length} />
+            <div className="grid gap-3">
+              {grouped.drafts.map((s) => (
+                <SessionCard
+                  key={s.id}
+                  session={s}
+                  variant="grid"
+                  currentUserId={currentUser.id}
+                  onClick={() => handleDraftClick(s)}
+                />
+              ))}
+            </div>
+          </section>
         )}
 
+        {/* Completed */}
+        {grouped.completed.length > 0 && (
+          <section>
+            <SectionHeader title="Recent Sessions" count={grouped.completed.length} />
+            <div className="grid gap-3">
+              {grouped.completed.map((s) => (
+                <SessionCard
+                  key={s.id}
+                  session={s}
+                  variant="grid"
+                  currentUserId={currentUser.id}
+                  onClick={() => handleCompletedClick(s)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Archived */}
+        {grouped.archived.length > 0 && (
+          <section>
+            <SectionHeader
+              title="Archived"
+              count={grouped.archived.length}
+              collapsible
+              collapsed={!archivedOpen}
+              onToggle={() => setArchivedOpen((o) => !o)}
+            />
+            {archivedOpen && (
+              <div className="grid gap-3">
+                {grouped.archived.map((s) => (
+                  <SessionCard
+                    key={s.id}
+                    session={s}
+                    variant="grid"
+                    currentUserId={currentUser.id}
+                    onClick={() => handleCompletedClick(s)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        <JoinActiveSessionDialog
+          session={pendingJoin}
+          onCancel={() => setPendingJoin(null)}
+          onConfirm={confirmJoin}
+        />
+        <SwitchMonitoringSessionDialog
+          currentSession={grouped.yourActive}
+          newSession={pendingSwitch}
+          onCancel={() => setPendingSwitch(null)}
+          onConfirm={confirmSwitch}
+        />
         <ExpiredSessionDialog
           session={expiredSession}
           onClose={() => setExpiredSession(null)}
