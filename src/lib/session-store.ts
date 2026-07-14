@@ -350,6 +350,8 @@ export function getSessions(): SessionRecord[] {
     ownerUserId: s.ownerUserId ?? s.hostUserId,
     viewers: s.viewers ?? [],
     changeLog: s.changeLog ?? [],
+    ownershipRequests: s.ownershipRequests ?? [],
+
   }));
 }
 
