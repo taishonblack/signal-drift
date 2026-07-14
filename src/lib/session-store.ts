@@ -45,6 +45,30 @@ export interface SessionViewer {
   focus?: string; // friendly label of currently focused input
 }
 
+export type SessionChangeKind =
+  | "session_renamed"
+  | "purpose_changed"
+  | "duration_changed"
+  | "timezone_changed"
+  | "source_added"
+  | "source_removed"
+  | "source_renamed"
+  | "source_address_changed"
+  | "source_notes_changed"
+  | "config_saved";
+
+export interface SessionChangeEntry {
+  id: string;
+  at: string;
+  userId: string;
+  userName: string;
+  kind: SessionChangeKind;
+  summary: string;
+  before?: string;
+  after?: string;
+  target?: string;
+}
+
 export interface SessionRecord {
   id: string;
   name: string;
@@ -63,6 +87,7 @@ export interface SessionRecord {
   notes: string[];
   markers: { timestamp: string; streamLabel: string; note: string }[];
   viewers?: SessionViewer[];
+  changeLog?: SessionChangeEntry[];
 }
 
 export interface AddressBookEntry {
