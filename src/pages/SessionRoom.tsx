@@ -44,9 +44,16 @@ const gridStylesMobile: Record<string, { cls: string; style: React.CSSProperties
 
 const SessionRoom = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const session = mockSessions.find((s) => s.id === id) || mockSessions[0];
   const activeInputs = session.inputs.filter((i) => i.enabled);
   const isMobile = useIsMobile();
+
+  // Look up the persisted SessionRecord for lifecycle metadata (scheduled end).
+  const record = id ? getSessionById(id) : undefined;
+  const [scheduledEndAt, setScheduledEndAt] = useState<string | null>(
+    record?.scheduledEndAt || null,
+  );
 
   const [layout, setLayout] = useState<Layout>("4");
   const [audioSource, setAudioSource] = useState(session.inputs[0]?.id);
