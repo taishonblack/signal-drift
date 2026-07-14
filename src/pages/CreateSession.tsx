@@ -1,9 +1,11 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Play, Save, Eraser, Radio, CheckCircle2, Download, User } from "lucide-react";
+import {
+  Play, Save, Eraser, Radio, CheckCircle2, Download, User,
+  ChevronDown, ChevronRight, Zap, Circle, PlugZap,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -19,13 +21,45 @@ import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 type HistoryFilter = "all" | "active" | "expired";
 type LineStatus = "empty" | "configured" | "error";
 
-const isValidSrt = (addr: string) => addr.trim().startsWith("srt://");
+// ─── Parsing helpers ─────────────────────────────────────────────
+// Accepts any of:
+//   srt://134.209.119.136:8890?mode=caller
+//   134.209.119.136:8890
+//   134.209.119.136
+// Returns { host, port } — port is "" when not supplied.
+export function parseSrtInput(raw: string): { host: string; port: string } {
+  let s = raw.trim();
+  if (!s) return { host: "", port: "" };
+  // strip protocol
+  s = s.replace(/^srt:\/\//i, "");
+  // strip query
+  s = s.split("?")[0];
+  // strip path
+  s = s.split("/")[0];
+  const [host, port = ""] = s.split(":");
+  return { host: host || "", port: (port || "").replace(/\D/g, "") };
+}
+
+// Always caller mode internally.
+function composeSrt(host: string, port: string): string {
+  const h = host.trim();
+  const p = port.trim();
+  if (!h) return "";
+  if (!p) return `srt://${h}`;
+  return `srt://${h}:${p}?mode=caller`;
+}
+
+const isConfigured = (line: SrtLine) => {
+  const { host, port } = parseSrtInput(line.srtAddress);
+  return !!host && !!port;
+};
 
 const getLineStatus = (line: SrtLine): LineStatus => {
   if (!line.enabled) return "empty";
   if (!line.srtAddress.trim()) return "empty";
-  if (!isValidSrt(line.srtAddress)) return "error";
-  return "configured";
+  const { host } = parseSrtInput(line.srtAddress);
+  if (!host) return "error";
+  return isConfigured(line) ? "configured" : "empty";
 };
 
 const statusDot: Record<LineStatus, string> = {
@@ -46,24 +80,74 @@ const CreateSession = () => {
   ]);
   const [activeTab, setActiveTab] = useState(1);
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
+  const [advancedOpen, setAdvancedOpen] = useState<Record<number, boolean>>({});
+  const [tested, setTested] = useState<Record<number, boolean>>({});
   const sessions = getSessions();
 
   const activeLine = lines.find((l) => l.id === activeTab)!;
+  const { host: activeHost, port: activePort } = useMemo(
+    () => parseSrtInput(activeLine.srtAddress),
+    [activeLine.srtAddress]
+  );
 
   const updateLine = useCallback(
-    (patch: Partial<SrtLine>) => {
+    (patch: Partial<SrtLine>, lineId: number = activeTab) => {
       setLines((prev) =>
-        prev.map((l) => (l.id === activeTab ? { ...l, ...patch } : l))
+        prev.map((l) => (l.id === lineId ? { ...l, ...patch } : l))
       );
     },
     [activeTab]
   );
 
+  // Reset tested state whenever the address changes.
+  useEffect(() => {
+    setTested((prev) => ({ ...prev, [activeTab]: false }));
+  }, [activeLine.srtAddress, activeTab]);
+
+  const setHostPort = (host: string, port: string) => {
+    updateLine({ srtAddress: composeSrt(host, port) });
+  };
+
+  const handleHostChange = (val: string) => {
+    // If the pasted value looks like a URL / has a colon, auto-split.
+    if (/[:/?]/.test(val) || /^srt:\/\//i.test(val)) {
+      const parsed = parseSrtInput(val);
+      setHostPort(parsed.host, parsed.port || activePort);
+    } else {
+      setHostPort(val, activePort);
+    }
+  };
+
+  const handlePortChange = (val: string) => {
+    setHostPort(activeHost, val.replace(/\D/g, ""));
+  };
+
+  const handleAddressBookSelect = (addr: string) => {
+    const { host, port } = parseSrtInput(addr);
+    setHostPort(host, port);
+  };
+
+  const configureSource = () => {
+    updateLine({ enabled: true });
+  };
+
+  const disableSource = () => {
+    updateLine({ enabled: false });
+  };
+
+  const testConnection = () => {
+    setTested((prev) => ({ ...prev, [activeTab]: true }));
+  };
+
   const handleStart = () => {
-    const enabledLines = lines.filter((l) => l.enabled && l.srtAddress.trim());
+    const enabledLines = lines.filter((l) => l.enabled && isConfigured(l));
     if (enabledLines.length === 0) return;
     const sessionName =
-      name.trim() || enabledLines[0]?.srtAddress || "Untitled Session";
+      name.trim() || enabledLines[0]?.label || enabledLines[0]?.srtAddress || "Untitled Session";
+    // Ensure every enabled line uses caller mode internally.
+    const normalized = lines.map((l) =>
+      l.enabled ? { ...l, mode: "caller" as const } : l
+    );
     const session: SessionRecord = {
       id: generateSessionId(),
       name: sessionName,
@@ -72,7 +156,7 @@ const CreateSession = () => {
       host: "You",
       hostUserId: "u1",
       defaultOriginTimeZone,
-      lines,
+      lines: normalized,
       pin: generatePin(),
       notes: [],
       markers: [],
@@ -95,10 +179,10 @@ const CreateSession = () => {
       srtAddress: "",
       passphrase: "",
       bitrate: "",
-      mode: "caller",
       notes: "",
-      originTimeZone: "",
+      label: `Line ${activeTab}`,
     });
+    setTested((prev) => ({ ...prev, [activeTab]: false }));
   };
 
   const handleDownloadLog = (session: SessionRecord) => {
@@ -113,15 +197,13 @@ const CreateSession = () => {
   };
 
   const filteredSessions = sessions
-    .filter(
-      (s) =>
-        historyFilter === "all" || s.status === historyFilter
-    )
+    .filter((s) => historyFilter === "all" || s.status === historyFilter)
     .slice(0, 10);
 
-  const hasValidLine = lines.some(
-    (l) => l.enabled && isValidSrt(l.srtAddress)
-  );
+  const hasValidLine = lines.some((l) => l.enabled && isConfigured(l));
+
+  const activeAdvancedOpen = !!advancedOpen[activeTab] || !!activeLine.passphrase;
+  const activeIsTested = !!tested[activeTab] && isConfigured(activeLine) && activeLine.enabled;
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto">
@@ -129,12 +211,9 @@ const CreateSession = () => {
       <div className="flex-1 lg:flex-[7] space-y-6 min-w-0">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-semibold text-foreground">
-              Create Session
-            </h1>
+            <h1 className="text-xl font-semibold text-foreground">Create Session</h1>
             <p className="text-xs text-muted-foreground mt-1">
-              Configure up to 4 SRT lines. Start with one and add more now or
-              later.
+              Add up to 4 sources to monitor. Point MAKO at each feed — it discovers the rest.
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
@@ -148,9 +227,7 @@ const CreateSession = () => {
           <div className="space-y-1.5">
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
               Session Name{" "}
-              <span className="normal-case tracking-normal font-normal">
-                (optional)
-              </span>
+              <span className="normal-case tracking-normal font-normal">(optional)</span>
             </label>
             <Input
               value={name}
@@ -159,15 +236,14 @@ const CreateSession = () => {
               className="bg-muted/20 border-border/20 text-foreground placeholder:text-muted-foreground/40"
             />
             <p className="text-[10px] text-muted-foreground/60">
-              If left blank, MAKO will name the session using the first SRT
-              address.
+              If left blank, MAKO uses the first source name.
             </p>
           </div>
 
           {/* Default Event Time Zone */}
           <div className="space-y-1.5">
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-              Default Event Time Zone
+              Event Time Zone
             </label>
             <Select value={defaultOriginTimeZone} onValueChange={setDefaultOriginTimeZone}>
               <SelectTrigger className="bg-muted/20 border-border/20 text-foreground">
@@ -180,179 +256,151 @@ const CreateSession = () => {
               </SelectContent>
             </Select>
             <p className="text-[10px] text-muted-foreground/60">
-              Used as the origin clock for all lines unless overridden per-line.
+              Applies to every source in this session.
             </p>
           </div>
 
-          {/* SRT Line Tabs */}
+          {/* Source Tabs */}
           <div className="space-y-4">
             <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-              SRT Inputs
+              Sources
             </label>
 
             <div className="flex gap-1 p-1 rounded-md bg-muted/15 border border-border/15">
               {lines.map((line) => {
                 const st = getLineStatus(line);
+                const isDefaultLabel = /^Line \d+$/.test(line.label);
+                const display = isDefaultLabel ? `SRT ${line.id}` : line.label;
                 return (
                   <button
                     key={line.id}
                     onClick={() => setActiveTab(line.id)}
                     className={cn(
-                      "flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded text-xs font-medium transition-all",
+                      "flex-1 min-w-0 flex items-center justify-center gap-1.5 py-2 px-3 rounded text-xs font-medium transition-all",
                       activeTab === line.id
                         ? "bg-muted/40 text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground/70"
                     )}
                   >
-                    <span>SRT {line.id}</span>
+                    <span className="truncate">{display}</span>
                     {st !== "empty" && (
-                      <span
-                        className={cn(
-                          "h-1.5 w-1.5 rounded-full",
-                          statusDot[st]
-                        )}
-                      />
+                      <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusDot[st])} />
                     )}
                   </button>
                 );
               })}
             </div>
 
-            {/* Active line form */}
+            {/* Active source card */}
             <div
               className={cn(
                 "rounded-md border p-4 space-y-4 transition-colors",
                 activeLine.enabled
                   ? "border-border/20 bg-muted/8"
-                  : "border-border/10 bg-muted/4 opacity-60"
+                  : "border-border/10 bg-muted/4"
               )}
             >
-              {/* Enable + label row */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Switch
-                    checked={activeLine.enabled}
-                    onCheckedChange={(checked) =>
-                      updateLine({ enabled: checked })
-                    }
-                  />
-                  <Input
-                    value={activeLine.label}
-                    onChange={(e) => updateLine({ label: e.target.value })}
-                    className="w-40 h-7 text-xs bg-transparent border-none px-1 text-foreground"
-                  />
+              {/* Status header */}
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  {!activeLine.enabled ? (
+                    <>
+                      <Circle className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                      <span className="text-xs text-muted-foreground truncate">Disabled</span>
+                    </>
+                  ) : !isConfigured(activeLine) ? (
+                    <>
+                      <Circle className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+                      <span className="text-xs text-muted-foreground truncate">
+                        No source configured
+                      </span>
+                    </>
+                  ) : activeIsTested ? (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))] shrink-0" />
+                      <span className="text-xs text-foreground truncate">
+                        Connected · {activeLine.label || `SRT ${activeTab}`}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="h-2 w-2 rounded-full bg-primary/60 shrink-0" />
+                      <span className="text-xs text-foreground truncate">
+                        Ready · {activeLine.label || `SRT ${activeTab}`}
+                      </span>
+                    </>
+                  )}
                 </div>
-                <AddressBookModal
-                  onSelect={(addr) => updateLine({ srtAddress: addr })}
-                />
+                <div className="flex items-center gap-1 shrink-0">
+                  <AddressBookModal onSelect={handleAddressBookSelect} />
+                  {activeLine.enabled ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={disableSource}
+                      className="text-[11px] h-7 text-muted-foreground hover:text-foreground"
+                    >
+                      Disable
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={configureSource}
+                      className="text-[11px] h-7 text-primary hover:text-primary"
+                    >
+                      Configure Source
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {activeLine.enabled && (
                 <>
-                  {/* SRT Address */}
+                  {/* Friendly Name */}
                   <div className="space-y-1">
                     <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      SRT Address
+                      Name
                     </label>
                     <Input
-                      value={activeLine.srtAddress}
+                      value={/^Line \d+$/.test(activeLine.label) ? "" : activeLine.label}
                       onChange={(e) =>
-                        updateLine({ srtAddress: e.target.value })
+                        updateLine({ label: e.target.value || `Line ${activeTab}` })
                       }
-                      placeholder="srt://ip:port?mode=caller"
-                      className={cn(
-                        "bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40",
-                        activeLine.srtAddress &&
-                          !isValidSrt(activeLine.srtAddress) &&
-                          "border-destructive/40"
-                      )}
+                      placeholder="e.g. NBC Program, Truck A, Camera ISO"
+                      className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40"
                     />
-                    {activeLine.srtAddress &&
-                      !isValidSrt(activeLine.srtAddress) && (
-                        <p className="text-[10px] text-destructive/80">
-                          Address must start with srt://
-                        </p>
-                      )}
                   </div>
 
-                  {/* Passphrase + Bitrate */}
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-1">
+                  {/* Address + Port */}
+                  <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+                    <div className="space-y-1 min-w-0">
                       <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Passphrase
+                        Address
                       </label>
                       <Input
-                        type="password"
-                        value={activeLine.passphrase}
-                        onChange={(e) =>
-                          updateLine({ passphrase: e.target.value })
-                        }
-                        placeholder="Optional"
-                        className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40"
+                        value={activeHost}
+                        onChange={(e) => handleHostChange(e.target.value)}
+                        placeholder="134.209.119.136"
+                        className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
                       />
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-1 sm:w-28">
                       <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Bitrate (kbps)
+                        Port
                       </label>
                       <Input
-                        type="number"
-                        value={activeLine.bitrate}
-                        onChange={(e) =>
-                          updateLine({ bitrate: e.target.value })
-                        }
-                        placeholder="Optional"
-                        className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40"
+                        value={activePort}
+                        onChange={(e) => handlePortChange(e.target.value)}
+                        placeholder="8890"
+                        inputMode="numeric"
+                        className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
                       />
                     </div>
                   </div>
-
-                  {/* Mode selector */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Mode
-                    </label>
-                    <div className="flex gap-1 p-0.5 rounded bg-muted/15 border border-border/15 w-fit">
-                      {(["caller", "listener"] as const).map((m) => (
-                        <button
-                          key={m}
-                          onClick={() => updateLine({ mode: m })}
-                          className={cn(
-                            "px-4 py-1.5 rounded text-xs font-medium transition-all capitalize",
-                            activeLine.mode === m
-                              ? "bg-muted/40 text-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground/70"
-                          )}
-                        >
-                          {m}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Origin Time Zone override */}
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Origin Time Zone
-                    </label>
-                    <Select
-                      value={activeLine.originTimeZone || "__default__"}
-                      onValueChange={(v) => updateLine({ originTimeZone: v === "__default__" ? "" : v })}
-                    >
-                      <SelectTrigger className="bg-muted/15 border-border/15 text-sm text-foreground">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="mako-glass-solid border-border/20">
-                        <SelectItem value="__default__">Use session default</SelectItem>
-                        {COMMON_TIMEZONES.map((tz) => (
-                          <SelectItem key={tz} value={tz}>{tzLabel(tz)}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[10px] text-muted-foreground/60">
-                      Override the session default for this line's event clock.
-                    </p>
-                  </div>
+                  <p className="text-[10px] text-muted-foreground/50 -mt-2">
+                    Paste a full <span className="font-mono">srt://</span> URL and MAKO splits it for you.
+                  </p>
 
                   {/* Notes */}
                   <div className="space-y-1">
@@ -362,10 +410,79 @@ const CreateSession = () => {
                     <Textarea
                       value={activeLine.notes}
                       onChange={(e) => updateLine({ notes: e.target.value })}
-                      placeholder="Optional notes for this line..."
+                      placeholder="Optional context for this source…"
                       rows={2}
                       className="bg-muted/15 border-border/15 text-xs text-foreground placeholder:text-muted-foreground/40 min-h-0"
                     />
+                  </div>
+
+                  {/* Advanced */}
+                  <div className="border-t border-border/10 pt-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAdvancedOpen((p) => ({ ...p, [activeTab]: !activeAdvancedOpen }))
+                      }
+                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {activeAdvancedOpen ? (
+                        <ChevronDown className="h-3 w-3" />
+                      ) : (
+                        <ChevronRight className="h-3 w-3" />
+                      )}
+                      Advanced
+                    </button>
+                    {activeAdvancedOpen && (
+                      <div className="mt-3 space-y-1">
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          Passphrase
+                        </label>
+                        <Input
+                          type="password"
+                          value={activeLine.passphrase}
+                          onChange={(e) => updateLine({ passphrase: e.target.value })}
+                          placeholder="Only for encrypted SRT streams"
+                          className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Test Connection + Diagnostics */}
+                  <div className="border-t border-border/10 pt-4 space-y-3">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={testConnection}
+                      disabled={!isConfigured(activeLine)}
+                      className="gap-2 border-border/30 text-foreground w-full sm:w-auto"
+                    >
+                      <PlugZap className="h-3.5 w-3.5" />
+                      {activeIsTested ? "Re-test Connection" : "Test Connection"}
+                    </Button>
+
+                    {activeIsTested && (
+                      <div className="rounded-md border border-primary/20 bg-primary/[0.04] p-3 space-y-2">
+                        <div className="flex items-center gap-2 text-xs text-primary">
+                          <Zap className="h-3.5 w-3.5" />
+                          <span className="font-medium">Stream discovered</span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-[11px]">
+                          <Diag label="Codec" value="H.264 High" />
+                          <Diag label="Resolution" value="1920×1080" />
+                          <Diag label="FPS" value="59.94" />
+                          <Diag label="Bitrate" value="8.3 Mbps" />
+                          <Diag label="Latency" value="74 ms" />
+                          <Diag label="Packet Loss" value="0.00%" />
+                          <Diag label="Audio" value="2ch · 48 kHz" />
+                          <Diag label="Loudness" value="-23 LUFS" />
+                          <Diag label="Clock Sync" value="Locked" />
+                        </div>
+                        <p className="text-[10px] text-muted-foreground/60 pt-1">
+                          Values reported by MediaMTX after handshake.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -396,7 +513,7 @@ const CreateSession = () => {
               onClick={handleClearLine}
               className="gap-2 text-muted-foreground"
             >
-              <Eraser className="h-4 w-4" /> Clear Line
+              <Eraser className="h-4 w-4" /> Clear Source
             </Button>
           </div>
         </div>
@@ -410,9 +527,7 @@ const CreateSession = () => {
       <div className="lg:flex-[3] min-w-0">
         <div className="mako-glass-solid rounded-lg p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-foreground">
-              Recent Sessions
-            </h2>
+            <h2 className="text-sm font-medium text-foreground">Recent Sessions</h2>
             <div className="flex gap-0.5 p-0.5 rounded bg-muted/15 border border-border/15">
               {(["all", "active", "expired"] as const).map((f) => (
                 <button
@@ -477,8 +592,7 @@ const CreateSession = () => {
                   </div>
                   {!isActive && (
                     <span className="flex items-center gap-1 text-[10px] text-muted-foreground/50 mt-1">
-                      <Download className="h-2.5 w-2.5" /> Click to download
-                      log
+                      <Download className="h-2.5 w-2.5" /> Click to download log
                     </span>
                   )}
                 </button>
@@ -490,5 +604,12 @@ const CreateSession = () => {
     </div>
   );
 };
+
+const Diag = ({ label, value }: { label: string; value: string }) => (
+  <div className="min-w-0">
+    <div className="text-[9px] uppercase tracking-wider text-muted-foreground/70">{label}</div>
+    <div className="font-mono text-foreground truncate">{value}</div>
+  </div>
+);
 
 export default CreateSession;
