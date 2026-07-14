@@ -1,6 +1,15 @@
+import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Circle } from "lucide-react";
-import type { SessionViewer } from "@/lib/session-store";
+import { Users, Circle, Crown, ShieldCheck, Hand, Check, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import type { SessionViewer, SessionOwnershipRequest, OwnershipRequestKind } from "@/lib/session-store";
+import {
+  getSessionById,
+  requestOwnership,
+  resolveOwnershipRequest,
+  getCurrentUserRef,
+} from "@/lib/session-store";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -9,13 +18,75 @@ interface Props {
   align?: "start" | "center" | "end";
   triggerAs?: "chip" | "count";
   onClick?: (e: React.MouseEvent) => void;
+  /** When provided, ownership request/approval UI is enabled. */
+  sessionId?: string;
+  currentUserId?: string;
+  /** Called after any ownership-related mutation so the parent can refresh. */
+  onChange?: () => void;
 }
 
 const initials = (name: string) =>
   name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 
-const ViewersPanel = ({ viewers, className, align = "end", triggerAs = "chip", onClick }: Props) => {
+const ViewersPanel = ({
+  viewers,
+  className,
+  align = "end",
+  triggerAs = "chip",
+  onClick,
+  sessionId,
+  currentUserId,
+  onChange,
+}: Props) => {
+  const [choosingKind, setChoosingKind] = useState(false);
   const count = viewers.length;
+
+  // Live-read requests/owner from store so approvals refresh immediately.
+  const record = sessionId ? getSessionById(sessionId) : undefined;
+  const ownerId = record?.ownerUserId ?? record?.hostUserId;
+  const pending: SessionOwnershipRequest[] =
+    (record?.ownershipRequests ?? []).filter((r) => r.status === "pending");
+
+  const me = viewers.find((v) => v.userId === currentUserId);
+  const isOwner = !!currentUserId && ownerId === currentUserId;
+  const isCoOwner = !!me?.isCoOwner;
+  const hasPending = !!currentUserId && pending.some((r) => r.userId === currentUserId);
+  const canRequest =
+    !!sessionId && !!currentUserId && !!me && !isOwner && !isCoOwner && !hasPending;
+
+  const handleRequest = (kind: OwnershipRequestKind) => {
+    if (!sessionId) return;
+    const user = currentUserId
+      ? { id: currentUserId, name: me?.name ?? getCurrentUserRef().name }
+      : getCurrentUserRef();
+    requestOwnership(sessionId, user, kind);
+    setChoosingKind(false);
+    toast.success(
+      kind === "full"
+        ? "Requested full ownership"
+        : "Requested co-ownership",
+      { description: "The session owner will be notified." }
+    );
+    onChange?.();
+  };
+
+  const handleResolve = (reqId: string, decision: "approve" | "deny") => {
+    if (!sessionId || !currentUserId) return;
+    const approver = { id: currentUserId, name: me?.name ?? getCurrentUserRef().name };
+    const req = pending.find((r) => r.id === reqId);
+    resolveOwnershipRequest(sessionId, reqId, decision, approver);
+    if (req) {
+      toast.success(
+        decision === "approve"
+          ? req.kind === "full"
+            ? `Transferred ownership to ${req.userName}`
+            : `${req.userName} is now a co-owner`
+          : `Denied ${req.userName}'s request`
+      );
+    }
+    onChange?.();
+  };
+
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -23,7 +94,7 @@ const ViewersPanel = ({ viewers, className, align = "end", triggerAs = "chip", o
           type="button"
           onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
           className={cn(
-            "inline-flex items-center gap-1.5 text-xs rounded-md transition-colors",
+            "inline-flex items-center gap-1.5 text-xs rounded-md transition-colors relative",
             triggerAs === "chip"
               ? "px-2 py-1 border border-border/30 bg-muted/20 hover:bg-muted/40 text-foreground/80"
               : "text-muted-foreground hover:text-foreground",
@@ -33,9 +104,59 @@ const ViewersPanel = ({ viewers, className, align = "end", triggerAs = "chip", o
           <Users className="h-3 w-3" />
           <span className="tabular-nums">{count}</span>
           <span>{count === 1 ? "Viewer" : "Viewers"}</span>
+          {isOwner && pending.length > 0 && (
+            <span className="ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-[hsl(var(--warning))] text-[9px] font-bold text-background">
+              {pending.length}
+            </span>
+          )}
         </button>
       </PopoverTrigger>
-      <PopoverContent align={align} className="mako-glass-solid border-border/30 w-64 p-0">
+      <PopoverContent align={align} className="mako-glass-solid border-border/30 w-72 p-0">
+        {/* Pending requests — owner only */}
+        {isOwner && pending.length > 0 && (
+          <div className="border-b border-border/20 bg-[hsl(var(--warning))]/5">
+            <div className="px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wider text-[hsl(var(--warning))] font-semibold">
+                Ownership Requests
+              </p>
+            </div>
+            <div className="pb-1">
+              {pending.map((r) => (
+                <div key={r.id} className="px-3 py-2 border-t border-border/10 first:border-t-0">
+                  <div className="flex items-start gap-2">
+                    <Hand className="h-3 w-3 mt-0.5 text-[hsl(var(--warning))] shrink-0" />
+                    <div className="min-w-0 flex-1 text-xs">
+                      <div className="text-foreground truncate">
+                        <span className="font-medium">{r.userName}</span>{" "}
+                        <span className="text-muted-foreground">
+                          requested {r.kind === "full" ? "full ownership" : "co-ownership"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 mt-2 pl-5">
+                    <Button
+                      size="sm"
+                      className="h-6 px-2 text-[10px] gap-1"
+                      onClick={() => handleResolve(r.id, "approve")}
+                    >
+                      <Check className="h-3 w-3" /> Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-[10px] gap-1 text-muted-foreground"
+                      onClick={() => handleResolve(r.id, "deny")}
+                    >
+                      <X className="h-3 w-3" /> Deny
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="px-3 py-2 border-b border-border/20">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
             Currently Watching
@@ -51,11 +172,16 @@ const ViewersPanel = ({ viewers, className, align = "end", triggerAs = "chip", o
                 {initials(v.name)}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                   <span className="text-xs font-medium text-foreground truncate">{v.name}</span>
                   {v.isOwner && (
-                    <span className="text-[9px] uppercase font-semibold text-primary bg-primary/10 border border-primary/25 rounded px-1 py-[1px] shrink-0">
-                      Owner
+                    <span className="text-[9px] uppercase font-semibold text-primary bg-primary/10 border border-primary/25 rounded px-1 py-[1px] shrink-0 inline-flex items-center gap-0.5">
+                      <Crown className="h-2.5 w-2.5" /> Owner
+                    </span>
+                  )}
+                  {!v.isOwner && v.isCoOwner && (
+                    <span className="text-[9px] uppercase font-semibold text-[hsl(var(--warning))] bg-[hsl(var(--warning))]/10 border border-[hsl(var(--warning))]/25 rounded px-1 py-[1px] shrink-0 inline-flex items-center gap-0.5">
+                      <ShieldCheck className="h-2.5 w-2.5" /> Co-owner
                     </span>
                   )}
                 </div>
@@ -71,6 +197,69 @@ const ViewersPanel = ({ viewers, className, align = "end", triggerAs = "chip", o
             </div>
           ))}
         </div>
+
+        {/* Request ownership — non-owner viewers */}
+        {sessionId && me && !isOwner && (
+          <div className="border-t border-border/20 p-2">
+            {isCoOwner ? (
+              <div className="text-[10px] text-muted-foreground px-2 py-1 inline-flex items-center gap-1">
+                <ShieldCheck className="h-3 w-3 text-[hsl(var(--warning))]" />
+                You have co-owner configuration access.
+              </div>
+            ) : hasPending ? (
+              <div className="text-[10px] text-muted-foreground px-2 py-1">
+                Request pending owner approval…
+              </div>
+            ) : !choosingKind ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-7 text-[11px] gap-1.5 border-border/30"
+                onClick={() => setChoosingKind(true)}
+              >
+                <Hand className="h-3 w-3" /> Request ownership
+              </Button>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[10px] text-muted-foreground px-1">
+                  What would you like to request?
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[11px] gap-1.5 border-border/30 justify-start"
+                  onClick={() => handleRequest("co")}
+                >
+                  <ShieldCheck className="h-3 w-3 text-[hsl(var(--warning))]" />
+                  Co-ownership
+                  <span className="text-muted-foreground ml-auto text-[9px]">
+                    edit alongside owner
+                  </span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[11px] gap-1.5 border-border/30 justify-start"
+                  onClick={() => handleRequest("full")}
+                >
+                  <Crown className="h-3 w-3 text-primary" />
+                  Full ownership
+                  <span className="text-muted-foreground ml-auto text-[9px]">
+                    transfer control
+                  </span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[10px] text-muted-foreground"
+                  onClick={() => setChoosingKind(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );
