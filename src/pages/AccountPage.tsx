@@ -41,6 +41,34 @@ const AccountPage = () => {
           <SettingRow label="Show metric overlays" description="Display bitrate/loss on stream tiles" checked />
         </div>
       </div>
+
+      {/* Retention (scaffold — team admin only) */}
+      <div>
+        <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">Team Retention</h2>
+        <div className="mako-glass rounded-lg p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm text-foreground">Completed session retention</p>
+              <p className="text-xs text-muted-foreground">
+                How long completed sessions stay in history before archiving.
+              </p>
+            </div>
+            <select
+              disabled
+              defaultValue="90"
+              className="h-8 rounded-md bg-muted/20 border border-border/20 text-xs px-2 text-muted-foreground cursor-not-allowed"
+            >
+              <option value="30">30 days</option>
+              <option value="90">90 days</option>
+              <option value="365">1 year</option>
+              <option value="0">Indefinite</option>
+            </select>
+          </div>
+          <p className="text-[10px] text-muted-foreground/60">
+            Team Admin only — coming soon.
+          </p>
+        </div>
+      </div>
     </div>
   );
 };
