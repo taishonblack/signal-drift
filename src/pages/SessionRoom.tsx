@@ -61,11 +61,44 @@ const SessionRoom = () => {
   const activeInputs = session.inputs.filter((i) => i.enabled);
   const isMobile = useIsMobile();
 
-  // Look up the persisted SessionRecord for lifecycle metadata (scheduled end).
-  const record = id ? getSessionById(id) : undefined;
+  // Persisted session record — updated via polling for viewers/ownership changes.
+  const currentUserRef = getCurrentUserRef();
+  const [record, setRecord] = useState<SessionRecord | undefined>(() =>
+    id ? getSessionById(id) : undefined,
+  );
   const [scheduledEndAt, setScheduledEndAt] = useState<string | null>(
     record?.scheduledEndAt || null,
   );
+  const [ownershipDialogOpen, setOwnershipDialogOpen] = useState(false);
+  const [previousOwnerName, setPreviousOwnerName] = useState<string | undefined>();
+
+  // Join on mount, leave on unmount.
+  useEffect(() => {
+    if (!id) return;
+    joinSession(id, currentUserRef);
+    setRecord(getSessionById(id));
+    return () => {
+      leaveSession(id, currentUserRef.id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // Poll for viewer/ownership updates (mock realtime).
+  useEffect(() => {
+    if (!id) return;
+    const t = window.setInterval(() => {
+      const next = getSessionById(id);
+      setRecord(next);
+      if (next && !next.ownerUserId && (next.viewers ?? []).some((v) => v.userId === currentUserRef.id)) {
+        setOwnershipDialogOpen(true);
+      }
+    }, 2000);
+    return () => window.clearInterval(t);
+  }, [id, currentUserRef.id]);
+
+  const viewers = record?.viewers ?? [];
+  const isOwner = (record?.ownerUserId ?? record?.hostUserId) === currentUserRef.id;
+
 
   const [layout, setLayout] = useState<Layout>("4");
   const [audioSource, setAudioSource] = useState(session.inputs[0]?.id);
