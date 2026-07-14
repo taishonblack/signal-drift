@@ -41,9 +41,25 @@ export interface SessionViewer {
   userId: string;
   name: string;
   isOwner: boolean;
+  isCoOwner?: boolean;
   joinedAt: string;
   focus?: string; // friendly label of currently focused input
 }
+
+export type OwnershipRequestKind = "full" | "co";
+export type OwnershipRequestStatus = "pending" | "approved" | "denied";
+
+export interface SessionOwnershipRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  kind: OwnershipRequestKind;
+  status: OwnershipRequestStatus;
+  requestedAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+}
+
 
 export type SessionChangeKind =
   | "session_renamed"
