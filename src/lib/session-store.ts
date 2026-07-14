@@ -455,6 +455,157 @@ export function groupSessions(
   return { yourActive, teamActive, drafts, completed, archived };
 }
 
+// ─── Permissions ───
+
+export function isAdmin(_userId: string): boolean {
+  // Role management stub — always false for now. Owner path is the working case.
+  return false;
+}
+
+export function canConfigureSession(
+  session: SessionRecord | undefined | null,
+  userId: string
+): boolean {
+  if (!session) return false;
+  if ((session.ownerUserId ?? session.hostUserId) === userId) return true;
+  return isAdmin(userId);
+}
+
+// ─── Change log ───
+
+function labelForLine(l: SrtLine | undefined, fallbackIdx?: number): string {
+  if (!l) return `Source ${fallbackIdx ?? "?"}`;
+  return /^Line \d+$/.test(l.label) ? `Source ${l.id}` : l.label;
+}
+
+export function appendChangeLog(sessionId: string, entry: SessionChangeEntry) {
+  const s = getSessionById(sessionId);
+  if (!s) return;
+  const log = [...(s.changeLog ?? []), entry].slice(-200);
+  updateSession(sessionId, { changeLog: log });
+}
+
+export function diffSessionConfig(
+  prev: SessionRecord,
+  next: Pick<
+    SessionRecord,
+    "name" | "purpose" | "scheduledEndAt" | "defaultOriginTimeZone" | "lines"
+  >,
+  actor: { id: string; name: string }
+): SessionChangeEntry[] {
+  const entries: SessionChangeEntry[] = [];
+  const at = new Date().toISOString();
+  const mk = (
+    kind: SessionChangeKind,
+    summary: string,
+    extra: Partial<SessionChangeEntry> = {}
+  ): SessionChangeEntry => ({
+    id: `cl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    at,
+    userId: actor.id,
+    userName: actor.name,
+    kind,
+    summary,
+    ...extra,
+  });
+
+  if ((prev.name || "") !== (next.name || "")) {
+    entries.push(
+      mk(
+        "session_renamed",
+        `Renamed session from “${prev.name}” to “${next.name}”`,
+        { before: prev.name, after: next.name }
+      )
+    );
+  }
+  if ((prev.purpose || "") !== (next.purpose || "")) {
+    entries.push(
+      mk("purpose_changed", `Changed purpose to “${next.purpose}”`, {
+        before: prev.purpose as string,
+        after: next.purpose as string,
+      })
+    );
+  }
+  if ((prev.scheduledEndAt || "") !== (next.scheduledEndAt || "")) {
+    entries.push(
+      mk("duration_changed", "Updated session duration", {
+        before: prev.scheduledEndAt,
+        after: next.scheduledEndAt,
+      })
+    );
+  }
+  if (prev.defaultOriginTimeZone !== next.defaultOriginTimeZone) {
+    entries.push(
+      mk(
+        "timezone_changed",
+        `Changed event time zone to ${next.defaultOriginTimeZone}`,
+        { before: prev.defaultOriginTimeZone, after: next.defaultOriginTimeZone }
+      )
+    );
+  }
+
+  // Sources — key by line.id
+  const prevById = new Map(prev.lines.map((l) => [l.id, l]));
+  const nextById = new Map(next.lines.map((l) => [l.id, l]));
+
+  for (const [id, nLine] of nextById) {
+    const pLine = prevById.get(id);
+    const wasActive = !!pLine?.enabled && !!pLine?.srtAddress?.trim();
+    const isActive = !!nLine.enabled && !!nLine.srtAddress?.trim();
+    const target = labelForLine(nLine);
+
+    if (!wasActive && isActive) {
+      entries.push(
+        mk("source_added", `Added ${target}`, {
+          target,
+          after: nLine.srtAddress,
+        })
+      );
+      continue;
+    }
+    if (wasActive && !isActive) {
+      entries.push(
+        mk("source_removed", `Removed ${labelForLine(pLine)}`, {
+          target: labelForLine(pLine),
+          before: pLine?.srtAddress,
+        })
+      );
+      continue;
+    }
+    if (!pLine) continue;
+
+    if (pLine.label !== nLine.label) {
+      entries.push(
+        mk(
+          "source_renamed",
+          `Renamed ${labelForLine(pLine)} to “${nLine.label}”`,
+          { target, before: pLine.label, after: nLine.label }
+        )
+      );
+    }
+    if (pLine.srtAddress !== nLine.srtAddress && isActive) {
+      entries.push(
+        mk("source_address_changed", `Changed address for ${target}`, {
+          target,
+          before: pLine.srtAddress,
+          after: nLine.srtAddress,
+        })
+      );
+    }
+    if ((pLine.notes || "") !== (nLine.notes || "") && isActive) {
+      entries.push(
+        mk("source_notes_changed", `Updated notes for ${target}`, {
+          target,
+          before: pLine.notes,
+          after: nLine.notes,
+        })
+      );
+    }
+  }
+
+  return entries;
+}
+
 // ─── Drafts ───
 
 export function getDrafts(): SessionDraft[] {
