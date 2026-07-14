@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   getAddressBook, saveAddressBook, isLoggedIn,
-  parseSrtInput, composeSrt,
+  parseSrtInput,
   type AddressBookEntry,
 } from "@/lib/session-store";
 
