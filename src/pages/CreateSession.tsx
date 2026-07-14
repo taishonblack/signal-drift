@@ -676,24 +676,42 @@ const CreateSession = () => {
             <Button
               onClick={handleStart}
               size="lg"
-              disabled={!hasValidLine}
+              disabled={(mode === "create" && !hasValidLine) || isReadOnly || !allowed}
               className="flex-1 gap-2"
             >
-              <Play className="h-4 w-4" /> Start Session
+              {mode === "create" || !isActiveConfigure ? (
+                <Play className="h-4 w-4" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}{" "}
+              {primaryLabel}
             </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={handleSaveDraft}
-              className="gap-2 border-border/30 text-foreground"
-            >
-              <Save className="h-4 w-4" /> Save Draft
-            </Button>
+            {mode === "create" && (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={handleSaveDraft}
+                className="gap-2 border-border/30 text-foreground"
+              >
+                <Save className="h-4 w-4" /> Save Draft
+              </Button>
+            )}
+            {mode === "configure" && isActiveConfigure && existing && (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => navigate(`/session/${existing.id}`)}
+                className="gap-2 border-border/30 text-foreground"
+              >
+                <Radio className="h-4 w-4" /> Back to Session
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="lg"
               onClick={handleClearLine}
               className="gap-2 text-muted-foreground"
+              disabled={isReadOnly}
             >
               <Eraser className="h-4 w-4" /> Clear Source
             </Button>
