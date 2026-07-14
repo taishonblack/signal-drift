@@ -493,8 +493,108 @@ export function canConfigureSession(
 ): boolean {
   if (!session) return false;
   if ((session.ownerUserId ?? session.hostUserId) === userId) return true;
+  if ((session.viewers ?? []).some((v) => v.userId === userId && v.isCoOwner)) return true;
   return isAdmin(userId);
 }
+
+// ─── Ownership requests ───
+
+export function requestOwnership(
+  sessionId: string,
+  user: { id: string; name: string },
+  kind: OwnershipRequestKind
+): SessionOwnershipRequest | undefined {
+  const s = getSessionById(sessionId);
+  if (!s) return;
+  const existing = (s.ownershipRequests ?? []).find(
+    (r) => r.userId === user.id && r.status === "pending"
+  );
+  if (existing) return existing;
+  const req: SessionOwnershipRequest = {
+    id: `or-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    userId: user.id,
+    userName: user.name,
+    kind,
+    status: "pending",
+    requestedAt: new Date().toISOString(),
+  };
+  updateSession(sessionId, {
+    ownershipRequests: [...(s.ownershipRequests ?? []), req],
+  });
+  appendChangeLog(sessionId, {
+    id: `cl-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+    at: req.requestedAt,
+    userId: user.id,
+    userName: user.name,
+    kind: "ownership_requested",
+    summary:
+      kind === "full"
+        ? `${user.name} requested full ownership`
+        : `${user.name} requested co-ownership`,
+  });
+  return req;
+}
+
+export function resolveOwnershipRequest(
+  sessionId: string,
+  requestId: string,
+  decision: "approve" | "deny",
+  approver: { id: string; name: string }
+) {
+  const s = getSessionById(sessionId);
+  if (!s) return;
+  const requests = s.ownershipRequests ?? [];
+  const req = requests.find((r) => r.id === requestId);
+  if (!req || req.status !== "pending") return;
+  const at = new Date().toISOString();
+  const nextRequests = requests.map((r) =>
+    r.id === requestId
+      ? { ...r, status: decision === "approve" ? "approved" as const : "denied" as const, resolvedAt: at, resolvedBy: approver.name }
+      : r
+  );
+  updateSession(sessionId, { ownershipRequests: nextRequests });
+
+  if (decision === "deny") {
+    appendChangeLog(sessionId, {
+      id: `cl-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+      at,
+      userId: approver.id,
+      userName: approver.name,
+      kind: "ownership_denied",
+      summary: `Denied ${req.userName}'s ${req.kind === "full" ? "ownership" : "co-ownership"} request`,
+    });
+    return;
+  }
+
+  if (req.kind === "full") {
+    transferOwnership(sessionId, req.userId);
+    appendChangeLog(sessionId, {
+      id: `cl-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+      at,
+      userId: approver.id,
+      userName: approver.name,
+      kind: "ownership_granted",
+      summary: `Transferred ownership to ${req.userName}`,
+    });
+  } else {
+    // Co-ownership: mark viewer as co-owner
+    const after = getSessionById(sessionId);
+    const viewers = (after?.viewers ?? []).map((v) =>
+      v.userId === req.userId ? { ...v, isCoOwner: true } : v
+    );
+    updateSession(sessionId, { viewers });
+    appendChangeLog(sessionId, {
+      id: `cl-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+      at,
+      userId: approver.id,
+      userName: approver.name,
+      kind: "co_ownership_granted",
+      summary: `Granted co-ownership to ${req.userName}`,
+    });
+  }
+}
+
+
 
 // ─── Change log ───
 
