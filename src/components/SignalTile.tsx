@@ -1,3 +1,4 @@
+import LiveCamera from "@/components/LiveCamera";
 import { Maximize2, Edit3, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -91,7 +92,9 @@ const SignalTile = ({
 
       {/* Video placeholder – always 16:9 */}
       <div className={`relative flex items-center justify-center ${isFullscreen ? "flex-1" : "flex-1 min-h-0 w-full"}`} style={{ background: "black" }}>
-        {input.videoSrc && isActive ? (
+        {input.id === "line-1" && isActive ? (
+          <LiveCamera streamName="cam1" />
+        ) : input.videoSrc && isActive ? (
           <video
             src={input.videoSrc}
             autoPlay
