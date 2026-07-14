@@ -21,10 +21,15 @@ import {
   transferOwnership,
   updateViewerFocus,
   getCurrentUserRef,
+  canConfigureSession,
   type SessionRecord,
+  type SessionChangeEntry,
 } from "@/lib/session-store";
 import ViewersPanel from "@/components/session/ViewersPanel";
 import OwnershipTransferDialog from "@/components/session/OwnershipTransferDialog";
+import SessionChangeLogPanel from "@/components/session/SessionChangeLogPanel";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { History, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useLiveMetrics } from "@/hooks/use-live-metrics";
 import { useSessionFocus } from "@/hooks/use-session-focus";
