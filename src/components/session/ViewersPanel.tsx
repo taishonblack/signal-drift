@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Circle, Crown, ShieldCheck, Hand, Check, X } from "lucide-react";
+import { Users, Circle, Crown, ShieldCheck, Hand, Check, X, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { SessionViewer, SessionOwnershipRequest, OwnershipRequestKind } from "@/lib/session-store";
@@ -8,6 +8,7 @@ import {
   getSessionById,
   requestOwnership,
   resolveOwnershipRequest,
+  cancelOwnershipRequest,
   getCurrentUserRef,
 } from "@/lib/session-store";
 import { cn } from "@/lib/utils";
