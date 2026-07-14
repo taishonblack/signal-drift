@@ -1,83 +1,96 @@
+# Sessions Page & Recent Sessions Redesign
 
-# Create Session → Mission Control
+Turn `/sessions` from a flat list into a live operations board that separates active work from history, encourages team joins, and enforces "one active session at a time" per user.
 
-Reframe Create Session from a form into the entry point of a live monitoring workspace. This plan is scoped to what can be built inside MAKO's current frontend (mock-store based), with hooks in place for the collaboration/ownership features that will later be wired to Lovable Cloud.
+## 1. Data model extensions (`src/lib/session-store.ts`)
 
-## 1. Session Information (top of page)
+Extend `SessionRecord`:
+- `team?: string` — team label ("Broadcast Ops" default on seeds)
+- `viewers: SessionViewer[]` — live participants (owner is always the first entry while present)
 
-- **Session Name** — optional. If left blank at submit, auto-generate from first source's friendly name (e.g. "NBC Program — Feb 14").
-- **Purpose** (new) — chips: Review, QC, Troubleshooting, Replay Review, Engineering, Custom. Stored on the session for later filtering.
-- **Default Event Time Zone** — keep as-is; master clock for the session.
-- **Session Duration** (new):
-  - Preset chips: 30m, 1h, 2h, 4h, 6h, Custom
-  - OR "Ends at" date+time picker (toggle between the two modes)
-  - Persist `scheduledEndAt` on the session record.
+New `SessionViewer` type:
+```
+{ userId: string; name: string; isOwner: boolean; joinedAt: string; focus?: string }
+```
 
-## 2. Sources (renamed from "SRT Inputs")
+Helpers:
+- `getCurrentUser()` — returns mock user (id `u1`, name "You") from existing auth stub.
+- `getActiveSessionForUser(userId)` — already exists; extend to also match sessions where the user is in `viewers`.
+- `joinSession(sessionId, user)` / `leaveSession(sessionId, userId)` — mutate `viewers`, persist.
+- `transferOwnership(sessionId, newOwnerId)` — flips `ownerUserId`/`hostUserId` and viewer `isOwner` flags.
+- `groupSessions(sessions)` → `{ yourActive, teamActive, drafts, completed, archived }`.
 
-Each source card asks only what MAKO cannot discover:
+Seed sessions: add 2–3 "team" active sessions owned by other mock users ("Quinn Roberts", "Stephanie Black") with 2–4 viewers each, so the operations board has content.
 
-- **Friendly Name** (e.g. "NBC Program", "Camera 3") — used everywhere in the UI; internal `Line N` id retained
-- **Address** (host/IP) + **Port** (numeric) as separate fields
-- **Smart paste**: pasting `srt://host:port`, `host:port`, or just `host` auto-splits into the two fields
-- **Advanced** disclosure → **Passphrase** only
-- Removed: Mode selector (always `caller` internally), Bitrate input, per-line timezone
+## 2. Sessions page (`src/pages/Sessions.tsx`)
 
-**Source state pill** replaces enable toggle:
-`No Source` → `Configured` → `Testing…` → `Connected` / `Failed` / `Disabled`
+Replace the flat grid with grouped sections rendered in this order (hide empty groups except "Your Active Session" which shows a subtle empty state):
 
-**Test Connection** button → shows mocked discovery panel (Codec, Resolution, FPS, Bitrate, Latency, Packet Loss, Audio, Loudness, Clock Sync). Already partly in place — will be expanded and moved into the new state model.
+```text
+┌─────────────────────────────────────────────┐
+│ Your Active Session         [End Session]   │
+│ ── large hero card ──                       │
+├─────────────────────────────────────────────┤
+│ Team Active Sessions           N sessions   │
+│ ── card grid, 1–2 cols ──                   │
+├─────────────────────────────────────────────┤
+│ Drafts                                      │
+│ Completed (recent)                          │
+│ Archived (collapsed by default)             │
+└─────────────────────────────────────────────┘
+```
 
-**Address Book**
-- "+" **Save Source** action beside the Address field saves { name, address, port, passphrase?, description } into the existing address book
-- Selecting an entry populates the current source panel (name/address/port/passphrase)
+New `SessionCard` component displays:
+- Name, `SessionStatusBadge`
+- Owner name (avatar circle with initials)
+- Team
+- Created/started time (relative), duration for active
+- Source count
+- Viewer count (only when active) — clickable, opens `ViewersPanel`
 
-## 3. Lifecycle & rules
+Behavior:
+- Click a **team active** card → `JoinActiveSessionDialog`
+- Click **your active** card → navigate straight into `/session/:id`
+- Click a **completed** card → existing `ExpiredSessionDialog`
+- Click a **draft** card → resume in `/create?draft=…` (stub link; existing draft flow)
 
-- **Session status enum** extended: `draft | scheduled | active | paused | completed | archived` (Recent Sessions renders a colored badge per status; today only draft/active/completed will actually be produced by the UI).
-- **Save Draft** → status `draft`, appears in Recent Sessions with a pencil/gray badge.
-- **One active session per user** — creating or joining a new active session while one exists shows a confirm dialog:
-  > "You already have an active monitoring session. Switching sessions will end your current monitoring session." — [Cancel] [Switch Session]
-  Enforced client-side against the mock store; the losing session is marked `completed`.
-- **Scheduled end reached** (client timer while a session room is open): modal "This session is scheduled to end. Are you still monitoring?" with [Extend 30 min] [Extend 1 hr] [End Session]. If no response in 15 minutes, auto-end.
-- **Ownership transfer** (scaffold only): if the current owner leaves a shared session, remaining participant sees "Become session owner?" prompt. Wired to a placeholder handler; real presence comes with the collaboration backend.
+## 3. New components (all under `src/components/session/`)
 
-## 4. Recent Sessions badges
+- `SessionCard.tsx` — reusable card used across groups (variant: `hero | grid | compact`).
+- `JoinActiveSessionDialog.tsx` — matches spec: session, owner, viewer count, started, duration; `Cancel` / `Join Session`.
+- `SwitchMonitoringSessionDialog.tsx` — shown when user tries to join while already monitoring another session; `Stay Here` / `Join New Session`. Reuses `SwitchActiveSessionDialog` visuals but with dual-session content.
+- `ViewersPanel.tsx` — popover/sheet listing viewers with owner tag; live-updates via store subscription.
+- `OwnershipTransferDialog.tsx` — appears in `SessionRoom` when owner leaves; `Become Owner` / `Leave Session`. First accept wins (client-side race via localStorage timestamp).
 
-Update `RecentSessionsPanel` to render status badges: Draft (gray pencil), Scheduled (amber clock), Active (green radio), Paused (slate), Completed (muted check), Archived (dim box). Uses existing glass styling and cyan/warning tokens — no new palette.
+## 4. Sessions page join flow
 
-## 5. Account-level retention (Future — scaffolded)
+```text
+click team card
+   ├─ user has NO active session      → JoinActiveSessionDialog → confirm → joinSession + navigate
+   └─ user IS in another active session → SwitchMonitoringSessionDialog
+                                          └─ confirm → leaveSession(current) + joinSession(new) + navigate
+```
 
-Add a read-only "Session Retention" row on `AccountPage` explaining the policy (30 / 90 / 365 / Indefinite). Selector is present but disabled with a "Team Admin only" hint. Real enforcement is deferred.
+## 5. Session room updates (`src/pages/SessionRoom.tsx`)
 
----
+- On mount: `joinSession(id, currentUser)`; on unmount: `leaveSession`.
+- Poll viewers from store every 2s (localStorage-backed pseudo-realtime, matches existing patterns).
+- Header: show viewer count chip that opens `ViewersPanel`.
+- If `ownerUserId` changes to `null` (owner left) and current user is a remaining viewer → show `OwnershipTransferDialog`.
 
-## Technical notes
+## 6. Recent Sessions sidebar (`src/components/RecentSessionsPanel.tsx`)
 
-**Data model** (`src/lib/session-store.ts`)
-- Extend `SessionRecord`:
-  - `status: "draft" | "scheduled" | "active" | "paused" | "completed" | "archived"` (replacing `"active" | "expired"`; migrate on read)
-  - `purpose?: string`
-  - `scheduledEndAt?: string`
-  - `ownerUserId: string` (alias of existing `hostUserId`)
-- Extend `SrtLine`:
-  - `friendlyName?: string`
-  - `host?: string`, `port?: string` (kept alongside `srtAddress` — composed on save)
-- Extend `AddressBookEntry` with `port`, `passphrase?`, `description?`.
-- Helpers: `parseSrtInput(str)` returning `{ host, port }`; `composeSrtAddress({host, port})`; `getActiveSessionForUser()`; `endSession(id)`.
+Group items by status with small headers (Active, Draft, Completed, Archived) instead of a single mixed list. Keep the collapse behavior.
 
-**UI**
-- `src/pages/CreateSession.tsx` — reorganize into sections: Session Info, Sources, Actions. Introduce `SourceCard` sub-component for cleanliness.
-- New: `src/components/session/DurationPicker.tsx` (preset chips + "Ends at" toggle).
-- New: `src/components/session/PurposeSelect.tsx` (chip group).
-- Extend `AddressBookModal` save form with the additional fields.
-- `RecentSessionsPanel` + `Sessions.tsx` — status badge component `SessionStatusBadge`.
-- New: `src/components/session/ScheduledEndDialog.tsx` used inside `SessionRoom` when `scheduledEndAt` passes.
-- New confirm dialog `SwitchActiveSessionDialog` triggered from Create Session submit and from `Sessions.tsx` join clicks.
+## 7. Presence indicator (lightweight, in-scope teaser of the "future enhancement")
 
-**Out of scope for this pass**
-- Real presence / multi-user ownership transfer (needs backend)
-- Account-level retention enforcement
-- Actual paused/archived transitions (only visualized)
+Each active-session card and viewer row shows a small line like "focused on Program" when `viewer.focus` is set. Wire to the existing `use-session-focus` hook so owner's focus writes into the viewer entry. No cursors, no per-action broadcast.
 
-Once approved I'll implement in this order: data model + helpers → CreateSession redesign → duration/purpose components → active-session rule → status badges → scheduled-end dialog wired into SessionRoom → account retention stub.
+## Out of scope
+- Real multi-user realtime (still localStorage-based mock; groundwork only).
+- Team management CRUD — "team" is a display string.
+- Draft resume flow beyond linking to `/create`.
+
+## Files touched
+- Edit: `src/lib/session-store.ts`, `src/pages/Sessions.tsx`, `src/pages/SessionRoom.tsx`, `src/components/RecentSessionsPanel.tsx`, `src/hooks/use-session-focus.ts` (write focus into viewer entry).
+- New: `src/components/session/SessionCard.tsx`, `JoinActiveSessionDialog.tsx`, `SwitchMonitoringSessionDialog.tsx`, `ViewersPanel.tsx`, `OwnershipTransferDialog.tsx`.
