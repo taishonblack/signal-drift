@@ -93,6 +93,14 @@ const ViewersPanel = ({
     onChange?.();
   };
 
+  const handleCancel = (reqId: string) => {
+    if (!sessionId || !currentUserId) return;
+    const actor = { id: currentUserId, name: me?.name ?? getCurrentUserRef().name };
+    cancelOwnershipRequest(sessionId, reqId, actor);
+    toast.success("Ownership request cancelled");
+    onChange?.();
+  };
+
   return (
     <Popover>
       <PopoverTrigger asChild>
