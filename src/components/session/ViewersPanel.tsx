@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Circle, Crown, ShieldCheck, Hand, Check, X } from "lucide-react";
+import { Users, Circle, Crown, ShieldCheck, Hand, Check, X, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { SessionViewer, SessionOwnershipRequest, OwnershipRequestKind } from "@/lib/session-store";
@@ -8,6 +8,7 @@ import {
   getSessionById,
   requestOwnership,
   resolveOwnershipRequest,
+  cancelOwnershipRequest,
   getCurrentUserRef,
 } from "@/lib/session-store";
 import { cn } from "@/lib/utils";
@@ -44,8 +45,13 @@ const ViewersPanel = ({
   // Live-read requests/owner from store so approvals refresh immediately.
   const record = sessionId ? getSessionById(sessionId) : undefined;
   const ownerId = record?.ownerUserId ?? record?.hostUserId;
-  const pending: SessionOwnershipRequest[] =
-    (record?.ownershipRequests ?? []).filter((r) => r.status === "pending");
+  const allRequests: SessionOwnershipRequest[] = record?.ownershipRequests ?? [];
+  const pending: SessionOwnershipRequest[] = allRequests.filter((r) => r.status === "pending");
+  const latestRequestFor = (userId: string): SessionOwnershipRequest | undefined => {
+    const forUser = allRequests.filter((r) => r.userId === userId);
+    if (forUser.length === 0) return undefined;
+    return [...forUser].sort((a, b) => (a.requestedAt < b.requestedAt ? 1 : -1))[0];
+  };
 
   const me = viewers.find((v) => v.userId === currentUserId);
   const isOwner = !!currentUserId && ownerId === currentUserId;
@@ -84,6 +90,14 @@ const ViewersPanel = ({
           : `Denied ${req.userName}'s request`
       );
     }
+    onChange?.();
+  };
+
+  const handleCancel = (reqId: string) => {
+    if (!sessionId || !currentUserId) return;
+    const actor = { id: currentUserId, name: me?.name ?? getCurrentUserRef().name };
+    cancelOwnershipRequest(sessionId, reqId, actor);
+    toast.success("Ownership request cancelled");
     onChange?.();
   };
 
@@ -166,36 +180,69 @@ const ViewersPanel = ({
           {viewers.length === 0 && (
             <p className="px-3 py-3 text-xs text-muted-foreground">No viewers yet.</p>
           )}
-          {viewers.map((v) => (
-            <div key={v.userId} className="flex items-start gap-2 px-3 py-2 hover:bg-muted/20">
-              <div className="h-7 w-7 rounded-full bg-primary/15 border border-primary/25 text-primary text-[10px] font-semibold flex items-center justify-center shrink-0">
-                {initials(v.name)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                  <span className="text-xs font-medium text-foreground truncate">{v.name}</span>
-                  {v.isOwner && (
-                    <span className="text-[9px] uppercase font-semibold text-primary bg-primary/10 border border-primary/25 rounded px-1 py-[1px] shrink-0 inline-flex items-center gap-0.5">
-                      <Crown className="h-2.5 w-2.5" /> Owner
-                    </span>
-                  )}
-                  {!v.isOwner && v.isCoOwner && (
-                    <span className="text-[9px] uppercase font-semibold text-[hsl(var(--warning))] bg-[hsl(var(--warning))]/10 border border-[hsl(var(--warning))]/25 rounded px-1 py-[1px] shrink-0 inline-flex items-center gap-0.5">
-                      <ShieldCheck className="h-2.5 w-2.5" /> Co-owner
-                    </span>
+          {viewers.map((v) => {
+            const latest = latestRequestFor(v.userId);
+            const isSelfRow = v.userId === currentUserId;
+            const showStatus =
+              !!latest && !v.isOwner && !(latest.status === "approved" && latest.kind === "co" && v.isCoOwner === false);
+            return (
+              <div key={v.userId} className="flex items-start gap-2 px-3 py-2 hover:bg-muted/20">
+                <div className="h-7 w-7 rounded-full bg-primary/15 border border-primary/25 text-primary text-[10px] font-semibold flex items-center justify-center shrink-0">
+                  {initials(v.name)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                    <span className="text-xs font-medium text-foreground truncate">{v.name}</span>
+                    {v.isOwner && (
+                      <span className="text-[9px] uppercase font-semibold text-primary bg-primary/10 border border-primary/25 rounded px-1 py-[1px] shrink-0 inline-flex items-center gap-0.5">
+                        <Crown className="h-2.5 w-2.5" /> Owner
+                      </span>
+                    )}
+                    {!v.isOwner && v.isCoOwner && (
+                      <span className="text-[9px] uppercase font-semibold text-[hsl(var(--warning))] bg-[hsl(var(--warning))]/10 border border-[hsl(var(--warning))]/25 rounded px-1 py-[1px] shrink-0 inline-flex items-center gap-0.5">
+                        <ShieldCheck className="h-2.5 w-2.5" /> Co-owner
+                      </span>
+                    )}
+                    {showStatus && latest.status === "pending" && (
+                      <span
+                        title={`Pending ${latest.kind === "full" ? "full ownership" : "co-ownership"} request`}
+                        className="text-[9px] uppercase font-semibold text-[hsl(var(--warning))] bg-[hsl(var(--warning))]/10 border border-[hsl(var(--warning))]/25 rounded px-1 py-[1px] shrink-0 inline-flex items-center gap-0.5"
+                      >
+                        <Clock className="h-2.5 w-2.5" /> Pending
+                      </span>
+                    )}
+                    {showStatus && latest.status === "approved" && !v.isCoOwner && (
+                      <span className="text-[9px] uppercase font-semibold text-[hsl(var(--success,142_71%_45%))] bg-emerald-500/10 border border-emerald-500/25 rounded px-1 py-[1px] shrink-0 inline-flex items-center gap-0.5">
+                        <Check className="h-2.5 w-2.5" /> Approved
+                      </span>
+                    )}
+                    {showStatus && latest.status === "denied" && (
+                      <span className="text-[9px] uppercase font-semibold text-muted-foreground bg-muted/30 border border-border/30 rounded px-1 py-[1px] shrink-0 inline-flex items-center gap-0.5">
+                        <X className="h-2.5 w-2.5" /> Denied
+                      </span>
+                    )}
+                    {isSelfRow && latest?.status === "pending" && (
+                      <button
+                        type="button"
+                        onClick={() => handleCancel(latest.id)}
+                        className="text-[9px] uppercase font-semibold text-muted-foreground hover:text-foreground underline underline-offset-2 shrink-0"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                  {v.focus && (
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <Circle className="h-1.5 w-1.5 fill-primary text-primary" />
+                      <span className="text-[10px] text-muted-foreground truncate">
+                        focused on {v.focus}
+                      </span>
+                    </div>
                   )}
                 </div>
-                {v.focus && (
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <Circle className="h-1.5 w-1.5 fill-primary text-primary" />
-                    <span className="text-[10px] text-muted-foreground truncate">
-                      focused on {v.focus}
-                    </span>
-                  </div>
-                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Request ownership — non-owner viewers */}
@@ -207,9 +254,27 @@ const ViewersPanel = ({
                 You have co-owner configuration access.
               </div>
             ) : hasPending ? (
-              <div className="text-[10px] text-muted-foreground px-2 py-1">
-                Request pending owner approval…
-              </div>
+              (() => {
+                const mine = currentUserId ? latestRequestFor(currentUserId) : undefined;
+                return (
+                  <div className="flex items-center justify-between gap-2 px-2 py-1">
+                    <span className="text-[10px] text-muted-foreground inline-flex items-center gap-1">
+                      <Clock className="h-3 w-3 text-[hsl(var(--warning))]" />
+                      {mine?.kind === "full" ? "Full ownership" : "Co-ownership"} request pending…
+                    </span>
+                    {mine && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                        onClick={() => handleCancel(mine.id)}
+                      >
+                        Cancel request
+                      </Button>
+                    )}
+                  </div>
+                );
+              })()
             ) : !choosingKind ? (
               <Button
                 size="sm"
