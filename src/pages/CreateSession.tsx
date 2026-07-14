@@ -307,22 +307,69 @@ const CreateSession = () => {
   const activeAdvancedOpen = !!advancedOpen[activeTab] || !!activeLine.passphrase;
   const activeIsTested = !!tested[activeTab] && isConfigured(activeLine) && activeLine.enabled;
 
+  const pageTitle =
+    mode === "create"
+      ? "New Session"
+      : isReadOnly
+        ? "Session Configuration"
+        : "Configure Session";
+  const pageHint =
+    mode === "create"
+      ? "A session is the workspace where you and your team monitor these feeds together."
+      : isActiveConfigure
+        ? "This session is live — changes are broadcast to everyone watching."
+        : isReadOnly
+          ? "This session has ended. Configuration is read-only."
+          : "Update the monitoring setup for this session, then start monitoring.";
+  const primaryLabel =
+    mode === "create"
+      ? "Start Monitoring"
+      : isActiveConfigure
+        ? "Save Changes"
+        : "Start Monitoring";
+  const ownerName = existing
+    ? (existing.ownerUserId ?? existing.hostUserId) === currentUser.id
+      ? "You"
+      : existing.host
+    : "You";
+
   return (
     <div className="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto">
       {/* ─── Left: Create Session ─── */}
       <div className="flex-1 lg:flex-[7] space-y-6 min-w-0">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">Create Session</h1>
-            <p className="text-xs text-muted-foreground mt-1">
-              A session is the workspace where you and your team monitor these feeds together.
-            </p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-semibold text-foreground">{pageTitle}</h1>
+              {mode === "configure" && existing && (
+                <SessionStatusBadge status={existing.status} />
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">{pageHint}</p>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
             <User className="h-3.5 w-3.5" />
-            <span>Owner: You</span>
+            <span>Owner: {ownerName}</span>
           </div>
         </div>
+
+        {isActiveConfigure && (
+          <div className="rounded-md border border-primary/25 bg-primary/[0.06] px-3 py-2 flex items-center gap-2 text-[11px] text-foreground/85">
+            <Radio className="h-3.5 w-3.5 text-primary" />
+            <span>
+              This session is live — {(existing?.viewers ?? []).length} operator
+              {(existing?.viewers ?? []).length === 1 ? "" : "s"} watching. Saved changes appear for
+              everyone instantly.
+            </span>
+          </div>
+        )}
+
+        {mode === "configure" && !allowed && (
+          <div className="rounded-md border border-border/20 bg-muted/10 px-3 py-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <Lock className="h-3.5 w-3.5" />
+            <span>Only the session owner or team administrators can modify this session.</span>
+          </div>
+        )}
 
         {/* ── Session Information ── */}
         <div className="mako-glass-solid rounded-lg p-5 md:p-6 space-y-6">
