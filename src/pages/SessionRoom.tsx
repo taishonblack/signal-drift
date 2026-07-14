@@ -407,6 +407,43 @@ const SessionRoom = () => {
               Reset Layout
             </Button>
           )}
+          {canConfigure && id && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/session/${id}/configure`)}
+              className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              title="Configure this session"
+            >
+              <Settings className="h-3 w-3" />
+              Configure
+            </Button>
+          )}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                title="Session change log"
+              >
+                <History className="h-3 w-3" />
+                Activity
+                {(record?.changeLog?.length ?? 0) > 0 && (
+                  <span className="text-[10px] text-muted-foreground/70">
+                    ({record?.changeLog?.length})
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              side="bottom"
+              align="end"
+              className="w-80 max-h-96 overflow-auto p-4 mako-glass-solid border-border/20"
+            >
+              <SessionChangeLogPanel entries={record?.changeLog ?? []} />
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Focus indicator + presence chip */}
