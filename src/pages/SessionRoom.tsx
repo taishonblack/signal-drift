@@ -295,6 +295,14 @@ const SessionRoom = () => {
         onEnd={handleEndSession}
       />
 
+      <OwnershipTransferDialog
+        open={ownershipDialogOpen}
+        previousOwner={previousOwnerName}
+        onBecomeOwner={handleBecomeOwner}
+        onLeave={handleLeaveAsViewer}
+      />
+
+
       {fullscreenInput && (
         <FullscreenOverlay
           input={fullscreenInput}
