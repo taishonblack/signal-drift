@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Play, Save, Eraser, Radio, CheckCircle2, Download, User,
-  ChevronDown, ChevronRight, Zap, Circle, PlugZap,
+  Play, Save, Eraser, User,
+  ChevronDown, ChevronRight, Zap, Circle, PlugZap, Plus, Radio,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,44 +10,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import AddressBookModal from "@/components/AddressBookModal";
+import PurposeSelect from "@/components/session/PurposeSelect";
+import DurationPicker from "@/components/session/DurationPicker";
+import SessionStatusBadge from "@/components/session/SessionStatusBadge";
+import SwitchActiveSessionDialog from "@/components/session/SwitchActiveSessionDialog";
 import {
   type SrtLine, type SessionRecord,
   createDefaultLine, getSessions, addSession,
-  generateSessionId, generatePin, exportSessionLog,
-  saveDraft,
+  generateSessionId, generatePin, saveDraft,
+  parseSrtInput, composeSrt,
+  getActiveSessionForUser, endSession,
+  getAddressBook, saveAddressBook,
 } from "@/lib/session-store";
 import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
+import { toast } from "@/components/ui/sonner";
 
-type HistoryFilter = "all" | "active" | "expired";
 type LineStatus = "empty" | "configured" | "error";
-
-// ─── Parsing helpers ─────────────────────────────────────────────
-// Accepts any of:
-//   srt://134.209.119.136:8890?mode=caller
-//   134.209.119.136:8890
-//   134.209.119.136
-// Returns { host, port } — port is "" when not supplied.
-export function parseSrtInput(raw: string): { host: string; port: string } {
-  let s = raw.trim();
-  if (!s) return { host: "", port: "" };
-  // strip protocol
-  s = s.replace(/^srt:\/\//i, "");
-  // strip query
-  s = s.split("?")[0];
-  // strip path
-  s = s.split("/")[0];
-  const [host, port = ""] = s.split(":");
-  return { host: host || "", port: (port || "").replace(/\D/g, "") };
-}
-
-// Always caller mode internally.
-function composeSrt(host: string, port: string): string {
-  const h = host.trim();
-  const p = port.trim();
-  if (!h) return "";
-  if (!p) return `srt://${h}`;
-  return `srt://${h}:${p}?mode=caller`;
-}
 
 const isConfigured = (line: SrtLine) => {
   const { host, port } = parseSrtInput(line.srtAddress);
@@ -68,9 +46,15 @@ const statusDot: Record<LineStatus, string> = {
   error: "bg-destructive",
 };
 
+const CURRENT_USER_ID = "u1";
+
 const CreateSession = () => {
   const navigate = useNavigate();
   const [name, setName] = useState("");
+  const [purpose, setPurpose] = useState<string>("QC");
+  const [scheduledEndAt, setScheduledEndAt] = useState<string>(
+    new Date(Date.now() + 60 * 60_000).toISOString(),
+  );
   const [defaultOriginTimeZone, setDefaultOriginTimeZone] = useState("UTC");
   const [lines, setLines] = useState<SrtLine[]>([
     createDefaultLine(1),
@@ -79,9 +63,10 @@ const CreateSession = () => {
     createDefaultLine(4),
   ]);
   const [activeTab, setActiveTab] = useState(1);
-  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [advancedOpen, setAdvancedOpen] = useState<Record<number, boolean>>({});
   const [tested, setTested] = useState<Record<number, boolean>>({});
+  const [pendingActiveSession, setPendingActiveSession] = useState<SessionRecord | null>(null);
+  const [pendingStart, setPendingStart] = useState<null | (() => void)>(null);
   const sessions = getSessions();
 
   const activeLine = lines.find((l) => l.id === activeTab)!;
@@ -99,7 +84,6 @@ const CreateSession = () => {
     [activeTab]
   );
 
-  // Reset tested state whenever the address changes.
   useEffect(() => {
     setTested((prev) => ({ ...prev, [activeTab]: false }));
   }, [activeLine.srtAddress, activeTab]);
@@ -109,7 +93,6 @@ const CreateSession = () => {
   };
 
   const handleHostChange = (val: string) => {
-    // If the pasted value looks like a URL / has a colon, auto-split.
     if (/[:/?]/.test(val) || /^srt:\/\//i.test(val)) {
       const parsed = parseSrtInput(val);
       setHostPort(parsed.host, parsed.port || activePort);
@@ -127,6 +110,30 @@ const CreateSession = () => {
     setHostPort(host, port);
   };
 
+  const handleSaveToAddressBook = () => {
+    if (!activeHost || !activePort) {
+      toast("Add an address and port before saving to the Address Book.");
+      return;
+    }
+    const label = /^Line \d+$/.test(activeLine.label) ? "" : activeLine.label;
+    const tag = label.trim() || `${activeHost}:${activePort}`;
+    const entries = getAddressBook();
+    const next = [
+      {
+        id: `ab-${Date.now()}`,
+        tag,
+        address: activeHost,
+        port: activePort,
+        passphrase: activeLine.passphrase || undefined,
+        description: activeLine.notes || undefined,
+        lastUsed: new Date().toISOString(),
+      },
+      ...entries,
+    ];
+    saveAddressBook(next);
+    toast(`Saved "${tag}" to Address Book.`);
+  };
+
   const configureSource = () => {
     updateLine({ enabled: true });
   };
@@ -139,12 +146,11 @@ const CreateSession = () => {
     setTested((prev) => ({ ...prev, [activeTab]: true }));
   };
 
-  const handleStart = () => {
+  const createAndNavigate = () => {
     const enabledLines = lines.filter((l) => l.enabled && isConfigured(l));
     if (enabledLines.length === 0) return;
-    const sessionName =
-      name.trim() || enabledLines[0]?.label || enabledLines[0]?.srtAddress || "Untitled Session";
-    // Ensure every enabled line uses caller mode internally.
+    const firstLabel = enabledLines[0].label;
+    const sessionName = name.trim() || firstLabel || "Untitled Session";
     const normalized = lines.map((l) =>
       l.enabled ? { ...l, mode: "caller" as const } : l
     );
@@ -152,9 +158,12 @@ const CreateSession = () => {
       id: generateSessionId(),
       name: sessionName,
       status: "active",
+      purpose,
+      scheduledEndAt: scheduledEndAt || undefined,
       createdAt: new Date().toISOString(),
       host: "You",
-      hostUserId: "u1",
+      hostUserId: CURRENT_USER_ID,
+      ownerUserId: CURRENT_USER_ID,
       defaultOriginTimeZone,
       lines: normalized,
       pin: generatePin(),
@@ -165,6 +174,30 @@ const CreateSession = () => {
     navigate(`/session/${session.id}`);
   };
 
+  const handleStart = () => {
+    const enabledLines = lines.filter((l) => l.enabled && isConfigured(l));
+    if (enabledLines.length === 0) return;
+
+    // Enforce "one active session per user"
+    const existing = getActiveSessionForUser(CURRENT_USER_ID);
+    if (existing) {
+      setPendingActiveSession(existing);
+      setPendingStart(() => createAndNavigate);
+      return;
+    }
+    createAndNavigate();
+  };
+
+  const confirmSwitch = () => {
+    if (pendingActiveSession) {
+      endSession(pendingActiveSession.id);
+    }
+    const start = pendingStart;
+    setPendingActiveSession(null);
+    setPendingStart(null);
+    if (start) start();
+  };
+
   const handleSaveDraft = () => {
     saveDraft({
       id: `draft-${Date.now()}`,
@@ -172,6 +205,7 @@ const CreateSession = () => {
       lines,
       createdAt: new Date().toISOString(),
     });
+    toast("Draft saved to Recent Sessions.");
   };
 
   const handleClearLine = () => {
@@ -185,21 +219,7 @@ const CreateSession = () => {
     setTested((prev) => ({ ...prev, [activeTab]: false }));
   };
 
-  const handleDownloadLog = (session: SessionRecord) => {
-    const log = exportSessionLog(session);
-    const blob = new Blob([log], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `mako-session-${session.id}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const filteredSessions = sessions
-    .filter((s) => historyFilter === "all" || s.status === historyFilter)
-    .slice(0, 10);
-
+  const recentSessions = sessions.slice(0, 10);
   const hasValidLine = lines.some((l) => l.enabled && isConfigured(l));
 
   const activeAdvancedOpen = !!advancedOpen[activeTab] || !!activeLine.passphrase;
@@ -207,286 +227,319 @@ const CreateSession = () => {
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto">
-      {/* ─── Left: Create Session Form ─── */}
+      {/* ─── Left: Create Session ─── */}
       <div className="flex-1 lg:flex-[7] space-y-6 min-w-0">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-xl font-semibold text-foreground">Create Session</h1>
             <p className="text-xs text-muted-foreground mt-1">
-              Add up to 4 sources to monitor. Point MAKO at each feed — it discovers the rest.
+              A session is the workspace where you and your team monitor these feeds together.
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
             <User className="h-3.5 w-3.5" />
-            <span>Host: You</span>
+            <span>Owner: You</span>
           </div>
         </div>
 
+        {/* ── Session Information ── */}
         <div className="mako-glass-solid rounded-lg p-5 md:p-6 space-y-6">
-          {/* Session name */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-              Session Name{" "}
-              <span className="normal-case tracking-normal font-normal">(optional)</span>
-            </label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Super Bowl LVIII — Main Feed Review"
-              className="bg-muted/20 border-border/20 text-foreground placeholder:text-muted-foreground/40"
-            />
-            <p className="text-[10px] text-muted-foreground/60">
-              If left blank, MAKO uses the first source name.
-            </p>
-          </div>
+          <SectionHeader
+            eyebrow="Session"
+            title="Session Information"
+            hint="How this workspace shows up in history, and when it should end."
+          />
 
-          {/* Default Event Time Zone */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-              Event Time Zone
-            </label>
-            <Select value={defaultOriginTimeZone} onValueChange={setDefaultOriginTimeZone}>
-              <SelectTrigger className="bg-muted/20 border-border/20 text-foreground">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="mako-glass-solid border-border/20">
-                {COMMON_TIMEZONES.map((tz) => (
-                  <SelectItem key={tz} value={tz}>{tzLabel(tz)}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[10px] text-muted-foreground/60">
-              Applies to every source in this session.
-            </p>
-          </div>
-
-          {/* Source Tabs */}
-          <div className="space-y-4">
-            <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-              Sources
-            </label>
-
-            <div className="flex gap-1 p-1 rounded-md bg-muted/15 border border-border/15">
-              {lines.map((line) => {
-                const st = getLineStatus(line);
-                const isDefaultLabel = /^Line \d+$/.test(line.label);
-                const display = isDefaultLabel ? `SRT ${line.id}` : line.label;
-                return (
-                  <button
-                    key={line.id}
-                    onClick={() => setActiveTab(line.id)}
-                    className={cn(
-                      "flex-1 min-w-0 flex items-center justify-center gap-1.5 py-2 px-3 rounded text-xs font-medium transition-all",
-                      activeTab === line.id
-                        ? "bg-muted/40 text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground/70"
-                    )}
-                  >
-                    <span className="truncate">{display}</span>
-                    {st !== "empty" && (
-                      <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusDot[st])} />
-                    )}
-                  </button>
-                );
-              })}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                Name <span className="normal-case tracking-normal font-normal">(optional)</span>
+              </label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Super Bowl LIX — Main Feed Review"
+                className="bg-muted/20 border-border/20 text-foreground placeholder:text-muted-foreground/40"
+              />
+              <p className="text-[10px] text-muted-foreground/60">
+                If left blank, MAKO names it after the first source.
+              </p>
             </div>
 
-            {/* Active source card */}
-            <div
-              className={cn(
-                "rounded-md border p-4 space-y-4 transition-colors",
-                activeLine.enabled
-                  ? "border-border/20 bg-muted/8"
-                  : "border-border/10 bg-muted/4"
-              )}
-            >
-              {/* Status header */}
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  {!activeLine.enabled ? (
-                    <>
-                      <Circle className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-                      <span className="text-xs text-muted-foreground truncate">Disabled</span>
-                    </>
-                  ) : !isConfigured(activeLine) ? (
-                    <>
-                      <Circle className="h-3 w-3 text-muted-foreground/60 shrink-0" />
-                      <span className="text-xs text-muted-foreground truncate">
-                        No source configured
-                      </span>
-                    </>
-                  ) : activeIsTested ? (
-                    <>
-                      <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))] shrink-0" />
-                      <span className="text-xs text-foreground truncate">
-                        Connected · {activeLine.label || `SRT ${activeTab}`}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="h-2 w-2 rounded-full bg-primary/60 shrink-0" />
-                      <span className="text-xs text-foreground truncate">
-                        Ready · {activeLine.label || `SRT ${activeTab}`}
-                      </span>
-                    </>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <AddressBookModal onSelect={handleAddressBookSelect} />
-                  {activeLine.enabled ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={disableSource}
-                      className="text-[11px] h-7 text-muted-foreground hover:text-foreground"
-                    >
-                      Disable
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={configureSource}
-                      className="text-[11px] h-7 text-primary hover:text-primary"
-                    >
-                      Configure Source
-                    </Button>
-                  )}
-                </div>
-              </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                Purpose
+              </label>
+              <PurposeSelect value={purpose} onChange={setPurpose} />
+            </div>
 
-              {activeLine.enabled && (
-                <>
-                  {/* Friendly Name */}
-                  <div className="space-y-1">
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                Default Event Time Zone
+              </label>
+              <Select value={defaultOriginTimeZone} onValueChange={setDefaultOriginTimeZone}>
+                <SelectTrigger className="bg-muted/20 border-border/20 text-foreground">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="mako-glass-solid border-border/20">
+                  {COMMON_TIMEZONES.map((tz) => (
+                    <SelectItem key={tz} value={tz}>{tzLabel(tz)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground/60">
+                Master clock — every timestamp, note, and marker references this.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                Session Duration
+              </label>
+              <DurationPicker value={scheduledEndAt} onChange={setScheduledEndAt} />
+            </div>
+          </div>
+        </div>
+
+        {/* ── Sources ── */}
+        <div className="mako-glass-solid rounded-lg p-5 md:p-6 space-y-5">
+          <SectionHeader
+            eyebrow="Feeds"
+            title="Sources"
+            hint="Tell MAKO where each feed lives — it discovers codec, resolution, bitrate, and latency automatically."
+          />
+
+          {/* Tabs */}
+          <div className="flex gap-1 p-1 rounded-md bg-muted/15 border border-border/15">
+            {lines.map((line) => {
+              const st = getLineStatus(line);
+              const isDefaultLabel = /^Line \d+$/.test(line.label);
+              const display = isDefaultLabel ? `Source ${line.id}` : line.label;
+              return (
+                <button
+                  key={line.id}
+                  onClick={() => setActiveTab(line.id)}
+                  className={cn(
+                    "flex-1 min-w-0 flex items-center justify-center gap-1.5 py-2 px-3 rounded text-xs font-medium transition-all",
+                    activeTab === line.id
+                      ? "bg-muted/40 text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground/70"
+                  )}
+                >
+                  <span className="truncate">{display}</span>
+                  {st !== "empty" && (
+                    <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", statusDot[st])} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Active source card */}
+          <div
+            className={cn(
+              "rounded-md border p-4 space-y-4 transition-colors",
+              activeLine.enabled
+                ? "border-border/20 bg-muted/8"
+                : "border-border/10 bg-muted/4"
+            )}
+          >
+            {/* Status header */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 min-w-0">
+                {!activeLine.enabled ? (
+                  <>
+                    <Circle className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                    <span className="text-xs text-muted-foreground truncate">Disabled</span>
+                  </>
+                ) : !isConfigured(activeLine) ? (
+                  <>
+                    <Circle className="h-3 w-3 text-muted-foreground/60 shrink-0" />
+                    <span className="text-xs text-muted-foreground truncate">
+                      No source configured
+                    </span>
+                  </>
+                ) : activeIsTested ? (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))] shrink-0" />
+                    <span className="text-xs text-foreground truncate">
+                      Connected · {activeLine.label || `Source ${activeTab}`}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="h-2 w-2 rounded-full bg-primary/60 shrink-0" />
+                    <span className="text-xs text-foreground truncate">
+                      Configured · {activeLine.label || `Source ${activeTab}`}
+                    </span>
+                  </>
+                )}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <AddressBookModal onSelect={handleAddressBookSelect} />
+                {activeLine.enabled ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={disableSource}
+                    className="text-[11px] h-7 text-muted-foreground hover:text-foreground"
+                  >
+                    Disable
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={configureSource}
+                    className="text-[11px] h-7 text-primary hover:text-primary"
+                  >
+                    Configure Source
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {activeLine.enabled && (
+              <>
+                {/* Friendly Name */}
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Friendly Name
+                  </label>
+                  <Input
+                    value={/^Line \d+$/.test(activeLine.label) ? "" : activeLine.label}
+                    onChange={(e) =>
+                      updateLine({ label: e.target.value || `Line ${activeTab}` })
+                    }
+                    placeholder="e.g. NBC Program, Truck A, Camera ISO"
+                    className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40"
+                  />
+                </div>
+
+                {/* Address + Port + Save */}
+                <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] items-end">
+                  <div className="space-y-1 min-w-0">
                     <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Name
+                      Address
                     </label>
                     <Input
-                      value={/^Line \d+$/.test(activeLine.label) ? "" : activeLine.label}
-                      onChange={(e) =>
-                        updateLine({ label: e.target.value || `Line ${activeTab}` })
-                      }
-                      placeholder="e.g. NBC Program, Truck A, Camera ISO"
-                      className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40"
+                      value={activeHost}
+                      onChange={(e) => handleHostChange(e.target.value)}
+                      placeholder="134.209.119.136"
+                      className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
                     />
                   </div>
-
-                  {/* Address + Port */}
-                  <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-                    <div className="space-y-1 min-w-0">
-                      <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Address
-                      </label>
-                      <Input
-                        value={activeHost}
-                        onChange={(e) => handleHostChange(e.target.value)}
-                        placeholder="134.209.119.136"
-                        className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
-                      />
-                    </div>
-                    <div className="space-y-1 sm:w-28">
-                      <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                        Port
-                      </label>
-                      <Input
-                        value={activePort}
-                        onChange={(e) => handlePortChange(e.target.value)}
-                        placeholder="8890"
-                        inputMode="numeric"
-                        className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
-                      />
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground/50 -mt-2">
-                    Paste a full <span className="font-mono">srt://</span> URL and MAKO splits it for you.
-                  </p>
-
-                  {/* Notes */}
-                  <div className="space-y-1">
+                  <div className="space-y-1 sm:w-28">
                     <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Notes
+                      Port
                     </label>
-                    <Textarea
-                      value={activeLine.notes}
-                      onChange={(e) => updateLine({ notes: e.target.value })}
-                      placeholder="Optional context for this source…"
-                      rows={2}
-                      className="bg-muted/15 border-border/15 text-xs text-foreground placeholder:text-muted-foreground/40 min-h-0"
+                    <Input
+                      value={activePort}
+                      onChange={(e) => handlePortChange(e.target.value)}
+                      placeholder="8890"
+                      inputMode="numeric"
+                      className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
                     />
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSaveToAddressBook}
+                    disabled={!activeHost || !activePort}
+                    className="gap-1.5 border-border/30 text-foreground h-9"
+                    title="Save this source to your Address Book"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Save Source
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground/50 -mt-2">
+                  Paste a full <span className="font-mono">srt://</span> URL and MAKO splits it for you.
+                </p>
 
-                  {/* Advanced */}
-                  <div className="border-t border-border/10 pt-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setAdvancedOpen((p) => ({ ...p, [activeTab]: !activeAdvancedOpen }))
-                      }
-                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {activeAdvancedOpen ? (
-                        <ChevronDown className="h-3 w-3" />
-                      ) : (
-                        <ChevronRight className="h-3 w-3" />
-                      )}
-                      Advanced
-                    </button>
-                    {activeAdvancedOpen && (
-                      <div className="mt-3 space-y-1">
-                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                          Passphrase
-                        </label>
-                        <Input
-                          type="password"
-                          value={activeLine.passphrase}
-                          onChange={(e) => updateLine({ passphrase: e.target.value })}
-                          placeholder="Only for encrypted SRT streams"
-                          className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40"
-                        />
-                      </div>
+                {/* Notes */}
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Notes
+                  </label>
+                  <Textarea
+                    value={activeLine.notes}
+                    onChange={(e) => updateLine({ notes: e.target.value })}
+                    placeholder="Optional context for this source…"
+                    rows={2}
+                    className="bg-muted/15 border-border/15 text-xs text-foreground placeholder:text-muted-foreground/40 min-h-0"
+                  />
+                </div>
+
+                {/* Advanced */}
+                <div className="border-t border-border/10 pt-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAdvancedOpen((p) => ({ ...p, [activeTab]: !activeAdvancedOpen }))
+                    }
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {activeAdvancedOpen ? (
+                      <ChevronDown className="h-3 w-3" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3" />
                     )}
-                  </div>
+                    Advanced
+                  </button>
+                  {activeAdvancedOpen && (
+                    <div className="mt-3 space-y-1">
+                      <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        Passphrase
+                      </label>
+                      <Input
+                        type="password"
+                        value={activeLine.passphrase}
+                        onChange={(e) => updateLine({ passphrase: e.target.value })}
+                        placeholder="Only for encrypted SRT streams"
+                        className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40"
+                      />
+                    </div>
+                  )}
+                </div>
 
-                  {/* Test Connection + Diagnostics */}
-                  <div className="border-t border-border/10 pt-4 space-y-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={testConnection}
-                      disabled={!isConfigured(activeLine)}
-                      className="gap-2 border-border/30 text-foreground w-full sm:w-auto"
-                    >
-                      <PlugZap className="h-3.5 w-3.5" />
-                      {activeIsTested ? "Re-test Connection" : "Test Connection"}
-                    </Button>
+                {/* Test Connection + Diagnostics */}
+                <div className="border-t border-border/10 pt-4 space-y-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={testConnection}
+                    disabled={!isConfigured(activeLine)}
+                    className="gap-2 border-border/30 text-foreground w-full sm:w-auto"
+                  >
+                    <PlugZap className="h-3.5 w-3.5" />
+                    {activeIsTested ? "Re-test Connection" : "Test Connection"}
+                  </Button>
 
-                    {activeIsTested && (
-                      <div className="rounded-md border border-primary/20 bg-primary/[0.04] p-3 space-y-2">
-                        <div className="flex items-center gap-2 text-xs text-primary">
-                          <Zap className="h-3.5 w-3.5" />
-                          <span className="font-medium">Stream discovered</span>
-                        </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-[11px]">
-                          <Diag label="Codec" value="H.264 High" />
-                          <Diag label="Resolution" value="1920×1080" />
-                          <Diag label="FPS" value="59.94" />
-                          <Diag label="Bitrate" value="8.3 Mbps" />
-                          <Diag label="Latency" value="74 ms" />
-                          <Diag label="Packet Loss" value="0.00%" />
-                          <Diag label="Audio" value="2ch · 48 kHz" />
-                          <Diag label="Loudness" value="-23 LUFS" />
-                          <Diag label="Clock Sync" value="Locked" />
-                        </div>
-                        <p className="text-[10px] text-muted-foreground/60 pt-1">
-                          Values reported by MediaMTX after handshake.
-                        </p>
+                  {activeIsTested && (
+                    <div className="rounded-md border border-primary/20 bg-primary/[0.04] p-3 space-y-2">
+                      <div className="flex items-center gap-2 text-xs text-primary">
+                        <Zap className="h-3.5 w-3.5" />
+                        <span className="font-medium">Stream discovered</span>
                       </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-[11px]">
+                        <Diag label="Codec" value="H.264 High" />
+                        <Diag label="Resolution" value="1920×1080" />
+                        <Diag label="FPS" value="59.94" />
+                        <Diag label="Bitrate" value="8.3 Mbps" />
+                        <Diag label="Latency" value="74 ms" />
+                        <Diag label="Packet Loss" value="0.00%" />
+                        <Diag label="Audio" value="2ch · 48 kHz" />
+                        <Diag label="Loudness" value="-23 LUFS" />
+                        <Diag label="Clock Sync" value="Locked" />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground/60 pt-1">
+                        Values reported by MediaMTX after handshake.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Actions */}
@@ -519,66 +572,39 @@ const CreateSession = () => {
         </div>
 
         <p className="text-[10px] text-muted-foreground/50 text-center">
-          Host can be transferred inside the session.
+          Ownership can be transferred inside the session if you leave.
         </p>
       </div>
 
-      {/* ─── Right: History Panel ─── */}
+      {/* ─── Right: Recent Sessions ─── */}
       <div className="lg:flex-[3] min-w-0">
         <div className="mako-glass-solid rounded-lg p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-medium text-foreground">Recent Sessions</h2>
-            <div className="flex gap-0.5 p-0.5 rounded bg-muted/15 border border-border/15">
-              {(["all", "active", "expired"] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setHistoryFilter(f)}
-                  className={cn(
-                    "px-2.5 py-1 rounded text-[10px] font-medium capitalize transition-all",
-                    historyFilter === f
-                      ? "bg-muted/40 text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground/70"
-                  )}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
+            <span className="text-[10px] text-muted-foreground/60">{recentSessions.length}</span>
           </div>
 
           <div className="space-y-1">
-            {filteredSessions.length === 0 && (
+            {recentSessions.length === 0 && (
               <p className="text-xs text-muted-foreground/60 text-center py-6">
-                No sessions found
+                No sessions yet
               </p>
             )}
-            {filteredSessions.map((session) => {
-              const isActive = session.status === "active";
+            {recentSessions.map((session) => {
+              const canOpen = session.status === "active";
               return (
                 <button
                   key={session.id}
-                  onClick={() =>
-                    isActive
-                      ? navigate(`/session/${session.id}`)
-                      : handleDownloadLog(session)
-                  }
+                  onClick={() => canOpen && navigate(`/session/${session.id}`)}
                   className="w-full text-left p-3 rounded-md hover:bg-muted/15 transition-colors group"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-xs font-medium text-foreground truncate group-hover:text-primary transition-colors">
                       {session.name}
                     </p>
-                    {isActive ? (
-                      <span className="flex items-center gap-1 text-[10px] text-primary shrink-0">
-                        <Radio className="h-3 w-3" /> Active
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground shrink-0">
-                        <CheckCircle2 className="h-3 w-3" /> Expired
-                      </span>
-                    )}
+                    <SessionStatusBadge status={session.status} />
                   </div>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-[10px] text-muted-foreground">
                       {new Date(session.createdAt).toLocaleDateString()}{" "}
                       {new Date(session.createdAt).toLocaleTimeString([], {
@@ -586,24 +612,49 @@ const CreateSession = () => {
                         minute: "2-digit",
                       })}
                     </span>
+                    {session.purpose && (
+                      <span className="text-[10px] text-muted-foreground/60">
+                        · {session.purpose}
+                      </span>
+                    )}
                     <span className="text-[10px] text-muted-foreground/50">
-                      Host: {session.host}
+                      · {session.host}
                     </span>
                   </div>
-                  {!isActive && (
-                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground/50 mt-1">
-                      <Download className="h-2.5 w-2.5" /> Click to download log
-                    </span>
-                  )}
                 </button>
               );
             })}
           </div>
         </div>
       </div>
+
+      <SwitchActiveSessionDialog
+        session={pendingActiveSession}
+        onCancel={() => {
+          setPendingActiveSession(null);
+          setPendingStart(null);
+        }}
+        onConfirm={confirmSwitch}
+      />
     </div>
   );
 };
+
+const SectionHeader = ({
+  eyebrow,
+  title,
+  hint,
+}: {
+  eyebrow: string;
+  title: string;
+  hint?: string;
+}) => (
+  <div className="space-y-1">
+    <p className="text-[10px] uppercase tracking-widest text-primary/70 font-medium">{eyebrow}</p>
+    <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+    {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+  </div>
+);
 
 const Diag = ({ label, value }: { label: string; value: string }) => (
   <div className="min-w-0">
