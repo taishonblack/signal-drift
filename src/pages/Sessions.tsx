@@ -64,7 +64,8 @@ const Sessions = () => {
         <div className="grid gap-3">
           {visibleSessions.map((session) => {
             const isEnded = session.status === "ended";
-            const isLive = session.status === "live";
+
+
 
             return (
               <Link
