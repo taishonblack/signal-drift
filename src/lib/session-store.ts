@@ -536,6 +536,14 @@ export function formatDuration(startIso: string, endIso?: string): string {
   return `${hours}h ${remMins}m`;
 }
 
+export function generateSessionId(): string {
+  return `sess-${Date.now().toString(36)}`;
+}
+
+export function generatePin(): string {
+  return String(Math.floor(1000 + Math.random() * 9000));
+}
+
 export function formatStartedTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
