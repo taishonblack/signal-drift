@@ -45,6 +45,30 @@ export interface SessionViewer {
   focus?: string; // friendly label of currently focused input
 }
 
+export type SessionChangeKind =
+  | "session_renamed"
+  | "purpose_changed"
+  | "duration_changed"
+  | "timezone_changed"
+  | "source_added"
+  | "source_removed"
+  | "source_renamed"
+  | "source_address_changed"
+  | "source_notes_changed"
+  | "config_saved";
+
+export interface SessionChangeEntry {
+  id: string;
+  at: string;
+  userId: string;
+  userName: string;
+  kind: SessionChangeKind;
+  summary: string;
+  before?: string;
+  after?: string;
+  target?: string;
+}
+
 export interface SessionRecord {
   id: string;
   name: string;
@@ -63,6 +87,7 @@ export interface SessionRecord {
   notes: string[];
   markers: { timestamp: string; streamLabel: string; note: string }[];
   viewers?: SessionViewer[];
+  changeLog?: SessionChangeEntry[];
 }
 
 export interface AddressBookEntry {
@@ -89,7 +114,7 @@ export const createDefaultLine = (n: number): SrtLine => ({
 
 // ─── localStorage helpers ───
 
-const SESSIONS_KEY = "mako_sessions_v2";
+const SESSIONS_KEY = "mako_sessions_v3";
 const DRAFTS_KEY = "mako_drafts";
 const ADDRESS_BOOK_KEY = "mako_address_book";
 const AUTH_KEY = "mako_auth";
@@ -145,6 +170,11 @@ const seedSessions: SessionRecord[] = [
       { userId: "u3", name: "Stephanie Black", isOwner: false, joinedAt: iso(-60 * 60_000), focus: "Program" },
       { userId: "u4", name: "Chris Martin", isOwner: false, joinedAt: iso(-40 * 60_000) },
       { userId: "u5", name: "Jennifer Day", isOwner: false, joinedAt: iso(-20 * 60_000) },
+    ],
+    changeLog: [
+      { id: "cl-1", at: iso(-70 * 60_000), userId: "u2", userName: "Quinn Roberts", kind: "config_saved", summary: "Started monitoring session" },
+      { id: "cl-2", at: iso(-56 * 60_000), userId: "u2", userName: "Quinn Roberts", kind: "source_renamed", target: "Source 2", before: "Camera 2", after: "Truck B Program", summary: "Renamed Source 2 from “Camera 2” to “Truck B Program”" },
+      { id: "cl-3", at: iso(-42 * 60_000), userId: "u3", userName: "Stephanie Black", kind: "source_added", target: "Source 4", after: "ISO — Sideline", summary: "Added Source 4 “ISO — Sideline”" },
     ],
   },
   {
@@ -296,6 +326,7 @@ export function getSessions(): SessionRecord[] {
     status: migrateStatus((s as any).status),
     ownerUserId: s.ownerUserId ?? s.hostUserId,
     viewers: s.viewers ?? [],
+    changeLog: s.changeLog ?? [],
   }));
 }
 
@@ -422,6 +453,157 @@ export function groupSessions(
     );
   const archived = sessions.filter((s) => s.status === "archived");
   return { yourActive, teamActive, drafts, completed, archived };
+}
+
+// ─── Permissions ───
+
+export function isAdmin(_userId: string): boolean {
+  // Role management stub — always false for now. Owner path is the working case.
+  return false;
+}
+
+export function canConfigureSession(
+  session: SessionRecord | undefined | null,
+  userId: string
+): boolean {
+  if (!session) return false;
+  if ((session.ownerUserId ?? session.hostUserId) === userId) return true;
+  return isAdmin(userId);
+}
+
+// ─── Change log ───
+
+function labelForLine(l: SrtLine | undefined, fallbackIdx?: number): string {
+  if (!l) return `Source ${fallbackIdx ?? "?"}`;
+  return /^Line \d+$/.test(l.label) ? `Source ${l.id}` : l.label;
+}
+
+export function appendChangeLog(sessionId: string, entry: SessionChangeEntry) {
+  const s = getSessionById(sessionId);
+  if (!s) return;
+  const log = [...(s.changeLog ?? []), entry].slice(-200);
+  updateSession(sessionId, { changeLog: log });
+}
+
+export function diffSessionConfig(
+  prev: SessionRecord,
+  next: Pick<
+    SessionRecord,
+    "name" | "purpose" | "scheduledEndAt" | "defaultOriginTimeZone" | "lines"
+  >,
+  actor: { id: string; name: string }
+): SessionChangeEntry[] {
+  const entries: SessionChangeEntry[] = [];
+  const at = new Date().toISOString();
+  const mk = (
+    kind: SessionChangeKind,
+    summary: string,
+    extra: Partial<SessionChangeEntry> = {}
+  ): SessionChangeEntry => ({
+    id: `cl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    at,
+    userId: actor.id,
+    userName: actor.name,
+    kind,
+    summary,
+    ...extra,
+  });
+
+  if ((prev.name || "") !== (next.name || "")) {
+    entries.push(
+      mk(
+        "session_renamed",
+        `Renamed session from “${prev.name}” to “${next.name}”`,
+        { before: prev.name, after: next.name }
+      )
+    );
+  }
+  if ((prev.purpose || "") !== (next.purpose || "")) {
+    entries.push(
+      mk("purpose_changed", `Changed purpose to “${next.purpose}”`, {
+        before: prev.purpose as string,
+        after: next.purpose as string,
+      })
+    );
+  }
+  if ((prev.scheduledEndAt || "") !== (next.scheduledEndAt || "")) {
+    entries.push(
+      mk("duration_changed", "Updated session duration", {
+        before: prev.scheduledEndAt,
+        after: next.scheduledEndAt,
+      })
+    );
+  }
+  if (prev.defaultOriginTimeZone !== next.defaultOriginTimeZone) {
+    entries.push(
+      mk(
+        "timezone_changed",
+        `Changed event time zone to ${next.defaultOriginTimeZone}`,
+        { before: prev.defaultOriginTimeZone, after: next.defaultOriginTimeZone }
+      )
+    );
+  }
+
+  // Sources — key by line.id
+  const prevById = new Map(prev.lines.map((l) => [l.id, l]));
+  const nextById = new Map(next.lines.map((l) => [l.id, l]));
+
+  for (const [id, nLine] of nextById) {
+    const pLine = prevById.get(id);
+    const wasActive = !!pLine?.enabled && !!pLine?.srtAddress?.trim();
+    const isActive = !!nLine.enabled && !!nLine.srtAddress?.trim();
+    const target = labelForLine(nLine);
+
+    if (!wasActive && isActive) {
+      entries.push(
+        mk("source_added", `Added ${target}`, {
+          target,
+          after: nLine.srtAddress,
+        })
+      );
+      continue;
+    }
+    if (wasActive && !isActive) {
+      entries.push(
+        mk("source_removed", `Removed ${labelForLine(pLine)}`, {
+          target: labelForLine(pLine),
+          before: pLine?.srtAddress,
+        })
+      );
+      continue;
+    }
+    if (!pLine) continue;
+
+    if (pLine.label !== nLine.label) {
+      entries.push(
+        mk(
+          "source_renamed",
+          `Renamed ${labelForLine(pLine)} to “${nLine.label}”`,
+          { target, before: pLine.label, after: nLine.label }
+        )
+      );
+    }
+    if (pLine.srtAddress !== nLine.srtAddress && isActive) {
+      entries.push(
+        mk("source_address_changed", `Changed address for ${target}`, {
+          target,
+          before: pLine.srtAddress,
+          after: nLine.srtAddress,
+        })
+      );
+    }
+    if ((pLine.notes || "") !== (nLine.notes || "") && isActive) {
+      entries.push(
+        mk("source_notes_changed", `Updated notes for ${target}`, {
+          target,
+          before: pLine.notes,
+          after: nLine.notes,
+        })
+      );
+    }
+  }
+
+  return entries;
 }
 
 // ─── Drafts ───

@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Play, Save, Eraser, User,
-  ChevronDown, ChevronRight, Zap, Circle, PlugZap, Plus, Radio,
+  ChevronDown, ChevronRight, Zap, Circle, PlugZap, Plus, Radio, Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,13 +14,16 @@ import PurposeSelect from "@/components/session/PurposeSelect";
 import DurationPicker from "@/components/session/DurationPicker";
 import SessionStatusBadge from "@/components/session/SessionStatusBadge";
 import SwitchActiveSessionDialog from "@/components/session/SwitchActiveSessionDialog";
+import SessionChangeLogPanel from "@/components/session/SessionChangeLogPanel";
 import {
   type SrtLine, type SessionRecord,
-  createDefaultLine, getSessions, addSession,
+  createDefaultLine, getSessions, addSession, getSessionById, updateSession,
   generateSessionId, generatePin, saveDraft,
   parseSrtInput, composeSrt,
   getActiveSessionForUser, endSession,
   getAddressBook, saveAddressBook,
+  canConfigureSession, getCurrentUserRef,
+  diffSessionConfig, appendChangeLog,
 } from "@/lib/session-store";
 import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 import { toast } from "@/components/ui/sonner";
@@ -46,22 +49,57 @@ const statusDot: Record<LineStatus, string> = {
   error: "bg-destructive",
 };
 
-const CURRENT_USER_ID = "u1";
 
 const CreateSession = () => {
   const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const [purpose, setPurpose] = useState<string>("QC");
-  const [scheduledEndAt, setScheduledEndAt] = useState<string>(
-    new Date(Date.now() + 60 * 60_000).toISOString(),
+  const { id: routeId } = useParams<{ id: string }>();
+  const currentUser = getCurrentUserRef();
+
+  // Configure mode: session id in URL.
+  const existing = useMemo(
+    () => (routeId ? getSessionById(routeId) : undefined),
+    [routeId]
   );
-  const [defaultOriginTimeZone, setDefaultOriginTimeZone] = useState("UTC");
-  const [lines, setLines] = useState<SrtLine[]>([
-    createDefaultLine(1),
-    createDefaultLine(2),
-    createDefaultLine(3),
-    createDefaultLine(4),
-  ]);
+  const mode: "create" | "configure" = routeId ? "configure" : "create";
+  const isActiveConfigure = mode === "configure" && existing?.status === "active";
+  const isReadOnly =
+    mode === "configure" &&
+    !!existing &&
+    (existing.status === "completed" || existing.status === "archived");
+  const allowed =
+    mode === "create" || (existing ? canConfigureSession(existing, currentUser.id) : false);
+
+  // Redirect viewers who can't configure.
+  useEffect(() => {
+    if (mode === "configure" && existing && !allowed) {
+      toast("Only the session owner or admins can configure this session.");
+      navigate(`/session/${existing.id}`, { replace: true });
+    }
+  }, [mode, existing, allowed, navigate]);
+
+  const seedLines = (): SrtLine[] => {
+    if (existing) {
+      const base = [...existing.lines];
+      while (base.length < 4) base.push(createDefaultLine(base.length + 1));
+      return base.slice(0, 4);
+    }
+    return [
+      createDefaultLine(1),
+      createDefaultLine(2),
+      createDefaultLine(3),
+      createDefaultLine(4),
+    ];
+  };
+
+  const [name, setName] = useState(existing?.name ?? "");
+  const [purpose, setPurpose] = useState<string>((existing?.purpose as string) ?? "QC");
+  const [scheduledEndAt, setScheduledEndAt] = useState<string>(
+    existing?.scheduledEndAt ?? new Date(Date.now() + 60 * 60_000).toISOString(),
+  );
+  const [defaultOriginTimeZone, setDefaultOriginTimeZone] = useState(
+    existing?.defaultOriginTimeZone ?? "UTC"
+  );
+  const [lines, setLines] = useState<SrtLine[]>(() => seedLines());
   const [activeTab, setActiveTab] = useState(1);
   const [advancedOpen, setAdvancedOpen] = useState<Record<number, boolean>>({});
   const [tested, setTested] = useState<Record<number, boolean>>({});
@@ -161,27 +199,71 @@ const CreateSession = () => {
       purpose,
       scheduledEndAt: scheduledEndAt || undefined,
       createdAt: new Date().toISOString(),
-      host: "You",
-      hostUserId: CURRENT_USER_ID,
-      ownerUserId: CURRENT_USER_ID,
+      host: currentUser.name,
+      hostUserId: currentUser.id,
+      ownerUserId: currentUser.id,
       defaultOriginTimeZone,
       lines: normalized,
       pin: generatePin(),
       notes: [],
       markers: [],
+      viewers: [],
+      changeLog: [
+        {
+          id: `cl-${Date.now()}`,
+          at: new Date().toISOString(),
+          userId: currentUser.id,
+          userName: currentUser.name,
+          kind: "config_saved",
+          summary: "Started monitoring session",
+        },
+      ],
     };
     addSession(session);
     navigate(`/session/${session.id}`);
   };
 
+  const saveConfigureChanges = () => {
+    if (!existing) return;
+    const normalized = lines.map((l) => (l.enabled ? { ...l, mode: "caller" as const } : l));
+    const nextConfig = {
+      name: name.trim() || existing.name,
+      purpose,
+      scheduledEndAt: scheduledEndAt || undefined,
+      defaultOriginTimeZone,
+      lines: normalized,
+    };
+    const diffs = diffSessionConfig(existing, nextConfig, currentUser);
+    updateSession(existing.id, nextConfig);
+    diffs.forEach((d) => appendChangeLog(existing.id, d));
+    if (diffs.length === 0) {
+      toast("No changes to save.");
+    } else {
+      toast(
+        isActiveConfigure
+          ? `Saved — ${diffs.length} change${diffs.length === 1 ? "" : "s"} broadcast to viewers.`
+          : "Session configuration saved.",
+      );
+    }
+    if (isActiveConfigure) {
+      // Stay on configure page so operator can keep tweaking.
+      return;
+    }
+    navigate("/sessions");
+  };
+
   const handleStart = () => {
+    if (mode === "configure") {
+      saveConfigureChanges();
+      return;
+    }
     const enabledLines = lines.filter((l) => l.enabled && isConfigured(l));
     if (enabledLines.length === 0) return;
 
     // Enforce "one active session per user"
-    const existing = getActiveSessionForUser(CURRENT_USER_ID);
-    if (existing) {
-      setPendingActiveSession(existing);
+    const active = getActiveSessionForUser(currentUser.id);
+    if (active) {
+      setPendingActiveSession(active);
       setPendingStart(() => createAndNavigate);
       return;
     }
@@ -225,22 +307,69 @@ const CreateSession = () => {
   const activeAdvancedOpen = !!advancedOpen[activeTab] || !!activeLine.passphrase;
   const activeIsTested = !!tested[activeTab] && isConfigured(activeLine) && activeLine.enabled;
 
+  const pageTitle =
+    mode === "create"
+      ? "New Session"
+      : isReadOnly
+        ? "Session Configuration"
+        : "Configure Session";
+  const pageHint =
+    mode === "create"
+      ? "A session is the workspace where you and your team monitor these feeds together."
+      : isActiveConfigure
+        ? "This session is live — changes are broadcast to everyone watching."
+        : isReadOnly
+          ? "This session has ended. Configuration is read-only."
+          : "Update the monitoring setup for this session, then start monitoring.";
+  const primaryLabel =
+    mode === "create"
+      ? "Start Monitoring"
+      : isActiveConfigure
+        ? "Save Changes"
+        : "Start Monitoring";
+  const ownerName = existing
+    ? (existing.ownerUserId ?? existing.hostUserId) === currentUser.id
+      ? "You"
+      : existing.host
+    : "You";
+
   return (
     <div className="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto">
       {/* ─── Left: Create Session ─── */}
       <div className="flex-1 lg:flex-[7] space-y-6 min-w-0">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">Create Session</h1>
-            <p className="text-xs text-muted-foreground mt-1">
-              A session is the workspace where you and your team monitor these feeds together.
-            </p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-semibold text-foreground">{pageTitle}</h1>
+              {mode === "configure" && existing && (
+                <SessionStatusBadge status={existing.status} />
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">{pageHint}</p>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
             <User className="h-3.5 w-3.5" />
-            <span>Owner: You</span>
+            <span>Owner: {ownerName}</span>
           </div>
         </div>
+
+        {isActiveConfigure && (
+          <div className="rounded-md border border-primary/25 bg-primary/[0.06] px-3 py-2 flex items-center gap-2 text-[11px] text-foreground/85">
+            <Radio className="h-3.5 w-3.5 text-primary" />
+            <span>
+              This session is live — {(existing?.viewers ?? []).length} operator
+              {(existing?.viewers ?? []).length === 1 ? "" : "s"} watching. Saved changes appear for
+              everyone instantly.
+            </span>
+          </div>
+        )}
+
+        {mode === "configure" && !allowed && (
+          <div className="rounded-md border border-border/20 bg-muted/10 px-3 py-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <Lock className="h-3.5 w-3.5" />
+            <span>Only the session owner or team administrators can modify this session.</span>
+          </div>
+        )}
 
         {/* ── Session Information ── */}
         <div className="mako-glass-solid rounded-lg p-5 md:p-6 space-y-6">
@@ -547,24 +676,42 @@ const CreateSession = () => {
             <Button
               onClick={handleStart}
               size="lg"
-              disabled={!hasValidLine}
+              disabled={(mode === "create" && !hasValidLine) || isReadOnly || !allowed}
               className="flex-1 gap-2"
             >
-              <Play className="h-4 w-4" /> Start Session
+              {mode === "create" || !isActiveConfigure ? (
+                <Play className="h-4 w-4" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}{" "}
+              {primaryLabel}
             </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={handleSaveDraft}
-              className="gap-2 border-border/30 text-foreground"
-            >
-              <Save className="h-4 w-4" /> Save Draft
-            </Button>
+            {mode === "create" && (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={handleSaveDraft}
+                className="gap-2 border-border/30 text-foreground"
+              >
+                <Save className="h-4 w-4" /> Save Draft
+              </Button>
+            )}
+            {mode === "configure" && isActiveConfigure && existing && (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => navigate(`/session/${existing.id}`)}
+                className="gap-2 border-border/30 text-foreground"
+              >
+                <Radio className="h-4 w-4" /> Back to Session
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="lg"
               onClick={handleClearLine}
               className="gap-2 text-muted-foreground"
+              disabled={isReadOnly}
             >
               <Eraser className="h-4 w-4" /> Clear Source
             </Button>
@@ -576,56 +723,65 @@ const CreateSession = () => {
         </p>
       </div>
 
-      {/* ─── Right: Recent Sessions ─── */}
+      {/* ─── Right: Change log (configure) or Recent Sessions (create) ─── */}
       <div className="lg:flex-[3] min-w-0">
-        <div className="mako-glass-solid rounded-lg p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-foreground">Recent Sessions</h2>
-            <span className="text-[10px] text-muted-foreground/60">{recentSessions.length}</span>
+        {mode === "configure" && existing ? (
+          <div className="mako-glass-solid rounded-lg p-5">
+            <SessionChangeLogPanel
+              entries={existing.changeLog ?? []}
+              emptyLabel="No changes recorded yet. Every save is logged here."
+            />
           </div>
+        ) : (
+          <div className="mako-glass-solid rounded-lg p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-medium text-foreground">Recent Sessions</h2>
+              <span className="text-[10px] text-muted-foreground/60">{recentSessions.length}</span>
+            </div>
 
-          <div className="space-y-1">
-            {recentSessions.length === 0 && (
-              <p className="text-xs text-muted-foreground/60 text-center py-6">
-                No sessions yet
-              </p>
-            )}
-            {recentSessions.map((session) => {
-              const canOpen = session.status === "active";
-              return (
-                <button
-                  key={session.id}
-                  onClick={() => canOpen && navigate(`/session/${session.id}`)}
-                  className="w-full text-left p-3 rounded-md hover:bg-muted/15 transition-colors group"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-medium text-foreground truncate group-hover:text-primary transition-colors">
-                      {session.name}
-                    </p>
-                    <SessionStatusBadge status={session.status} />
-                  </div>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="text-[10px] text-muted-foreground">
-                      {new Date(session.createdAt).toLocaleDateString()}{" "}
-                      {new Date(session.createdAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                    {session.purpose && (
-                      <span className="text-[10px] text-muted-foreground/60">
-                        · {session.purpose}
+            <div className="space-y-1">
+              {recentSessions.length === 0 && (
+                <p className="text-xs text-muted-foreground/60 text-center py-6">
+                  No sessions yet
+                </p>
+              )}
+              {recentSessions.map((session) => {
+                const canOpen = session.status === "active";
+                return (
+                  <button
+                    key={session.id}
+                    onClick={() => canOpen && navigate(`/session/${session.id}`)}
+                    className="w-full text-left p-3 rounded-md hover:bg-muted/15 transition-colors group"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-xs font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                        {session.name}
+                      </p>
+                      <SessionStatusBadge status={session.status} />
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="text-[10px] text-muted-foreground">
+                        {new Date(session.createdAt).toLocaleDateString()}{" "}
+                        {new Date(session.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </span>
-                    )}
-                    <span className="text-[10px] text-muted-foreground/50">
-                      · {session.host}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
+                      {session.purpose && (
+                        <span className="text-[10px] text-muted-foreground/60">
+                          · {session.purpose}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-muted-foreground/50">
+                        · {session.host}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <SwitchActiveSessionDialog

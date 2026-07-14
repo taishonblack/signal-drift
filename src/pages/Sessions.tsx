@@ -13,7 +13,7 @@ import {
   type SessionRecord,
 } from "@/lib/session-store";
 import SessionCard from "@/components/session/SessionCard";
-import JoinActiveSessionDialog from "@/components/session/JoinActiveSessionDialog";
+import SessionActionsDialog from "@/components/session/SessionActionsDialog";
 import SwitchMonitoringSessionDialog from "@/components/session/SwitchMonitoringSessionDialog";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
 import { mockSessions, type Session } from "@/lib/mock-data";
@@ -53,7 +53,6 @@ const Sessions = () => {
   const [sessions, setSessions] = useState<SessionRecord[]>(() => getSessions());
   const refresh = useCallback(() => setSessions(getSessions()), []);
 
-  // Poll every 2s to reflect other-tab/mock changes (simulates realtime).
   useEffect(() => {
     const id = window.setInterval(refresh, 2000);
     const onFocus = () => refresh();
@@ -70,38 +69,44 @@ const Sessions = () => {
   const grouped = useMemo(() => groupSessions(sessions, currentUser.id), [sessions, currentUser.id]);
 
   // Dialog state
-  const [pendingJoin, setPendingJoin] = useState<SessionRecord | null>(null);
+  const [actionSession, setActionSession] = useState<SessionRecord | null>(null);
   const [pendingSwitch, setPendingSwitch] = useState<SessionRecord | null>(null);
   const [expiredSession, setExpiredSession] = useState<Session | null>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
 
-  const handleYourActiveClick = useCallback(
-    (s: SessionRecord) => navigate(`/session/${s.id}`),
-    [navigate]
-  );
+  const handleActiveCardClick = useCallback((s: SessionRecord) => {
+    setActionSession(s);
+  }, []);
 
-  const handleTeamActiveClick = useCallback(
-    (s: SessionRecord) => {
-      if (grouped.yourActive && grouped.yourActive.id !== s.id) {
-        setPendingSwitch(s);
-      } else {
-        setPendingJoin(s);
-      }
-    },
-    [grouped.yourActive]
-  );
+  const handleJoinFromDialog = useCallback(() => {
+    if (!actionSession) return;
+    const target = actionSession;
+    const isYourActive = grouped.yourActive?.id === target.id;
+    if (isYourActive) {
+      setActionSession(null);
+      navigate(`/session/${target.id}`);
+      return;
+    }
+    if (grouped.yourActive && grouped.yourActive.id !== target.id) {
+      // Need to switch sessions.
+      setActionSession(null);
+      setPendingSwitch(target);
+      return;
+    }
+    joinSession(target.id, currentUser);
+    setActionSession(null);
+    navigate(`/session/${target.id}`);
+  }, [actionSession, grouped.yourActive, currentUser, navigate]);
 
-  const confirmJoin = useCallback(() => {
-    if (!pendingJoin) return;
-    joinSession(pendingJoin.id, currentUser);
-    const id = pendingJoin.id;
-    setPendingJoin(null);
-    navigate(`/session/${id}`);
-  }, [pendingJoin, currentUser, navigate]);
+  const handleConfigureFromDialog = useCallback(() => {
+    if (!actionSession) return;
+    const id = actionSession.id;
+    setActionSession(null);
+    navigate(`/session/${id}/configure`);
+  }, [actionSession, navigate]);
 
   const confirmSwitch = useCallback(() => {
     if (!pendingSwitch || !grouped.yourActive) return;
-    // Leave current, join new. If user is the owner of current, end it.
     const current = grouped.yourActive;
     const isOwner = (current.ownerUserId ?? current.hostUserId) === currentUser.id;
     if (isOwner) {
@@ -116,7 +121,6 @@ const Sessions = () => {
   }, [pendingSwitch, grouped.yourActive, currentUser, navigate]);
 
   const handleCompletedClick = useCallback((s: SessionRecord) => {
-    // Map to legacy mock Session shape for ExpiredSessionDialog
     const legacy = mockSessions.find((m) => m.id === s.id) ?? {
       id: s.id,
       name: s.name,
@@ -130,8 +134,9 @@ const Sessions = () => {
   }, []);
 
   const handleDraftClick = useCallback((s: SessionRecord) => {
-    navigate(`/create?draft=${s.id}`);
+    navigate(`/session/${s.id}/configure`);
   }, [navigate]);
+
 
   return (
     <TooltipProvider>
@@ -161,7 +166,7 @@ const Sessions = () => {
               session={grouped.yourActive}
               variant="hero"
               currentUserId={currentUser.id}
-              onClick={() => handleYourActiveClick(grouped.yourActive!)}
+              onClick={() => handleActiveCardClick(grouped.yourActive!)}
             />
           ) : (
             <div className="mako-glass rounded-lg p-5 border border-dashed border-border/30 text-center">
@@ -184,7 +189,7 @@ const Sessions = () => {
                   session={s}
                   variant="grid"
                   currentUserId={currentUser.id}
-                  onClick={() => handleTeamActiveClick(s)}
+                  onClick={() => handleActiveCardClick(s)}
                 />
               ))}
             </div>
@@ -253,10 +258,13 @@ const Sessions = () => {
           </section>
         )}
 
-        <JoinActiveSessionDialog
-          session={pendingJoin}
-          onCancel={() => setPendingJoin(null)}
-          onConfirm={confirmJoin}
+        <SessionActionsDialog
+          session={actionSession}
+          currentUserId={currentUser.id}
+          onClose={() => setActionSession(null)}
+          onJoin={handleJoinFromDialog}
+          onConfigure={handleConfigureFromDialog}
+          joinLabel={grouped.yourActive?.id === actionSession?.id ? "Return to Session" : "Join Live Session"}
         />
         <SwitchMonitoringSessionDialog
           currentSession={grouped.yourActive}

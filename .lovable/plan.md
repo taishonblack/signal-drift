@@ -1,96 +1,143 @@
-# Sessions Page & Recent Sessions Redesign
 
-Turn `/sessions` from a flat list into a live operations board that separates active work from history, encourages team joins, and enforces "one active session at a time" per user.
+# Session Configuration Workflow + Change Log
 
-## 1. Data model extensions (`src/lib/session-store.ts`)
+Reframe sessions as live productions with **one** configuration surface (no separate "edit" page), enforce owner/admin-only configuration, broadcast configuration changes to viewers in real time, and record every change to an auditable Session Change Log.
 
-Extend `SessionRecord`:
-- `team?: string` — team label ("Broadcast Ops" default on seeds)
-- `viewers: SessionViewer[]` — live participants (owner is always the first entry while present)
+## 1. Lifecycle & terminology
 
-New `SessionViewer` type:
-```
-{ userId: string; name: string; isOwner: boolean; joinedAt: string; focus?: string }
-```
+States remain: `draft → scheduled → active → completed` (`paused`, `archived` still supported internally). All operator-facing language moves from "Edit" to **"Configure"**.
 
-Helpers:
-- `getCurrentUser()` — returns mock user (id `u1`, name "You") from existing auth stub.
-- `getActiveSessionForUser(userId)` — already exists; extend to also match sessions where the user is in `viewers`.
-- `joinSession(sessionId, user)` / `leaveSession(sessionId, userId)` — mutate `viewers`, persist.
-- `transferOwnership(sessionId, newOwnerId)` — flips `ownerUserId`/`hostUserId` and viewer `isOwner` flags.
-- `groupSessions(sessions)` → `{ yourActive, teamActive, drafts, completed, archived }`.
+- "Create Session" screen is reused for both new and existing sessions.
+- Header title:
+  - No `id` in route → **"New Session"**, primary button **"Start Monitoring"**.
+  - `id` in route, session is `draft`/`scheduled` → **"Configure Session"**, primary button **"Start Monitoring"**.
+  - `id` in route, session is `active` → **"Configure Session"** with a live badge, primary button **"Save Changes"**.
+  - `id` in route, session is `completed`/`archived` → **"Session Configuration"** (read-only), no primary button.
 
-Seed sessions: add 2–3 "team" active sessions owned by other mock users ("Quinn Roberts", "Stephanie Black") with 2–4 viewers each, so the operations board has content.
+## 2. Card action dialog
 
-## 2. Sessions page (`src/pages/Sessions.tsx`)
-
-Replace the flat grid with grouped sections rendered in this order (hide empty groups except "Your Active Session" which shows a subtle empty state):
+Clicking any session card opens a new `SessionActionsDialog` (replaces today's direct navigation / JoinActiveSessionDialog for owned sessions):
 
 ```text
-┌─────────────────────────────────────────────┐
-│ Your Active Session         [End Session]   │
-│ ── large hero card ──                       │
-├─────────────────────────────────────────────┤
-│ Team Active Sessions           N sessions   │
-│ ── card grid, 1–2 cols ──                   │
-├─────────────────────────────────────────────┤
-│ Drafts                                      │
-│ Completed (recent)                          │
-│ Archived (collapsed by default)             │
-└─────────────────────────────────────────────┘
+Super Bowl LIX
+Owner   Quinn Roberts
+Started 1:12 PM
+Watching 4 Operators
+
+[ Join Live Session ]   ← primary, active sessions only
+[ Configure Session ]   ← owner/admin only, else shown as locked row
+[ Cancel ]
 ```
 
-New `SessionCard` component displays:
-- Name, `SessionStatusBadge`
-- Owner name (avatar circle with initials)
-- Team
-- Created/started time (relative), duration for active
-- Source count
-- Viewer count (only when active) — clickable, opens `ViewersPanel`
+- Team active + user not joined → also surfaces the existing `SwitchMonitoringSessionDialog` check.
+- Completed/archived → `Join Live Session` becomes `Open Report` (existing `ExpiredSessionDialog`).
+- Drafts → single `Configure Session` button.
+- If viewer lacks permission: `Configure Session` row is replaced by
+  ```
+  🔒 Only the session owner or team administrators can modify this session.
+  ```
 
-Behavior:
-- Click a **team active** card → `JoinActiveSessionDialog`
-- Click **your active** card → navigate straight into `/session/:id`
-- Click a **completed** card → existing `ExpiredSessionDialog`
-- Click a **draft** card → resume in `/create?draft=…` (stub link; existing draft flow)
+## 3. Routing
 
-## 3. New components (all under `src/components/session/`)
+- Keep `/create` (New Session flow).
+- Add `/session/:id/configure` → renders the same `CreateSession.tsx` component in **configure mode**, prefilled from `getSessionById(id)`.
+- `SessionRoom` header gains a **Configure** button (owner/admin only) that navigates to `/session/:id/configure`.
 
-- `SessionCard.tsx` — reusable card used across groups (variant: `hero | grid | compact`).
-- `JoinActiveSessionDialog.tsx` — matches spec: session, owner, viewer count, started, duration; `Cancel` / `Join Session`.
-- `SwitchMonitoringSessionDialog.tsx` — shown when user tries to join while already monitoring another session; `Stay Here` / `Join New Session`. Reuses `SwitchActiveSessionDialog` visuals but with dual-session content.
-- `ViewersPanel.tsx` — popover/sheet listing viewers with owner tag; live-updates via store subscription.
-- `OwnershipTransferDialog.tsx` — appears in `SessionRoom` when owner leaves; `Become Owner` / `Leave Session`. First accept wins (client-side race via localStorage timestamp).
+## 4. CreateSession refactor (`src/pages/CreateSession.tsx`)
 
-## 4. Sessions page join flow
+Introduce a `mode: "create" | "configure"` derived from `useParams()`.
 
-```text
-click team card
-   ├─ user has NO active session      → JoinActiveSessionDialog → confirm → joinSession + navigate
-   └─ user IS in another active session → SwitchMonitoringSessionDialog
-                                          └─ confirm → leaveSession(current) + joinSession(new) + navigate
+- Prefill all fields from the existing `SessionRecord` when configuring.
+- Rename primary button + toast copy per mode.
+- On save in configure mode:
+  - Diff previous vs. new record (name, purpose, duration, timezone, source list — add/remove/rename/address/port change, notes).
+  - `updateSession(id, patch)`.
+  - Emit one change-log entry per meaningful diff (see §6).
+  - If session is `active`, stay on configure page and show "Changes saved" toast; else route back to `/sessions`.
+- Show a small banner in configure mode when session is `active`:
+  > "This session is live — changes broadcast to 4 operators."
+
+## 5. Permission helper
+
+Add `canConfigureSession(session, userId)` in `session-store.ts`:
+- `true` if `ownerUserId === userId`, or user has `admin` role (stub: read from `mem`/mock auth — for now expose `isAdmin()` returning `false`; owner path is the working case).
+- Used by the dialog, the SessionRoom Configure button, and a guard inside `CreateSession` (redirects viewers to `/session/:id` with a toast).
+
+## 6. Session Change Log
+
+Extend `SessionRecord` with:
+
+```ts
+changeLog: SessionChangeEntry[]
+
+interface SessionChangeEntry {
+  id: string;
+  at: string;              // ISO
+  userId: string;
+  userName: string;
+  kind:
+    | "session_renamed"
+    | "purpose_changed"
+    | "duration_changed"
+    | "timezone_changed"
+    | "source_added"
+    | "source_removed"
+    | "source_renamed"
+    | "source_address_changed"
+    | "source_notes_changed"
+    | "config_saved";
+  summary: string;         // human-readable one-liner
+  before?: string;
+  after?: string;
+  target?: string;         // e.g. "Source 2"
+}
 ```
 
-## 5. Session room updates (`src/pages/SessionRoom.tsx`)
+Helpers in `session-store.ts`:
+- `appendChangeLog(sessionId, entry)`
+- `diffSessionConfig(prev, next, actor)` → returns `SessionChangeEntry[]`
 
-- On mount: `joinSession(id, currentUser)`; on unmount: `leaveSession`.
-- Poll viewers from store every 2s (localStorage-backed pseudo-realtime, matches existing patterns).
-- Header: show viewer count chip that opens `ViewersPanel`.
-- If `ownerUserId` changes to `null` (owner left) and current user is a remaining viewer → show `OwnershipTransferDialog`.
+Seed a couple of entries on existing seeded active sessions so the UI has content.
 
-## 6. Recent Sessions sidebar (`src/components/RecentSessionsPanel.tsx`)
+## 7. Live sync of configuration changes
 
-Group items by status with small headers (Active, Draft, Completed, Archived) instead of a single mixed list. Keep the collapse behavior.
+Reuse the existing 2.5s localStorage polling already added for viewers.
 
-## 7. Presence indicator (lightweight, in-scope teaser of the "future enhancement")
+- `SessionRoom` tracks `lastSeenChangeLogId`. When new entries appear authored by someone **other** than current user, show a `sonner` toast:
+  ```
+  Quinn updated Source 2 → "Truck B Program"
+  ```
+  Batched: if >1 new entry in a poll, single toast "Quinn made 3 configuration changes".
+- Same polling updates the live source list / names shown in the room, since `SessionRoom` already reads from the store.
 
-Each active-session card and viewer row shows a small line like "focused on Program" when `viewer.focus` is set. Wire to the existing `use-session-focus` hook so owner's focus writes into the viewer entry. No cursors, no per-action broadcast.
+## 8. Change Log UI
+
+New `src/components/session/SessionChangeLogPanel.tsx`:
+
+- Reverse-chronological list, grouped by short relative time header.
+- Row: timestamp · actor · summary (with before → after chips when applicable).
+- Accessible from two places:
+  1. **SessionRoom** — new "Activity" tab / drawer trigger in the toolbar next to Viewers.
+  2. **Configure page** — collapsible "Recent changes" section under the source list.
+- Completed session report (`ExpiredSessionDialog` / report PDF) includes the change log.
+
+## 9. Files touched
+
+Edit:
+- `src/lib/session-store.ts` — `changeLog`, diff/append helpers, `canConfigureSession`, seed entries.
+- `src/App.tsx` — add `/session/:id/configure` route.
+- `src/pages/CreateSession.tsx` — configure mode, prefill, diff-on-save, permission guard.
+- `src/pages/Sessions.tsx` — route card clicks through `SessionActionsDialog`.
+- `src/pages/SessionRoom.tsx` — Configure button, change-log toasts, Activity drawer trigger.
+- `src/components/session/JoinActiveSessionDialog.tsx` — repurposed/wrapped by `SessionActionsDialog` (kept for join confirmation content).
+- `src/lib/session-report-pdf.ts` — include change log in report.
+
+New:
+- `src/components/session/SessionActionsDialog.tsx`
+- `src/components/session/SessionChangeLogPanel.tsx`
 
 ## Out of scope
-- Real multi-user realtime (still localStorage-based mock; groundwork only).
-- Team management CRUD — "team" is a display string.
-- Draft resume flow beyond linking to `/create`.
 
-## Files touched
-- Edit: `src/lib/session-store.ts`, `src/pages/Sessions.tsx`, `src/pages/SessionRoom.tsx`, `src/components/RecentSessionsPanel.tsx`, `src/hooks/use-session-focus.ts` (write focus into viewer entry).
-- New: `src/components/session/SessionCard.tsx`, `JoinActiveSessionDialog.tsx`, `SwitchMonitoringSessionDialog.tsx`, `ViewersPanel.tsx`, `OwnershipTransferDialog.tsx`.
+- Real backend realtime (still localStorage polling).
+- Full admin role management — `isAdmin()` returns `false`; owner is the working permission path. Hook is in place for later.
+- Removing `/create` entirely — keep it; both routes render the same component so consolidation later is a one-line change.

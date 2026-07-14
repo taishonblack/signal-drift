@@ -28,6 +28,7 @@ const App = () => (
           {/* App routes — with sidebar/nav */}
           <Route path="/sessions" element={<AppLayout><Sessions /></AppLayout>} />
           <Route path="/create" element={<AppLayout><CreateSession /></AppLayout>} />
+          <Route path="/session/:id/configure" element={<AppLayout><CreateSession /></AppLayout>} />
           <Route path="/session/:id" element={<AppLayout><SessionRoom /></AppLayout>} />
           <Route path="/join" element={<AppLayout><JoinSession /></AppLayout>} />
           <Route path="/account" element={<AppLayout><AccountPage /></AppLayout>} />

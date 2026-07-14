@@ -21,10 +21,15 @@ import {
   transferOwnership,
   updateViewerFocus,
   getCurrentUserRef,
+  canConfigureSession,
   type SessionRecord,
+  type SessionChangeEntry,
 } from "@/lib/session-store";
 import ViewersPanel from "@/components/session/ViewersPanel";
 import OwnershipTransferDialog from "@/components/session/OwnershipTransferDialog";
+import SessionChangeLogPanel from "@/components/session/SessionChangeLogPanel";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { History, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useLiveMetrics } from "@/hooks/use-live-metrics";
 import { useSessionFocus } from "@/hooks/use-session-focus";
@@ -83,7 +88,12 @@ const SessionRoom = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Poll for viewer/ownership updates (mock realtime).
+  // Track last-seen change-log entry to fire toasts for new configuration changes.
+  const [lastSeenChangeId, setLastSeenChangeId] = useState<string | undefined>(
+    () => record?.changeLog?.[record.changeLog.length - 1]?.id,
+  );
+
+  // Poll for viewer/ownership + config-change updates (mock realtime).
   useEffect(() => {
     if (!id) return;
     const t = window.setInterval(() => {
@@ -92,12 +102,37 @@ const SessionRoom = () => {
       if (next && !next.ownerUserId && (next.viewers ?? []).some((v) => v.userId === currentUserRef.id)) {
         setOwnershipDialogOpen(true);
       }
+      // Change log deltas → toast for changes by other users.
+      const log = next?.changeLog ?? [];
+      if (log.length > 0) {
+        const lastIdx = lastSeenChangeId
+          ? log.findIndex((e) => e.id === lastSeenChangeId)
+          : -1;
+        const fresh: SessionChangeEntry[] = log.slice(lastIdx + 1);
+        const foreign = fresh.filter((e) => e.userId !== currentUserRef.id);
+        if (foreign.length === 1) {
+          toast({
+            title: `${foreign[0].userName} updated the session`,
+            description: foreign[0].summary,
+          });
+        } else if (foreign.length > 1) {
+          const actor = foreign[foreign.length - 1].userName;
+          toast({
+            title: `${actor} made ${foreign.length} configuration changes`,
+            description: foreign[foreign.length - 1].summary,
+          });
+        }
+        if (fresh.length > 0) {
+          setLastSeenChangeId(log[log.length - 1].id);
+        }
+      }
     }, 2000);
     return () => window.clearInterval(t);
-  }, [id, currentUserRef.id]);
+  }, [id, currentUserRef.id, lastSeenChangeId]);
 
   const viewers = record?.viewers ?? [];
   const isOwner = (record?.ownerUserId ?? record?.hostUserId) === currentUserRef.id;
+  const canConfigure = canConfigureSession(record, currentUserRef.id);
 
 
   const [layout, setLayout] = useState<Layout>("4");
@@ -372,6 +407,43 @@ const SessionRoom = () => {
               Reset Layout
             </Button>
           )}
+          {canConfigure && id && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/session/${id}/configure`)}
+              className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              title="Configure this session"
+            >
+              <Settings className="h-3 w-3" />
+              Configure
+            </Button>
+          )}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                title="Session change log"
+              >
+                <History className="h-3 w-3" />
+                Activity
+                {(record?.changeLog?.length ?? 0) > 0 && (
+                  <span className="text-[10px] text-muted-foreground/70">
+                    ({record?.changeLog?.length})
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              side="bottom"
+              align="end"
+              className="w-80 max-h-96 overflow-auto p-4 mako-glass-solid border-border/20"
+            >
+              <SessionChangeLogPanel entries={record?.changeLog ?? []} />
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Focus indicator + presence chip */}
