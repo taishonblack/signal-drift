@@ -162,14 +162,39 @@ const AddressBookModal = ({ onSelect }: Props) => {
             <Input
               value={editTag}
               onChange={(e) => setEditTag(e.target.value)}
-              placeholder="Tag name"
+              placeholder="Friendly name (e.g. NBC Program)"
               className="h-7 text-xs bg-muted/20 border-border/20"
             />
-            <Input
-              value={editAddr}
-              onChange={(e) => setEditAddr(e.target.value)}
-              placeholder="srt://ip:port"
-              className="h-7 text-xs bg-muted/20 border-border/20"
+            <div className="grid grid-cols-[1fr_5rem] gap-2">
+              <Input
+                value={editAddr}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (/[:/?]/.test(v) || /^srt:\/\//i.test(v)) {
+                    const p = parseSrtInput(v);
+                    setEditAddr(p.host);
+                    if (p.port) setEditPort(p.port);
+                  } else {
+                    setEditAddr(v);
+                  }
+                }}
+                placeholder="host or ip"
+                className="h-7 text-xs bg-muted/20 border-border/20 font-mono"
+              />
+              <Input
+                value={editPort}
+                onChange={(e) => setEditPort(e.target.value.replace(/\D/g, ""))}
+                placeholder="port"
+                inputMode="numeric"
+                className="h-7 text-xs bg-muted/20 border-border/20 font-mono"
+              />
+            </div>
+            <Textarea
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              placeholder="Description (optional)"
+              rows={2}
+              className="text-xs bg-muted/20 border-border/20 min-h-0"
             />
             <div className="flex gap-2 justify-end">
               <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => { setEditId(null); setAddMode(false); }}>Cancel</Button>
@@ -188,11 +213,16 @@ const AddressBookModal = ({ onSelect }: Props) => {
               className="flex items-center justify-between gap-2 p-2 rounded-md hover:bg-muted/15 transition-colors group"
             >
               <button
-                onClick={() => handleSelect(entry.address)}
+                onClick={() => handleSelect(entry)}
                 className="flex-1 text-left min-w-0"
               >
                 <p className="text-xs font-medium text-foreground truncate">{entry.tag}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{entry.address}</p>
+                <p className="text-[10px] text-muted-foreground truncate font-mono">
+                  {displayAddress(entry)}
+                </p>
+                {entry.description && (
+                  <p className="text-[10px] text-muted-foreground/60 truncate">{entry.description}</p>
+                )}
               </button>
               {confirmDelete === entry.id ? (
                 <div className="flex gap-1">
@@ -212,6 +242,7 @@ const AddressBookModal = ({ onSelect }: Props) => {
             </div>
           ))}
         </div>
+
       </DialogContent>
     </Dialog>
   );
