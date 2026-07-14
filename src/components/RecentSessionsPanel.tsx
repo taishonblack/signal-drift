@@ -91,13 +91,7 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
                       : "text-foreground/80 hover:bg-muted/20 hover:text-foreground"
                   }`}
                 >
-                  {isLive ? (
-                    <Radio className="h-2.5 w-2.5 text-primary shrink-0" />
-                  ) : session.status === "scheduled" ? (
-                    <Clock className="h-2.5 w-2.5 text-[hsl(var(--warning))] shrink-0" />
-                  ) : (
-                    <FileText className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
-                  )}
+                  <SessionStatusBadge status={session.status} className="shrink-0" />
                   <span className="truncate flex-1">{session.name}</span>
                   {isEnded && (
                     <Tooltip>
