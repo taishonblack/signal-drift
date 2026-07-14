@@ -114,7 +114,7 @@ export const createDefaultLine = (n: number): SrtLine => ({
 
 // ─── localStorage helpers ───
 
-const SESSIONS_KEY = "mako_sessions_v2";
+const SESSIONS_KEY = "mako_sessions_v3";
 const DRAFTS_KEY = "mako_drafts";
 const ADDRESS_BOOK_KEY = "mako_address_book";
 const AUTH_KEY = "mako_auth";
@@ -170,6 +170,11 @@ const seedSessions: SessionRecord[] = [
       { userId: "u3", name: "Stephanie Black", isOwner: false, joinedAt: iso(-60 * 60_000), focus: "Program" },
       { userId: "u4", name: "Chris Martin", isOwner: false, joinedAt: iso(-40 * 60_000) },
       { userId: "u5", name: "Jennifer Day", isOwner: false, joinedAt: iso(-20 * 60_000) },
+    ],
+    changeLog: [
+      { id: "cl-1", at: iso(-70 * 60_000), userId: "u2", userName: "Quinn Roberts", kind: "config_saved", summary: "Started monitoring session" },
+      { id: "cl-2", at: iso(-56 * 60_000), userId: "u2", userName: "Quinn Roberts", kind: "source_renamed", target: "Source 2", before: "Camera 2", after: "Truck B Program", summary: "Renamed Source 2 from “Camera 2” to “Truck B Program”" },
+      { id: "cl-3", at: iso(-42 * 60_000), userId: "u3", userName: "Stephanie Black", kind: "source_added", target: "Source 4", after: "ISO — Sideline", summary: "Added Source 4 “ISO — Sideline”" },
     ],
   },
   {
@@ -321,6 +326,7 @@ export function getSessions(): SessionRecord[] {
     status: migrateStatus((s as any).status),
     ownerUserId: s.ownerUserId ?? s.hostUserId,
     viewers: s.viewers ?? [],
+    changeLog: s.changeLog ?? [],
   }));
 }
 
