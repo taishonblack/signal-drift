@@ -24,16 +24,22 @@ const AddressBookModal = ({ onSelect }: Props) => {
   const [editId, setEditId] = useState<string | null>(null);
   const [editTag, setEditTag] = useState("");
   const [editAddr, setEditAddr] = useState("");
+  const [editPort, setEditPort] = useState("");
+  const [editDesc, setEditDesc] = useState("");
   const [addMode, setAddMode] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const filtered = useMemo(
     () =>
-      entries.filter(
-        (e) =>
-          e.tag.toLowerCase().includes(search.toLowerCase()) ||
-          e.address.toLowerCase().includes(search.toLowerCase())
-      ),
+      entries.filter((e) => {
+        const q = search.toLowerCase();
+        return (
+          e.tag.toLowerCase().includes(q) ||
+          e.address.toLowerCase().includes(q) ||
+          (e.port || "").includes(q) ||
+          (e.description || "").toLowerCase().includes(q)
+        );
+      }),
     [entries, search]
   );
 
@@ -42,8 +48,15 @@ const AddressBookModal = ({ onSelect }: Props) => {
     saveAddressBook(next);
   };
 
-  const handleSelect = (addr: string) => {
-    onSelect(addr);
+  const displayAddress = (e: AddressBookEntry) => {
+    if (e.port) return `${e.address}:${e.port}`;
+    return e.address;
+  };
+
+  const handleSelect = (e: AddressBookEntry) => {
+    // Compose a value CreateSession's parseSrtInput can split.
+    const value = e.port ? `${e.address}:${e.port}` : e.address;
+    onSelect(value);
     setOpen(false);
   };
 
@@ -51,31 +64,40 @@ const AddressBookModal = ({ onSelect }: Props) => {
     setAddMode(true);
     setEditTag("");
     setEditAddr("");
+    setEditPort("");
+    setEditDesc("");
     setEditId(null);
   };
 
   const startEdit = (e: AddressBookEntry) => {
+    // Support legacy entries that stored the full srt:// URL in `address`.
+    const parsed = parseSrtInput(e.address);
     setEditId(e.id);
     setEditTag(e.tag);
-    setEditAddr(e.address);
+    setEditAddr(e.port ? e.address : parsed.host || e.address);
+    setEditPort(e.port || parsed.port || "");
+    setEditDesc(e.description || "");
     setAddMode(false);
   };
 
   const saveEntry = () => {
     if (!editTag.trim() || !editAddr.trim()) return;
+    const clean = {
+      tag: editTag.trim(),
+      address: editAddr.trim(),
+      port: editPort.trim() || undefined,
+      description: editDesc.trim() || undefined,
+    };
     if (addMode) {
       const newEntry: AddressBookEntry = {
         id: `ab-${Date.now()}`,
-        tag: editTag.trim(),
-        address: editAddr.trim(),
+        ...clean,
         lastUsed: new Date().toISOString(),
       };
       persist([newEntry, ...entries]);
     } else if (editId) {
       persist(
-        entries.map((e) =>
-          e.id === editId ? { ...e, tag: editTag.trim(), address: editAddr.trim() } : e
-        )
+        entries.map((e) => (e.id === editId ? { ...e, ...clean } : e))
       );
     }
     setEditId(null);
@@ -86,6 +108,7 @@ const AddressBookModal = ({ onSelect }: Props) => {
     persist(entries.filter((e) => e.id !== id));
     setConfirmDelete(null);
   };
+
 
   // Not logged in → show sign-in prompt
   if (!loggedIn) {
