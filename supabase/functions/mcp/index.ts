@@ -3,7 +3,7 @@
 // supabase function: mcp
 // Bundled from src/lib/mcp/index.ts by @lovable.dev/mcp-js.
 // src/lib/mcp/index.ts
-import { defineMcp } from "npm:@lovable.dev/mcp-js@0.20.1";
+import { defineMcp, auth } from "npm:@lovable.dev/mcp-js@0.20.1";
 
 // src/lib/mcp/tools/get-focused-input.ts
 import { createClient } from "npm:@supabase/supabase-js@^2.95.3";
@@ -100,11 +100,17 @@ var submit_feedback_default = defineTool3({
 });
 
 // src/lib/mcp/index.ts
+var SUPABASE_URL = process.env.SUPABASE_URL ?? "https://pwdxgwbigjqkokeoixia.supabase.co";
 var mcp_default = defineMcp({
   name: "mako-mcp",
   title: "MAKO Broadcast MCP",
   version: "0.1.0",
   instructions: "Tools for the MAKO live-broadcast platform. Read session focus state, browse recent user feedback, and submit new feedback entries on a user's behalf.",
+  auth: auth.oauth.issuer({
+    issuer: `${SUPABASE_URL}/auth/v1`,
+    jwksUri: `${SUPABASE_URL}/auth/v1/.well-known/jwks.json`,
+    acceptedAudiences: ["authenticated"]
+  }),
   tools: [get_focused_input_default, list_feedback_default, submit_feedback_default]
 });
 
