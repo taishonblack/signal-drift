@@ -737,10 +737,10 @@ const CreateSession = () => {
               <Button
                 variant="outline"
                 size="lg"
-                onClick={handleSaveDraft}
+                onClick={handleCancel}
                 className="gap-2 border-border/30 text-foreground"
               >
-                <Save className="h-4 w-4" /> Save Draft
+                <X className="h-4 w-4" /> Cancel
               </Button>
             )}
             {mode === "configure" && isActiveConfigure && existing && (
