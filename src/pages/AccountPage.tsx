@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/components/ui/sonner";
-import { LogOut, Mail } from "lucide-react";
+import { LogOut, Mail, KeyRound, ShieldCheck, Shield, Loader2 } from "lucide-react";
 import { clearGuestIdentity } from "@/lib/identity";
+import { supabase } from "@/integrations/supabase/client";
+import type { User as SupaUser } from "@supabase/supabase-js";
 
 const AccountPage = () => {
   const { user, loading, signUp, signIn, signOut } = useAuth();
@@ -53,7 +55,11 @@ const AccountPage = () => {
       </div>
 
       {user ? (
-        <SignedInView email={user.email ?? ""} onSignOut={signOut} />
+        <>
+          <SignedInView email={user.email ?? ""} onSignOut={signOut} />
+          <PasswordSection user={user} />
+          <TwoFactorSection />
+        </>
       ) : (
         <AuthForm onSignIn={signIn} onSignUp={signUp} initialMode={claim ? "signup" : initialMode} />
       )}
@@ -217,5 +223,198 @@ const SettingRow = ({ label, description, checked, disabled }: { label: string; 
     <Switch defaultChecked={checked} disabled={disabled} />
   </div>
 );
+
+/* ── Password change ── */
+
+const PasswordSection = ({ user }: { user: SupaUser }) => {
+  const providers = (user.identities ?? []).map((i) => i.provider);
+  const hasPasswordAuth = providers.length === 0 || providers.includes("email");
+  const socialOnly = !hasPasswordAuth;
+
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (next.length < 6) return toast("Password must be at least 6 characters");
+    if (next !== confirm) return toast("Passwords do not match");
+    setBusy(true);
+    // Re-verify current password to prevent session hijack changes.
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: user.email ?? "",
+      password: current,
+    });
+    if (signInErr) {
+      setBusy(false);
+      return toast("Current password is incorrect");
+    }
+    const { error } = await supabase.auth.updateUser({ password: next });
+    setBusy(false);
+    if (error) return toast(error.message);
+    setCurrent(""); setNext(""); setConfirm("");
+    toast("Password updated");
+  };
+
+  return (
+    <div>
+      <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider flex items-center gap-2">
+        <KeyRound className="h-3.5 w-3.5" /> Password
+      </h2>
+      <div className="mako-glass rounded-lg p-5">
+        {socialOnly ? (
+          <p className="text-xs text-muted-foreground">
+            You signed in with {providers.join(", ")}. Password changes are managed by your identity provider.
+          </p>
+        ) : (
+          <form onSubmit={submit} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="current" className="text-xs text-muted-foreground">Current password</Label>
+              <Input id="current" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} required className="bg-background/50 border-border/30" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="new" className="text-xs text-muted-foreground">New password</Label>
+              <Input id="new" type="password" value={next} onChange={(e) => setNext(e.target.value)} required minLength={6} className="bg-background/50 border-border/30" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="confirm" className="text-xs text-muted-foreground">Confirm new password</Label>
+              <Input id="confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={6} className="bg-background/50 border-border/30" />
+            </div>
+            <Button type="submit" size="sm" disabled={busy}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update password"}
+            </Button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ── Two-factor auth (TOTP) ── */
+
+interface Factor { id: string; friendly_name?: string | null; status: string; }
+
+const TwoFactorSection = () => {
+  const [factors, setFactors] = useState<Factor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrollment, setEnrollment] = useState<{ factorId: string; qr: string; secret: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const refresh = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.auth.mfa.listFactors();
+    if (!error && data) {
+      setFactors((data.totp ?? []) as Factor[]);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { refresh(); }, []);
+
+  const verified = factors.filter((f) => f.status === "verified");
+  const hasMFA = verified.length > 0;
+
+  const startEnroll = async () => {
+    setEnrolling(true);
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp" });
+    if (error || !data) {
+      setEnrolling(false);
+      return toast(error?.message ?? "Failed to start enrollment");
+    }
+    setEnrollment({ factorId: data.id, qr: data.totp.qr_code, secret: data.totp.secret });
+  };
+
+  const cancelEnroll = async () => {
+    if (enrollment) await supabase.auth.mfa.unenroll({ factorId: enrollment.factorId });
+    setEnrollment(null);
+    setCode("");
+    setEnrolling(false);
+  };
+
+  const verifyEnroll = async () => {
+    if (!enrollment) return;
+    setBusy(true);
+    const { data: c, error: ce } = await supabase.auth.mfa.challenge({ factorId: enrollment.factorId });
+    if (ce || !c) { setBusy(false); return toast(ce?.message ?? "Challenge failed"); }
+    const { error } = await supabase.auth.mfa.verify({
+      factorId: enrollment.factorId,
+      challengeId: c.id,
+      code: code.trim(),
+    });
+    setBusy(false);
+    if (error) return toast(error.message);
+    toast("Two-factor authentication enabled");
+    setEnrollment(null); setCode(""); setEnrolling(false);
+    refresh();
+  };
+
+  const disable = async (factorId: string) => {
+    const { error } = await supabase.auth.mfa.unenroll({ factorId });
+    if (error) return toast(error.message);
+    toast("Two-factor authentication disabled");
+    refresh();
+  };
+
+  return (
+    <div>
+      <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider flex items-center gap-2">
+        <ShieldCheck className="h-3.5 w-3.5" /> Two-factor authentication
+      </h2>
+      <div className="mako-glass rounded-lg p-5 space-y-4">
+        {loading ? (
+          <p className="text-xs text-muted-foreground">Loading…</p>
+        ) : hasMFA ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm text-foreground">
+              <Shield className="h-4 w-4 text-primary" /> 2FA is enabled
+            </div>
+            {verified.map((f) => (
+              <div key={f.id} className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">{f.friendly_name || "Authenticator app"}</span>
+                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => disable(f.id)}>
+                  Disable
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : enrollment ? (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Scan this QR code with your authenticator app (1Password, Authy, Google Authenticator), then enter the 6-digit code.
+            </p>
+            <div className="flex justify-center bg-white rounded-md p-3">
+              <img src={enrollment.qr} alt="TOTP QR code" className="h-40 w-40" />
+            </div>
+            <p className="text-[10px] font-mono text-center text-muted-foreground break-all">
+              {enrollment.secret}
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="totp" className="text-xs text-muted-foreground">Verification code</Label>
+              <Input id="totp" value={code} onChange={(e) => setCode(e.target.value)} placeholder="123456" inputMode="numeric" maxLength={6} className="bg-background/50 border-border/30" />
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={verifyEnroll} disabled={busy || code.length < 6}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify & enable"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={cancelEnroll}>Cancel</Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Add an extra layer of security. You'll enter a code from your authenticator app when signing in.
+            </p>
+            <Button size="sm" onClick={startEnroll} disabled={enrolling}>
+              Enable 2FA
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default AccountPage;
