@@ -833,20 +833,63 @@ const SessionRoom = () => {
           )}
         </div>
 
-        {/* Notes panel — in normal flow below multiview */}
+        {/* Notes panel — resizable, with collapse to compact bar. */}
         {showNotes && (
-          <div className="flex-shrink-0 max-h-60 overflow-auto">
-            <QCNotesPanel
-              focusedLabel={focusedLabel}
-              notes={notes}
-              onNotesChange={setNotes}
-              markerNote={markerNote}
-              onMarkerNoteChange={setMarkerNote}
-              markers={markers}
-              onAddMarker={addMarker}
-            />
-          </div>
+          workspacePrefs.notesCollapsed ? (
+            <button
+              type="button"
+              onClick={() => {
+                updateWorkspacePrefs({ notesCollapsed: false });
+              }}
+              className="flex-shrink-0 flex items-center justify-between gap-3 mako-glass rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Expand notes"
+            >
+              <span className="flex items-center gap-2">
+                <ChevronUp className="h-3.5 w-3.5" />
+                <span className="uppercase tracking-wider font-medium">Notes</span>
+                <span className="text-muted-foreground/60">·</span>
+                <span>{markers.length} markers</span>
+                <span className="text-muted-foreground/60">·</span>
+                <span>{alertCount} Quinn events</span>
+              </span>
+              <span className="text-[10px] text-muted-foreground/60">Click to expand</span>
+            </button>
+          ) : (
+            <>
+              <ResizeDivider
+                orientation="horizontal"
+                value={workspacePrefs.notesHeightPx}
+                min={WORKSPACE_LIMITS.notesMinPx}
+                max={Math.max(
+                  WORKSPACE_LIMITS.notesMinPx,
+                  Math.floor((workspaceRef.current?.clientHeight ?? 800) * WORKSPACE_LIMITS.notesMaxFraction),
+                )}
+                step={16}
+                containerRef={workspaceRef}
+                toValue={(clientY, rect) => rect.bottom - clientY}
+                onChange={(next) => updateWorkspacePrefs({ notesHeightPx: next })}
+                onDoubleClick={() => updateWorkspacePrefs({ notesHeightPx: DEFAULT_WORKSPACE_PREFS.notesHeightPx })}
+                ariaLabel="Resize notes panel"
+              />
+              <div
+                className="flex-shrink-0 overflow-hidden"
+                style={{ height: `${workspacePrefs.notesHeightPx}px` }}
+              >
+                <QCNotesPanel
+                  focusedLabel={focusedLabel}
+                  notes={notes}
+                  onNotesChange={setNotes}
+                  markerNote={markerNote}
+                  onMarkerNoteChange={setMarkerNote}
+                  markers={markers}
+                  onAddMarker={addMarker}
+                  onCollapse={() => updateWorkspacePrefs({ notesCollapsed: true })}
+                />
+              </div>
+            </>
+          )
         )}
+
       </div>
     </>
   );
