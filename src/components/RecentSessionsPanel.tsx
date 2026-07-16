@@ -17,6 +17,7 @@ import JoinActiveSessionDialog from "@/components/session/JoinActiveSessionDialo
 import SwitchMonitoringSessionDialog from "@/components/session/SwitchMonitoringSessionDialog";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
 import { mockSessions, type Session } from "@/lib/mock-data";
+import { DEMO_DATA_ENABLED } from "@/lib/demo-flag";
 
 
 const LS_KEY = "mako_recent_sessions_collapsed";
