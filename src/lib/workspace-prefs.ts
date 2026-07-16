@@ -108,7 +108,8 @@ export async function saveWorkspacePrefs(
     await supabase
       .from("ui_preferences")
       .upsert(
-        { user_id: userId, workspace: clean as unknown as Record<string, unknown> },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { user_id: userId, workspace: clean as any },
         { onConflict: "user_id" },
       );
   } catch {
