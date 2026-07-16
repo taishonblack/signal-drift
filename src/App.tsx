@@ -31,6 +31,7 @@ const App = () => (
           <Route path="/session/:id/configure" element={<AppLayout><CreateSession /></AppLayout>} />
           <Route path="/session/:id" element={<AppLayout><SessionRoom /></AppLayout>} />
           <Route path="/join" element={<AppLayout><JoinSession /></AppLayout>} />
+          <Route path="/join/:sessionId" element={<AppLayout><JoinSession /></AppLayout>} />
           <Route path="/account" element={<AppLayout><AccountPage /></AppLayout>} />
           <Route path="/ops" element={<AppLayout><OpsDashboard /></AppLayout>} />
 
