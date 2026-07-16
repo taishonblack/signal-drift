@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { LogIn, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,8 +16,11 @@ import JoinConfirmDialog from "@/components/session/JoinConfirmDialog";
 
 const JoinSession = () => {
   const navigate = useNavigate();
+  const params = useParams();
   const [searchParams] = useSearchParams();
-  const [sessionId, setSessionId] = useState(searchParams.get("session") || "");
+  const preId = params.sessionId || searchParams.get("session") || "";
+  const idLocked = Boolean(params.sessionId);
+  const [sessionId, setSessionId] = useState(preId);
   const [pin, setPin] = useState(searchParams.get("pin") || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,8 +79,9 @@ const JoinSession = () => {
             value={sessionId}
             onChange={(e) => setSessionId(e.target.value)}
             placeholder="sess-001"
-            disabled={busy}
-            className="bg-muted/30 border-border/30 text-foreground placeholder:text-muted-foreground/50"
+            disabled={busy || idLocked}
+            readOnly={idLocked}
+            className={`bg-muted/30 border-border/30 text-foreground placeholder:text-muted-foreground/50 ${idLocked ? "opacity-70 cursor-not-allowed font-mono" : ""}`}
           />
         </div>
         <div className="space-y-2">
