@@ -47,10 +47,12 @@ export function useCurrentSession(pollMs: number = 2000): CurrentSessionState {
     const onStorage = () => refresh();
     window.addEventListener("storage", onStorage);
     window.addEventListener("focus", refresh);
+    window.addEventListener("mako:sessions-changed", refresh as EventListener);
     return () => {
       window.clearInterval(id);
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("focus", refresh);
+      window.removeEventListener("mako:sessions-changed", refresh as EventListener);
     };
   }, [currentUser.id, pollMs]);
 

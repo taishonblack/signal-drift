@@ -198,6 +198,13 @@ function read<T>(key: string, fallback: T): T {
 
 function write<T>(key: string, value: T) {
   pickStorage(key).setItem(key, JSON.stringify(value));
+  if (typeof window !== "undefined" && key === SESSIONS_KEY) {
+    try {
+      window.dispatchEvent(new CustomEvent("mako:sessions-changed"));
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 // ─── Current user ───
