@@ -140,7 +140,14 @@ export const createDefaultLine = (n: number): SrtLine => ({
   originTimeZone: "",
 });
 
-// ─── localStorage helpers ───
+// ─── Storage helpers ───
+//
+// Guest / Temporary Operator state lives in sessionStorage so it dies
+// with the browser tab. Signed-in members will move to a Supabase
+// backend in a follow-up; until then they get localStorage so history
+// survives reloads.
+
+import { DEMO_DATA_ENABLED } from "@/lib/demo-flag";
 
 const SESSIONS_KEY = "mako_sessions_v3";
 const DRAFTS_KEY = "mako_drafts";
@@ -148,9 +155,27 @@ const ADDRESS_BOOK_KEY = "mako_address_book";
 const AUTH_KEY = "mako_auth";
 const RETENTION_KEY = "mako_retention_days";
 
+// Keys whose lifetime should follow the identity kind (guest = tab,
+// member = browser). Other keys — address book, retention, auth — stay
+// in localStorage regardless.
+const IDENTITY_SCOPED_KEYS = new Set<string>([SESSIONS_KEY, DRAFTS_KEY]);
+
+function pickStorage(key: string): Storage {
+  if (!IDENTITY_SCOPED_KEYS.has(key)) return localStorage;
+  try {
+    // Local import avoids a circular type ref at module init time.
+    const raw = localStorage.getItem("mako_member_identity");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.kind === "member") return localStorage;
+    }
+  } catch {}
+  return sessionStorage;
+}
+
 function read<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = pickStorage(key).getItem(key);
     return raw ? JSON.parse(raw) : fallback;
   } catch {
     return fallback;
@@ -158,7 +183,7 @@ function read<T>(key: string, fallback: T): T {
 }
 
 function write<T>(key: string, value: T) {
-  localStorage.setItem(key, JSON.stringify(value));
+  pickStorage(key).setItem(key, JSON.stringify(value));
 }
 
 // ─── Current user ───
