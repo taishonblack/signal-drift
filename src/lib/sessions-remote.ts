@@ -159,12 +159,24 @@ export async function hydrateMemberSessions(): Promise<void> {
   if (rowsErr || !rows) return;
 
   const existing = new Map(getSessions().map((s) => [s.id, s]));
+  const TERMINAL = new Set(["completed", "archived"]);
   for (const row of rows) {
     const record = fromRemote(row);
     const prior = existing.get(row.id);
     if (prior) {
-      // Preserve any local-only fields (e.g. tab-local viewer focus)
-      updateSession(row.id, { ...prior, ...record });
+      // Never resurrect a locally-ended session. If the local copy is
+      // terminal (completed/archived) or already carries an endedAt,
+      // preserve that status/endedAt regardless of what the remote row
+      // still reports — the End Session write is authoritative for this
+      // client and remote may not yet have caught up.
+      const localTerminal = TERMINAL.has(prior.status) || !!prior.endedAt;
+      const merged: SessionRecord = { ...prior, ...record };
+      if (localTerminal) {
+        merged.status = prior.status;
+        merged.endedAt = prior.endedAt ?? merged.endedAt;
+        merged.endReason = prior.endReason ?? merged.endReason;
+      }
+      updateSession(row.id, merged);
     } else {
       addSession(record);
     }
