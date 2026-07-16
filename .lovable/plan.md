@@ -1,143 +1,129 @@
+# Guest-First Identity Redesign
 
-# Session Configuration Workflow + Change Log
+Shift MAKO from "log in to use" to "monitor first, identify later." Sign-in becomes about **persistence**, not access.
 
-Reframe sessions as live productions with **one** configuration surface (no separate "edit" page), enforce owner/admin-only configuration, broadcast configuration changes to viewers in real time, and record every change to an auditable Session Change Log.
+## Philosophy
 
-## 1. Lifecycle & terminology
+Every screen reinforces: *Monitoring comes first. Identity comes second.* Guests get the full live experience — create, join, share, transfer, note-take. Sign-in earns history, drafts, address book, teams, templates, saved layouts.
 
-States remain: `draft → scheduled → active → completed` (`paused`, `archived` still supported internally). All operator-facing language moves from "Edit" to **"Configure"**.
+## Identity States
 
-- "Create Session" screen is reused for both new and existing sessions.
-- Header title:
-  - No `id` in route → **"New Session"**, primary button **"Start Monitoring"**.
-  - `id` in route, session is `draft`/`scheduled` → **"Configure Session"**, primary button **"Start Monitoring"**.
-  - `id` in route, session is `active` → **"Configure Session"** with a live badge, primary button **"Save Changes"**.
-  - `id` in route, session is `completed`/`archived` → **"Session Configuration"** (read-only), no primary button.
+| State | Trigger | Header (upper-right) |
+|---|---|---|
+| **Anonymous Visitor** | Landed, no session | `Sign In` · `Create Account` |
+| **Temporary Operator** | Created/joined a session without auth | `Operator (Temporary)` chip with menu |
+| **Authenticated User** | Signed in | Name + Settings / Team / Sign Out |
 
-## 2. Card action dialog
+Temporary identity auto-generated on first session action (e.g. `Operator-4H2K`), persisted to `localStorage` so it survives reloads. The chip menu offers Sign In · Create Account · "What changes when I sign in?". On sign-in the temporary operator's participation in the current session rebinds to the real user.
 
-Clicking any session card opens a new `SessionActionsDialog` (replaces today's direct navigation / JoinActiveSessionDialog for owned sessions):
+## Guest capabilities
 
-```text
-Super Bowl LIX
-Owner   Quinn Roberts
-Started 1:12 PM
-Watching 4 Operators
+**Can:** create session · configure SRT sources · monitor · share · invite · join · view diagnostics · chat · notes · transfer ownership
+**Cannot:** save history · save drafts across devices · address book · teams · archives · saved layouts · templates
 
-[ Join Live Session ]   ← primary, active sessions only
-[ Configure Session ]   ← owner/admin only, else shown as locked row
-[ Cancel ]
-```
+## Navigation
 
-- Team active + user not joined → also surfaces the existing `SwitchMonitoringSessionDialog` check.
-- Completed/archived → `Join Live Session` becomes `Open Report` (existing `ExpiredSessionDialog`).
-- Drafts → single `Configure Session` button.
-- If viewer lacks permission: `Configure Session` row is replaced by
-  ```
-  🔒 Only the session owner or team administrators can modify this session.
-  ```
+Never blur. Use **educational empty states** in place of gated panels:
 
-## 3. Routing
+- Recent Sessions → "No saved sessions yet. Sign in to keep your monitoring history."
+- Address Book → "Available after signing in."
+- Teams → "Join or create a team after creating an account."
 
-- Keep `/create` (New Session flow).
-- Add `/session/:id/configure` → renders the same `CreateSession.tsx` component in **configure mode**, prefilled from `getSessionById(id)`.
-- `SessionRoom` header gains a **Configure** button (owner/admin only) that navigates to `/session/:id/configure`.
+Sidebar for guests: Sessions · Create · Join · Ops (Account item hidden; identity lives in header chip).
+Sidebar for members: same + name/Settings/Sign Out in the identity chip.
 
-## 4. CreateSession refactor (`src/pages/CreateSession.tsx`)
+## Home / Landing
 
-Introduce a `mode: "create" | "configure"` derived from `useParams()`.
+Rename primary CTA to **Start Monitoring**. No auth wall.
 
-- Prefill all fields from the existing `SessionRecord` when configuring.
-- Rename primary button + toast copy per mode.
-- On save in configure mode:
-  - Diff previous vs. new record (name, purpose, duration, timezone, source list — add/remove/rename/address/port change, notes).
-  - `updateSession(id, patch)`.
-  - Emit one change-log entry per meaningful diff (see §6).
-  - If session is `active`, stay on configure page and show "Changes saved" toast; else route back to `/sessions`.
-- Show a small banner in configure mode when session is `active`:
-  > "This session is live — changes broadcast to 4 operators."
+## Sessions / Create / Join
 
-## 5. Permission helper
+- `/create` and `/join` fully guest-accessible.
+- `/sessions` for guests shows the current session + empty-state cards for Recent / Drafts / Archive.
+- Join flow: enter Session ID + PIN, land in room as Temporary Operator.
 
-Add `canConfigureSession(session, userId)` in `session-store.ts`:
-- `true` if `ownerUserId === userId`, or user has `admin` role (stub: read from `mem`/mock auth — for now expose `isAdmin()` returning `false`; owner path is the working case).
-- Used by the dialog, the SessionRoom Configure button, and a guard inside `CreateSession` (redirects viewers to `/session/:id` with a toast).
+## Session Ownership & Lifecycle for Guests
 
-## 6. Session Change Log
+Guest who creates a session = Session Owner. Existing ownership/request/transfer flow already works.
 
-Extend `SessionRecord` with:
+**Close-tab warning** (`beforeunload`) for owner with viewers:
+> "Leaving this page will end your monitoring session. If another viewer accepts ownership, monitoring will continue. Otherwise this session will end."
+> `Cancel` · `Leave Session`
 
-```ts
-changeLog: SessionChangeEntry[]
+**Owner-left dialog** for every remaining viewer:
+> "The session owner has disconnected. Would you like to become the new owner?"
+> `Become Owner` · `Leave Session`
+First accept wins.
 
-interface SessionChangeEntry {
-  id: string;
-  at: string;              // ISO
-  userId: string;
-  userName: string;
-  kind:
-    | "session_renamed"
-    | "purpose_changed"
-    | "duration_changed"
-    | "timezone_changed"
-    | "source_added"
-    | "source_removed"
-    | "source_renamed"
-    | "source_address_changed"
-    | "source_notes_changed"
-    | "config_saved";
-  summary: string;         // human-readable one-liner
-  before?: string;
-  after?: string;
-  target?: string;         // e.g. "Source 2"
-}
-```
+**No-owner countdown** (30s): "No owner assigned. This monitoring session will end in 30… 29…" → terminate at zero.
 
-Helpers in `session-store.ts`:
-- `appendChangeLog(sessionId, entry)`
-- `diffSessionConfig(prev, next, actor)` → returns `SessionChangeEntry[]`
+## Save-on-End prompt
 
-Seed a couple of entries on existing seeded active sessions so the UI has content.
+When a guest ends their session:
+> "Save this monitoring session? Create a free account to keep session history, incident timeline, notes, stream diagnostics, layout."
+> `Create Account` · `Continue as Guest` · `Discard Session`
 
-## 7. Live sync of configuration changes
+Choosing Create Account stashes the session payload in `localStorage` under a claim key; after sign-up the stored session is claimed onto the new user.
 
-Reuse the existing 2.5s localStorage polling already added for viewers.
+---
 
-- `SessionRoom` tracks `lastSeenChangeLogId`. When new entries appear authored by someone **other** than current user, show a `sonner` toast:
-  ```
-  Quinn updated Source 2 → "Truck B Program"
-  ```
-  Batched: if >1 new entry in a poll, single toast "Quinn made 3 configuration changes".
-- Same polling updates the live source list / names shown in the room, since `SessionRoom` already reads from the store.
+## Technical plan
 
-## 8. Change Log UI
+**New: `src/lib/identity.ts`**
+- `useIdentity()` → `{ kind: 'anon' | 'guest' | 'member', id, name }`
+- Guest id/name generated + stored in `localStorage['mako_guest_identity']` on first session touch
+- On auth: migrate ownership refs in `session-store` from guest id → user id
+- Replaces `getCurrentUserRef()` in `session-store.ts`
 
-New `src/components/session/SessionChangeLogPanel.tsx`:
+**New: `src/components/IdentityChip.tsx`**
+- Renders in `AppLayout` header (desktop) and `MobileNav` top-right
+- Three variants matching identity states; popover menu per spec
+- Members get link to `/account`
 
-- Reverse-chronological list, grouped by short relative time header.
-- Row: timestamp · actor · summary (with before → after chips when applicable).
-- Accessible from two places:
-  1. **SessionRoom** — new "Activity" tab / drawer trigger in the toolbar next to Viewers.
-  2. **Configure page** — collapsible "Recent changes" section under the source list.
-- Completed session report (`ExpiredSessionDialog` / report PDF) includes the change log.
+**Edited: `AppLayout.tsx` / `MobileNav.tsx`**
+- Mount IdentityChip in header, drop Account item from sidebar/tab bar for guests (still routable directly for members)
 
-## 9. Files touched
+**Edited: `RecentSessionsPanel.tsx`**
+- Guest: hide session groups, show educational empty state block
 
-Edit:
-- `src/lib/session-store.ts` — `changeLog`, diff/append helpers, `canConfigureSession`, seed entries.
-- `src/App.tsx` — add `/session/:id/configure` route.
-- `src/pages/CreateSession.tsx` — configure mode, prefill, diff-on-save, permission guard.
-- `src/pages/Sessions.tsx` — route card clicks through `SessionActionsDialog`.
-- `src/pages/SessionRoom.tsx` — Configure button, change-log toasts, Activity drawer trigger.
-- `src/components/session/JoinActiveSessionDialog.tsx` — repurposed/wrapped by `SessionActionsDialog` (kept for join confirmation content).
-- `src/lib/session-report-pdf.ts` — include change log in report.
+**Edited: `Landing.tsx`**
+- Primary CTA → "Start Monitoring"
 
-New:
-- `src/components/session/SessionActionsDialog.tsx`
-- `src/components/session/SessionChangeLogPanel.tsx`
+**New: `src/components/session/OwnerLeftDialog.tsx`**
+- Subscribes to session store; opens when `ownerUserId` transitions to `null` while viewers > 0
+- Countdown driven by a `noOwnerSince` timestamp on the session record
 
-## Out of scope
+**Edited: `session-store.ts`**
+- Add `noOwnerSince: number | null` on `SessionRecord`
+- On owner leave: set timestamp; on claim: clear
+- New helpers: `claimOwnership(sessionId, actor)`, `orphanSweep()` invoked from the existing poller
 
-- Real backend realtime (still localStorage polling).
-- Full admin role management — `isAdmin()` returns `false`; owner is the working permission path. Hook is in place for later.
-- Removing `/create` entirely — keep it; both routes render the same component so consolidation later is a one-line change.
+**Edited: `SessionRoom.tsx`**
+- Mount `OwnerLeftDialog`
+- `beforeunload` handler for owner with active viewers
+- Custom Leave button opens confirm dialog with the specified copy
+
+**New: `src/components/session/SaveSessionPrompt.tsx`**
+- Shown when a guest owner ends a session
+- "Create Account" stashes snapshot in `localStorage['mako_pending_save']` and routes to `/account?claim=1`
+
+**Edited: `AccountPage.tsx`**
+- On sign-in/up, if `mako_pending_save` exists, claim it and toast "Session saved"
+- Rebind guest identity → member for any live sessions
+
+**New: `src/components/GatedEmptyState.tsx`** — reusable for Recent / Address Book / Teams
+
+## Explicitly out of scope
+- Server-side persistence of guest sessions (all guest state stays in `localStorage` / in-memory `session-store`)
+- Address Book / Teams / Templates gating logic beyond the empty-state copy (features not yet built)
+- 40-min soft prompt banner
+- Any auth provider changes (email/password only)
+
+## Acceptance
+1. Fresh browser → `/` → Start Monitoring → configure → land in `/session/:id` as `Operator (Temporary)`, no auth prompts.
+2. Share PIN → second browser joins via `/join` → Temporary Operator, sees stream immediately.
+3. Owner closes tab → viewers see Owner-Left dialog → Become Owner → owns session.
+4. No one claims → 30s countdown → session terminates.
+5. Guest ends session → Save prompt → Create Account → after sign-in, session appears in Recent.
+6. Signed-in user sees name in chip; Recent populated.
+7. Guest on `/sessions` sees educational empty states, never a blurred panel.
