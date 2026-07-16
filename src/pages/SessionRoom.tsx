@@ -11,6 +11,7 @@ import QCNotesPanel from "@/components/session/QCNotesPanel";
 import EditInputModal from "@/components/session/EditInputModal";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
 import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
+import ShareSessionDialog from "@/components/session/ShareSessionDialog";
 import SessionEndIndicator from "@/components/session/SessionEndIndicator";
 import { mockSessions, mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
 import {
