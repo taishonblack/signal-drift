@@ -6,6 +6,7 @@ import MakoBackground from "@/components/MakoBackground";
 import IdentityChip from "@/components/IdentityChip";
 import { useIdentityBootstrap } from "@/lib/identity";
 import { useRemoteSessionSync } from "@/hooks/use-remote-session-sync";
+import ActiveSessionReturnBar from "@/components/ActiveSessionReturnBar";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -43,6 +44,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
             </div>
           </header>
           <MobileNav />
+          <ActiveSessionReturnBar />
           <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6 overflow-x-hidden overflow-y-auto">
             {children}
           </main>

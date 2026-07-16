@@ -49,6 +49,7 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
   const [pendingJoin, setPendingJoin] = useState<SessionRecord | null>(null);
   const [pendingSwitch, setPendingSwitch] = useState<SessionRecord | null>(null);
   const [expiredSession, setExpiredSession] = useState<Session | null>(null);
+  const [expiredIsOwner, setExpiredIsOwner] = useState(false);
 
   useEffect(() => {
     if (location.pathname.startsWith("/session/")) {
@@ -108,6 +109,7 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
       createdAt: s.createdAt, inputCount: s.lines.filter((l) => l.enabled).length,
       pin: s.pin, inputs: [],
     };
+    setExpiredIsOwner((s.ownerUserId ?? s.hostUserId) === currentUser.id);
     setExpiredSession(legacy as Session);
   };
 
@@ -191,6 +193,7 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
         />
         <ExpiredSessionDialog
           session={expiredSession}
+          isOwner={expiredIsOwner}
           onClose={() => setExpiredSession(null)}
         />
       </div>
