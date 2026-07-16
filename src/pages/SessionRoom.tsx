@@ -388,9 +388,11 @@ const SessionRoom = () => {
         input={input}
         liveMetrics={getMetrics(input.id)}
         isFocused={focusedId === input.id}
-        onFocusClick={() => setFocus(input.id)}
+        onFocusClick={() => selectSourceForViewer(input.id)}
         isAudioSource={audioSource === input.id}
-        onSelectAudio={() => setAudioSource(input.id)}
+        muteAll={muteAll}
+        onSelectAudio={() => selectSourceForViewer(input.id)}
+
         onFullscreen={() => setFullscreenId(input.id)}
         onEdit={() => openEdit(input)}
         timePrefs={timePrefs}
