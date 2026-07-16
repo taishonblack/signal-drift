@@ -412,6 +412,22 @@ const Sessions = () => {
           isOwner={expiredIsOwner}
           onClose={() => setExpiredSession(null)}
         />
+        <ShareSessionDialog
+          open={!!shareSession}
+          onOpenChange={(o) => !o && setShareSession(null)}
+          sessionId={shareSession?.id ?? ""}
+          sessionName={shareSession?.name ?? ""}
+          pin={
+            shareSession &&
+            (shareSession.ownerUserId ?? shareSession.hostUserId) === currentUser.id
+              ? shareSession.pin
+              : null
+          }
+          isOwner={
+            !!shareSession &&
+            (shareSession.ownerUserId ?? shareSession.hostUserId) === currentUser.id
+          }
+        />
       </div>
     </TooltipProvider>
   );
