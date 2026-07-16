@@ -380,8 +380,13 @@ function migrateStatus(s: any): SessionStatus {
 export function getSessions(): SessionRecord[] {
   const stored = read<SessionRecord[] | null>(SESSIONS_KEY, null);
   if (!stored) {
-    write(SESSIONS_KEY, seedSessions);
-    return seedSessions;
+    // Only seed demo data when explicitly enabled via VITE_ENABLE_DEMO_DATA.
+    // Production guests + members start with an empty list.
+    if (DEMO_DATA_ENABLED) {
+      write(SESSIONS_KEY, seedSessions);
+      return seedSessions;
+    }
+    return [];
   }
   return stored.map((s) => ({
     ...s,
