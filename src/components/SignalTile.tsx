@@ -131,9 +131,15 @@ const SignalTile = ({
       {/* Video placeholder – always 16:9 */}
       <div className={`relative flex items-center justify-center ${isFullscreen ? "flex-1" : "flex-1 min-h-0 w-full"}`} style={{ background: "black" }}>
         {input.id === "line-1" && isActive ? (
-          <LiveCamera streamName="cam1" />
+          <LiveCamera
+            streamName="cam1"
+            muted={!wantsAudio}
+            onAudioBlocked={() => setAudioBlocked(true)}
+            onAudioPlaying={() => setAudioBlocked(false)}
+          />
         ) : input.videoSrc && input.status === "live" ? (
           <video
+            ref={videoRef}
             src={input.videoSrc}
             autoPlay
             loop
@@ -151,6 +157,34 @@ const SignalTile = ({
             Focus
           </div>
         )}
+
+        {/* Personal audio indicator — always visible on the selected pane. */}
+        {isActive && isAudioSource && (
+          <div
+            className={cn(
+              "absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase",
+              muteAll ? "bg-muted/70 text-muted-foreground" : "bg-primary/70 text-primary-foreground",
+              isFocused ? "translate-y-5" : "",
+            )}
+            title={muteAll ? "Muted (Mute All)" : "Audio source"}
+          >
+            {muteAll ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
+            <span>Audio</span>
+          </div>
+        )}
+
+        {/* Autoplay-blocked overlay — surfaced when the browser refuses unmuted playback. */}
+        {isActive && wantsAudio && audioBlocked && (
+          <button
+            type="button"
+            onClick={enableAudioFromOverlay}
+            className="absolute inset-x-0 bottom-8 mx-auto w-max px-3 py-1.5 rounded bg-background/80 border border-primary/40 text-xs text-foreground hover:bg-background z-10"
+          >
+            <Volume2 className="inline h-3.5 w-3.5 mr-1.5" />
+            Click to enable audio
+          </button>
+        )}
+
 
         {/* Time overlay */}
         {timePrefs && isActive && (
