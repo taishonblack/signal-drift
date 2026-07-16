@@ -211,6 +211,27 @@ export type Database = {
           },
         ]
       }
+      ui_preferences: {
+        Row: {
+          created_at: string
+          updated_at: string
+          user_id: string
+          workspace: Json
+        }
+        Insert: {
+          created_at?: string
+          updated_at?: string
+          user_id: string
+          workspace?: Json
+        }
+        Update: {
+          created_at?: string
+          updated_at?: string
+          user_id?: string
+          workspace?: Json
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { DndContext, closestCenter, DragEndEvent, DragOverlay, DragStartEvent } from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
@@ -52,6 +52,11 @@ import { Button } from "@/components/ui/button";
 import { getUnackedAlertCountForSession, getCurrentUser, isHost } from "@/lib/quinn-store";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { type SlotId, type SlotMap, defaultSlotMap, loadSlotMap, saveSlotMap, swapSlots } from "@/lib/slot-map";
+import ResizeDivider from "@/components/session/ResizeDivider";
+import { useWorkspacePrefs } from "@/hooks/use-workspace-prefs";
+import { WORKSPACE_LIMITS, DEFAULT_WORKSPACE_PREFS } from "@/lib/workspace-prefs";
+import { ChevronUp } from "lucide-react";
+
 
 const SLOT_IDS: SlotId[] = ["A", "B", "C", "D"];
 
@@ -195,6 +200,23 @@ const SessionRoom = () => {
   const [showSafeArea, setShowSafeArea] = useState(false);
   const [activeDragSlot, setActiveDragSlot] = useState<SlotId | null>(null);
   const [cycleFlash, setCycleFlash] = useState(false);
+
+  // Per-viewer workspace layout preferences (pane splits, notes height, panel visibility).
+  const { prefs: workspacePrefs, update: updateWorkspacePrefs, ready: workspacePrefsReady } =
+    useWorkspacePrefs();
+  const hydratedInspectorRef = useRef(false);
+  useEffect(() => {
+    if (!workspacePrefsReady || hydratedInspectorRef.current) return;
+    hydratedInspectorRef.current = true;
+    setShowInspector(workspacePrefs.inspectorOpen);
+    setShowNotes(!workspacePrefs.notesCollapsed ? true : false);
+    // Only hydrate once from prefs. Subsequent toggles are user-driven.
+  }, [workspacePrefsReady, workspacePrefs.inspectorOpen, workspacePrefs.notesCollapsed]);
+
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const layout3RowRef = useRef<HTMLDivElement | null>(null);
+  const rightStackRef = useRef<HTMLDivElement | null>(null);
+
 
   const user = getCurrentUser();
   const isHostUser = isHost("u1");
@@ -492,7 +514,7 @@ const SessionRoom = () => {
         onApply={applyEdit}
       />
 
-      <div className="flex flex-col h-[calc(100vh-3rem-2rem)] md:h-[calc(100vh-3rem-3rem)] gap-4 w-full max-w-full overflow-x-hidden" style={{ touchAction: "pan-y" }}>
+      <div ref={workspaceRef} className="flex flex-col h-[calc(100vh-3rem-2rem)] md:h-[calc(100vh-3rem-3rem)] gap-4 w-full max-w-full overflow-x-hidden" style={{ touchAction: "pan-y" }}>
         <SessionToolbar
           sessionName={session.name}
           sessionStatus={session.status}
@@ -502,13 +524,22 @@ const SessionRoom = () => {
           timePrefs={timePrefs}
           onTimePrefsChange={handleTimePrefsChange}
           showNotes={showNotes}
-          onToggleNotes={() => setShowNotes(!showNotes)}
+          onToggleNotes={() => {
+            const next = !showNotes;
+            setShowNotes(next);
+            updateWorkspacePrefs({ notesCollapsed: !next });
+          }}
           showInspector={showInspector}
-          onToggleInspector={() => setShowInspector(!showInspector)}
+          onToggleInspector={() => {
+            const next = !showInspector;
+            setShowInspector(next);
+            updateWorkspacePrefs({ inspectorOpen: next });
+          }}
           showSafeArea={showSafeArea}
           onToggleSafeArea={() => setShowSafeArea(!showSafeArea)}
           onShare={() => setShareOpen(true)}
         />
+
 
         <ShareSessionDialog
           open={shareOpen}
@@ -695,21 +726,71 @@ const SessionRoom = () => {
                 );
               }
 
+              // Layout 3 on desktop: resizable big-left + stacked-right.
+              if (effectiveStr === "3" && !isMobile) {
+                return (
+                  <SortableContext items={slots}>
+                    <div
+                      ref={layout3RowRef}
+                      className="flex-1 flex min-h-0 min-w-0 items-stretch"
+                    >
+                      <div
+                        className="min-h-0 min-w-0"
+                        style={{ flexBasis: `${workspacePrefs.mainSplitPct}%`, flexGrow: 0, flexShrink: 0 }}
+                      >
+                        {renderDraggableTile("A")}
+                      </div>
+                      <ResizeDivider
+                        orientation="vertical"
+                        value={workspacePrefs.mainSplitPct}
+                        min={WORKSPACE_LIMITS.mainSplitMin}
+                        max={WORKSPACE_LIMITS.mainSplitMax}
+                        step={2}
+                        containerRef={layout3RowRef}
+                        toValue={(clientX, rect) => ((clientX - rect.left) / rect.width) * 100}
+                        onChange={(next) => updateWorkspacePrefs({ mainSplitPct: next })}
+                        onDoubleClick={() => updateWorkspacePrefs({ mainSplitPct: DEFAULT_WORKSPACE_PREFS.mainSplitPct })}
+                        ariaLabel="Resize left and right panes"
+                      />
+                      <div
+                        ref={rightStackRef}
+                        className="flex-1 min-h-0 min-w-0 flex flex-col"
+                      >
+                        <div
+                          className="min-h-0 min-w-0"
+                          style={{ flexBasis: `${workspacePrefs.rightStackPct}%`, flexGrow: 0, flexShrink: 0 }}
+                        >
+                          {renderDraggableTile("B")}
+                        </div>
+                        <ResizeDivider
+                          orientation="horizontal"
+                          value={workspacePrefs.rightStackPct}
+                          min={WORKSPACE_LIMITS.rightStackMin}
+                          max={WORKSPACE_LIMITS.rightStackMax}
+                          step={2}
+                          containerRef={rightStackRef}
+                          toValue={(clientY, rect) => ((clientY - rect.top) / rect.height) * 100}
+                          onChange={(next) => updateWorkspacePrefs({ rightStackPct: next })}
+                          onDoubleClick={() => updateWorkspacePrefs({ rightStackPct: DEFAULT_WORKSPACE_PREFS.rightStackPct })}
+                          ariaLabel="Resize upper and lower right panes"
+                        />
+                        <div className="flex-1 min-h-0 min-w-0">
+                          {renderDraggableTile("C")}
+                        </div>
+                      </div>
+                    </div>
+                  </SortableContext>
+                );
+              }
+
               return (
                 <SortableContext items={slots}>
                   <div className={`flex-1 grid ${grid.cls} gap-3 min-h-0`} style={grid.style}>
-                    {effectiveStr === "3" && !isMobile ? (
-                      <>
-                        <div className="row-span-2 min-h-0">{renderDraggableTile("A")}</div>
-                        {renderDraggableTile("B")}
-                        {renderDraggableTile("C")}
-                      </>
-                    ) : (
-                      slots.map((slot) => renderDraggableTile(slot))
-                    )}
+                    {slots.map((slot) => renderDraggableTile(slot))}
                   </div>
                 </SortableContext>
               );
+
             })()}
 
             <DragOverlay>
@@ -752,20 +833,63 @@ const SessionRoom = () => {
           )}
         </div>
 
-        {/* Notes panel — in normal flow below multiview */}
+        {/* Notes panel — resizable, with collapse to compact bar. */}
         {showNotes && (
-          <div className="flex-shrink-0 max-h-60 overflow-auto">
-            <QCNotesPanel
-              focusedLabel={focusedLabel}
-              notes={notes}
-              onNotesChange={setNotes}
-              markerNote={markerNote}
-              onMarkerNoteChange={setMarkerNote}
-              markers={markers}
-              onAddMarker={addMarker}
-            />
-          </div>
+          workspacePrefs.notesCollapsed ? (
+            <button
+              type="button"
+              onClick={() => {
+                updateWorkspacePrefs({ notesCollapsed: false });
+              }}
+              className="flex-shrink-0 flex items-center justify-between gap-3 mako-glass rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Expand notes"
+            >
+              <span className="flex items-center gap-2">
+                <ChevronUp className="h-3.5 w-3.5" />
+                <span className="uppercase tracking-wider font-medium">Notes</span>
+                <span className="text-muted-foreground/60">·</span>
+                <span>{markers.length} markers</span>
+                <span className="text-muted-foreground/60">·</span>
+                <span>{alertCount} Quinn events</span>
+              </span>
+              <span className="text-[10px] text-muted-foreground/60">Click to expand</span>
+            </button>
+          ) : (
+            <>
+              <ResizeDivider
+                orientation="horizontal"
+                value={workspacePrefs.notesHeightPx}
+                min={WORKSPACE_LIMITS.notesMinPx}
+                max={Math.max(
+                  WORKSPACE_LIMITS.notesMinPx,
+                  Math.floor((workspaceRef.current?.clientHeight ?? 800) * WORKSPACE_LIMITS.notesMaxFraction),
+                )}
+                step={16}
+                containerRef={workspaceRef}
+                toValue={(clientY, rect) => rect.bottom - clientY}
+                onChange={(next) => updateWorkspacePrefs({ notesHeightPx: next })}
+                onDoubleClick={() => updateWorkspacePrefs({ notesHeightPx: DEFAULT_WORKSPACE_PREFS.notesHeightPx })}
+                ariaLabel="Resize notes panel"
+              />
+              <div
+                className="flex-shrink-0 overflow-hidden"
+                style={{ height: `${workspacePrefs.notesHeightPx}px` }}
+              >
+                <QCNotesPanel
+                  focusedLabel={focusedLabel}
+                  notes={notes}
+                  onNotesChange={setNotes}
+                  markerNote={markerNote}
+                  onMarkerNoteChange={setMarkerNote}
+                  markers={markers}
+                  onAddMarker={addMarker}
+                  onCollapse={() => updateWorkspacePrefs({ notesCollapsed: true })}
+                />
+              </div>
+            </>
+          )
         )}
+
       </div>
     </>
   );

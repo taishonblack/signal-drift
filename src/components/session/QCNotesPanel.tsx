@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { ChevronDown } from "lucide-react";
 import type { QCMarker } from "@/lib/mock-data";
 
 interface QCNotesPanelProps {
@@ -11,14 +12,27 @@ interface QCNotesPanelProps {
   onMarkerNoteChange: (val: string) => void;
   markers: QCMarker[];
   onAddMarker: () => void;
+  onCollapse?: () => void;
 }
 
-const QCNotesPanel = ({ focusedLabel, notes, onNotesChange, markerNote, onMarkerNoteChange, markers, onAddMarker }: QCNotesPanelProps) => (
-  <div className="mako-glass rounded-lg p-4 space-y-3 max-h-60 overflow-auto">
+const QCNotesPanel = ({ focusedLabel, notes, onNotesChange, markerNote, onMarkerNoteChange, markers, onAddMarker, onCollapse }: QCNotesPanelProps) => (
+  <div className="mako-glass rounded-lg p-4 space-y-3 h-full overflow-auto">
     <div className="flex items-center justify-between">
       <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
         Notes for: <span className="text-primary">{focusedLabel}</span>
       </span>
+      {onCollapse && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onCollapse}
+          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+          aria-label="Collapse notes"
+          title="Collapse notes"
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </Button>
+      )}
     </div>
     <Textarea value={notes} onChange={(e) => onNotesChange(e.target.value)} placeholder={`Notes about ${focusedLabel}…`} className="bg-muted/20 border-border/20 text-sm min-h-[60px] text-foreground placeholder:text-muted-foreground/40" />
     <div className="flex gap-2">
@@ -38,3 +52,4 @@ const QCNotesPanel = ({ focusedLabel, notes, onNotesChange, markerNote, onMarker
 );
 
 export default QCNotesPanel;
+
