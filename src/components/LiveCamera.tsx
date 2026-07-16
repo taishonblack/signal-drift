@@ -3,9 +3,21 @@ import { useEffect, useRef, useState } from "react";
 interface LiveCameraProps {
   streamName: string;
   baseUrl?: string;
+  /** When false, the video element is unmuted (subject to browser autoplay). */
+  muted?: boolean;
+  /** Called when the browser blocks unmuted playback. */
+  onAudioBlocked?: () => void;
+  /** Called when unmuted playback resumes successfully. */
+  onAudioPlaying?: () => void;
 }
 
-const LiveCamera = ({ streamName, baseUrl = "/mediamtx" }: LiveCameraProps) => {
+const LiveCamera = ({
+  streamName,
+  baseUrl = "/mediamtx",
+  muted = true,
+  onAudioBlocked,
+  onAudioPlaying,
+}: LiveCameraProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const [status, setStatus] = useState("Connecting");
@@ -74,6 +86,25 @@ const LiveCamera = ({ streamName, baseUrl = "/mediamtx" }: LiveCameraProps) => {
     };
   }, [baseUrl, streamName]);
 
+  // Apply the requested muted state and probe autoplay. Browsers only allow
+  // unmuted playback after a user gesture — the parent should call this
+  // hook with muted=false in direct response to a click.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = muted;
+    if (muted) {
+      onAudioPlaying?.();
+      return;
+    }
+    const p = el.play();
+    if (p && typeof p.then === "function") {
+      p.then(() => onAudioPlaying?.()).catch(() => onAudioBlocked?.());
+    }
+  }, [muted, onAudioBlocked, onAudioPlaying]);
+
+
+
   return (
     <div className="absolute inset-0 bg-black">
       <video
@@ -83,6 +114,7 @@ const LiveCamera = ({ streamName, baseUrl = "/mediamtx" }: LiveCameraProps) => {
         playsInline
         className="absolute inset-0 h-full w-full object-contain"
       />
+
 
       <div className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-[10px] uppercase tracking-wider text-white">
         WebRTC · {status}

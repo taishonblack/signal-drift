@@ -1,5 +1,6 @@
+import { useEffect, useRef, useState } from "react";
 import LiveCamera from "@/components/LiveCamera";
-import { Maximize2, Edit3, Volume2, VideoOff, WifiOff, Loader2, PlugZap, RefreshCw } from "lucide-react";
+import { Maximize2, Edit3, Volume2, VolumeX, VideoOff, WifiOff, Loader2, PlugZap, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { StreamInput } from "@/lib/mock-data";
@@ -13,6 +14,8 @@ interface SignalTileProps {
   liveMetrics?: LiveMetrics;
   isFocused?: boolean;
   isAudioSource?: boolean;
+  /** Global mute-all — overrides isAudioSource and mutes every pane. */
+  muteAll?: boolean;
   isFullscreen?: boolean;
   onFocusClick?: () => void;
   onFullscreen?: () => void;
@@ -24,6 +27,7 @@ interface SignalTileProps {
   sessionStartedAt?: string;
   showSafeArea?: boolean;
 }
+
 
 const statusBadge: Record<string, { label: string; cls: string }> = {
   live: { label: "LIVE", cls: "bg-primary/20 text-primary" },
@@ -56,7 +60,7 @@ const AudioMeter = ({ peakL, peakR }: { peakL: number; peakR: number }) => {
 };
 
 const SignalTile = ({
-  input, liveMetrics, isFocused = false, isAudioSource, isFullscreen,
+  input, liveMetrics, isFocused = false, isAudioSource, muteAll = false, isFullscreen,
   onFocusClick, onFullscreen, onEdit, onSelectAudio,
   timePrefs, tileOriginTZ = "UTC", focusedOriginTZ = "UTC", sessionStartedAt = "",
   showSafeArea = false,
@@ -67,6 +71,40 @@ const SignalTile = ({
   const peakL = liveMetrics?.audioPeakL ?? 0;
   const peakR = liveMetrics?.audioPeakR ?? 0;
   const isActive = input.status !== "idle";
+
+  // Personal audio state — this pane is the audio source for this viewer,
+  // and mute-all is not overriding it.
+  const wantsAudio = !!isAudioSource && !muteAll;
+  const [audioBlocked, setAudioBlocked] = useState(false);
+
+  // Local <video> path (non-WebRTC): mirror the requested mute state and
+  // probe autoplay. Browsers only allow unmuted playback after a user
+  // gesture — the parent should call onSelectAudio in direct response to
+  // a click for this to succeed on the first try.
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = !wantsAudio;
+    if (!wantsAudio) {
+      setAudioBlocked(false);
+      return;
+    }
+    const p = el.play();
+    if (p && typeof p.then === "function") {
+      p.then(() => setAudioBlocked(false)).catch(() => setAudioBlocked(true));
+    }
+  }, [wantsAudio]);
+
+  const enableAudioFromOverlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = false;
+    el.play().then(() => setAudioBlocked(false)).catch(() => setAudioBlocked(true));
+  };
+
+
 
   return (
     <div
@@ -93,9 +131,15 @@ const SignalTile = ({
       {/* Video placeholder – always 16:9 */}
       <div className={`relative flex items-center justify-center ${isFullscreen ? "flex-1" : "flex-1 min-h-0 w-full"}`} style={{ background: "black" }}>
         {input.id === "line-1" && isActive ? (
-          <LiveCamera streamName="cam1" />
+          <LiveCamera
+            streamName="cam1"
+            muted={!wantsAudio}
+            onAudioBlocked={() => setAudioBlocked(true)}
+            onAudioPlaying={() => setAudioBlocked(false)}
+          />
         ) : input.videoSrc && input.status === "live" ? (
           <video
+            ref={videoRef}
             src={input.videoSrc}
             autoPlay
             loop
@@ -113,6 +157,34 @@ const SignalTile = ({
             Focus
           </div>
         )}
+
+        {/* Personal audio indicator — always visible on the selected pane. */}
+        {isActive && isAudioSource && (
+          <div
+            className={cn(
+              "absolute top-2 left-2 flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase",
+              muteAll ? "bg-muted/70 text-muted-foreground" : "bg-primary/70 text-primary-foreground",
+              isFocused ? "translate-y-5" : "",
+            )}
+            title={muteAll ? "Muted (Mute All)" : "Audio source"}
+          >
+            {muteAll ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
+            <span>Audio</span>
+          </div>
+        )}
+
+        {/* Autoplay-blocked overlay — surfaced when the browser refuses unmuted playback. */}
+        {isActive && wantsAudio && audioBlocked && (
+          <button
+            type="button"
+            onClick={enableAudioFromOverlay}
+            className="absolute inset-x-0 bottom-8 mx-auto w-max px-3 py-1.5 rounded bg-background/80 border border-primary/40 text-xs text-foreground hover:bg-background z-10"
+          >
+            <Volume2 className="inline h-3.5 w-3.5 mr-1.5" />
+            Click to enable audio
+          </button>
+        )}
+
 
         {/* Time overlay */}
         {timePrefs && isActive && (

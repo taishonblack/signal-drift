@@ -12,6 +12,8 @@ interface DraggableSignalTileProps {
   liveMetrics?: LiveMetrics;
   isFocused?: boolean;
   isAudioSource?: boolean;
+  muteAll?: boolean;
+
   onFocusClick?: () => void;
   onFullscreen?: () => void;
   onEdit?: () => void;

@@ -55,7 +55,7 @@ import { type SlotId, type SlotMap, defaultSlotMap, loadSlotMap, saveSlotMap, sw
 import ResizeDivider from "@/components/session/ResizeDivider";
 import { useWorkspacePrefs } from "@/hooks/use-workspace-prefs";
 import { WORKSPACE_LIMITS, DEFAULT_WORKSPACE_PREFS } from "@/lib/workspace-prefs";
-import { ChevronUp } from "lucide-react";
+import { ChevronUp, Volume2, VolumeX } from "lucide-react";
 
 
 const SLOT_IDS: SlotId[] = ["A", "B", "C", "D"];
@@ -200,6 +200,9 @@ const SessionRoom = () => {
   const [showSafeArea, setShowSafeArea] = useState(false);
   const [activeDragSlot, setActiveDragSlot] = useState<SlotId | null>(null);
   const [cycleFlash, setCycleFlash] = useState(false);
+  const [muteAll, setMuteAll] = useState(false);
+
+
 
   // Per-viewer workspace layout preferences (pane splits, notes height, panel visibility).
   const { prefs: workspacePrefs, update: updateWorkspacePrefs, ready: workspacePrefsReady } =
@@ -249,6 +252,22 @@ const SessionRoom = () => {
   const focusedInput = activeInputs.find((i) => i.id === focusedId);
   const focusedLabel = focusedInput?.label ?? "Unknown";
 
+  /**
+   * Personal audio-follows-selection: clicking a pane sets both visual
+   * focus AND audio to that source, and clears mute-all. Focus and audio
+   * are kept as separate state so a future preference can decouple them
+   * (spec §9). Do not merge into one variable.
+   */
+  const selectSourceForViewer = useCallback(
+    (inputId: string) => {
+      setFocus(inputId);
+      setAudioSource(inputId);
+      setMuteAll(false);
+    },
+    [setFocus],
+  );
+
+
   // Presence: write focused label into current viewer entry.
   useEffect(() => {
     if (!id || !focusedInput) return;
@@ -289,14 +308,28 @@ const SessionRoom = () => {
   }, []);
   const focusedOriginTZ = getOriginTZ(focusedId);
 
-  // Escape to exit fullscreen
+  // Escape to exit fullscreen; "M" toggles global mute-all (spec §32).
   useEffect(() => {
+    const isTyping = (el: EventTarget | null) => {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName?.toLowerCase();
+      return tag === "input" || tag === "textarea" || el.isContentEditable;
+    };
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && fullscreenId) setFullscreenId(null);
+      if (e.key === "Escape" && fullscreenId) {
+        setFullscreenId(null);
+        return;
+      }
+      if ((e.key === "m" || e.key === "M") && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (isTyping(e.target)) return;
+        e.preventDefault();
+        setMuteAll((m) => !m);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [fullscreenId]);
+
 
   // Global keyboard shortcuts (1-4 jump + arrow cycling) — single-stream mode only
   useSessionKeyboardShortcuts({
@@ -369,9 +402,11 @@ const SessionRoom = () => {
         input={input}
         liveMetrics={getMetrics(input.id)}
         isFocused={focusedId === input.id}
-        onFocusClick={() => setFocus(input.id)}
+        onFocusClick={() => selectSourceForViewer(input.id)}
         isAudioSource={audioSource === input.id}
-        onSelectAudio={() => setAudioSource(input.id)}
+        muteAll={muteAll}
+        onSelectAudio={() => selectSourceForViewer(input.id)}
+
         onFullscreen={() => setFullscreenId(input.id)}
         onEdit={() => openEdit(input)}
         timePrefs={timePrefs}
@@ -498,8 +533,9 @@ const SessionRoom = () => {
           isFocused={focusedId === fullscreenInput.id}
           isAudioSource={audioSource === fullscreenInput.id}
           onClose={() => setFullscreenId(null)}
-          onFocusClick={() => setFocus(fullscreenInput.id)}
-          onSelectAudio={() => setAudioSource(fullscreenInput.id)}
+          onFocusClick={() => selectSourceForViewer(fullscreenInput.id)}
+          onSelectAudio={() => selectSourceForViewer(fullscreenInput.id)}
+
           onEdit={() => openEdit(fullscreenInput)}
         />
       )}
@@ -571,8 +607,20 @@ const SessionRoom = () => {
           </div>
         )}
 
-        {/* Quinn toggle + alert badge + Reset layout */}
+        {/* Quinn toggle + alert badge + Reset layout + Mute All */}
         <div className="flex items-center gap-2 -mt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setMuteAll((m) => !m)}
+            className={`h-7 gap-1.5 text-xs ${muteAll ? "text-primary bg-muted/30" : "text-muted-foreground"}`}
+            title="Mute all sources (M)"
+            aria-pressed={muteAll}
+          >
+            {muteAll ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+            {muteAll ? "Muted" : "Mute All"}
+          </Button>
+
           <Button
             variant="ghost"
             size="sm"
@@ -700,9 +748,11 @@ const SessionRoom = () => {
                       input={input}
                       liveMetrics={getMetrics(input.id)}
                       isFocused={true}
-                      onFocusClick={() => setFocus(input.id)}
+                      onFocusClick={() => selectSourceForViewer(input.id)}
                       isAudioSource={audioSource === input.id}
-                      onSelectAudio={() => setAudioSource(input.id)}
+                      muteAll={muteAll}
+                      onSelectAudio={() => selectSourceForViewer(input.id)}
+
                       onFullscreen={() => setFullscreenId(input.id)}
                       onEdit={() => openEdit(input)}
                       timePrefs={timePrefs}
@@ -801,6 +851,8 @@ const SessionRoom = () => {
                     liveMetrics={getMetrics(draggedInput.id)}
                     isFocused={focusedId === draggedInput.id}
                     isAudioSource={audioSource === draggedInput.id}
+                    muteAll={true}
+
                     showSafeArea={false}
                   />
                 </div>
