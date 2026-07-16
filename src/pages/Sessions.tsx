@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, LogIn, ChevronDown, ChevronRight, Radio, BookOpen, Users, Archive } from "lucide-react";
+import {
+  Plus, LogIn, ChevronDown, ChevronRight, Radio, BookOpen, Users, Archive,
+  Settings2, X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -13,6 +16,7 @@ import {
   type SessionRecord,
 } from "@/lib/session-store";
 import { useIdentity } from "@/lib/identity";
+import { DEMO_DATA_ENABLED } from "@/lib/demo-flag";
 import SessionCard from "@/components/session/SessionCard";
 import SessionActionsDialog from "@/components/session/SessionActionsDialog";
 import SwitchMonitoringSessionDialog from "@/components/session/SwitchMonitoringSessionDialog";
@@ -72,6 +76,11 @@ const Sessions = () => {
   }, [refresh]);
 
   const grouped = useMemo(() => groupSessions(sessions, currentUser.id), [sessions, currentUser.id]);
+
+  // Team-visible active sessions are not shipped in Phase 1 — only surface
+  // them when the demo flag is on, so the seeded fixtures still work for
+  // internal review runs.
+  const showTeamActive = DEMO_DATA_ENABLED && grouped.teamActive.length > 0;
 
   // Dialog state
   const [actionSession, setActionSession] = useState<SessionRecord | null>(null);
@@ -142,7 +151,133 @@ const Sessions = () => {
     navigate(`/session/${s.id}/configure`);
   }, [navigate]);
 
+  // ─── Guest view ──────────────────────────────────────────────
+  if (!isMember) {
+    const current = grouped.yourActive;
+    return (
+      <TooltipProvider>
+        <div className="max-w-3xl mx-auto space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-semibold text-foreground">Sessions</h1>
+              <p className="text-sm text-muted-foreground">
+                Monitor now. Sign in later if you want to keep the history.
+              </p>
+            </div>
+          </div>
 
+          {/* Current Temporary Session */}
+          <section>
+            <SectionHeader
+              title="Your Current Temporary Session"
+              count={current ? 1 : 0}
+            />
+            {current ? (
+              <div className="mako-glass rounded-lg p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {current.name}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Temporary session · ends when you close this tab
+                    </p>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wider bg-primary/15 text-primary rounded px-2 py-0.5">
+                    Active
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => navigate(`/session/${current.id}`)}
+                  >
+                    <Radio className="h-3.5 w-3.5" /> Return to Session
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 border-border/40"
+                    onClick={() => navigate(`/session/${current.id}/configure`)}
+                  >
+                    <Settings2 className="h-3.5 w-3.5" /> Configure Sources
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1.5 text-muted-foreground hover:text-destructive"
+                    onClick={() => {
+                      endSession(current.id);
+                      refresh();
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5" /> End Session
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mako-glass rounded-lg p-6 border border-dashed border-border/30 text-center space-y-3">
+                <Radio className="h-5 w-5 text-muted-foreground/60 mx-auto" />
+                <p className="text-xs text-muted-foreground">
+                  You aren't monitoring anything yet. Start a session or join
+                  one shared with you.
+                </p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button asChild size="sm" className="gap-1.5">
+                    <Link to="/create"><Plus className="h-3.5 w-3.5" /> Start Monitoring</Link>
+                  </Button>
+                  <Button asChild size="sm" variant="outline" className="gap-1.5 border-border/40">
+                    <Link to="/join"><LogIn className="h-3.5 w-3.5" /> Join with ID and PIN</Link>
+                  </Button>
+                  <Button asChild size="sm" variant="ghost" className="gap-1.5 text-muted-foreground">
+                    <Link to="/account?mode=login">Sign In</Link>
+                  </Button>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* Join another */}
+          <section>
+            <SectionHeader title="Join Another Session" count={0} />
+            <div className="mako-glass rounded-lg p-4 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-muted-foreground max-w-md">
+                Enter a Session ID and PIN supplied by the session owner.
+              </p>
+              <Button asChild size="sm" className="gap-1.5">
+                <Link to="/join"><LogIn className="h-3.5 w-3.5" /> Join with ID and PIN</Link>
+              </Button>
+            </div>
+          </section>
+
+          {/* Sign-in benefits */}
+          <section className="space-y-3 pt-2">
+            <SectionHeader title="Available After Signing In" count={0} />
+            <div className="grid gap-3 md:grid-cols-3">
+              <GatedEmptyState
+                title="Recent Sessions"
+                body="Sign in to keep your monitoring history across devices."
+                icon={<BookOpen className="h-5 w-5" />}
+              />
+              <GatedEmptyState
+                title="Address Book"
+                body="Save SRT endpoints for one-click reuse."
+                icon={<Users className="h-5 w-5" />}
+              />
+              <GatedEmptyState
+                title="Drafts &amp; Archive"
+                body="Save configurations, revisit archived sessions, sync layouts."
+                icon={<Archive className="h-5 w-5" />}
+              />
+            </div>
+          </section>
+        </div>
+      </TooltipProvider>
+    );
+  }
+
+  // ─── Signed-in member view ──────────────────────────────────
   return (
     <TooltipProvider>
       <div className="max-w-5xl mx-auto space-y-4">
@@ -177,14 +312,14 @@ const Sessions = () => {
             <div className="mako-glass rounded-lg p-5 border border-dashed border-border/30 text-center">
               <Radio className="h-5 w-5 text-muted-foreground/60 mx-auto mb-1.5" />
               <p className="text-xs text-muted-foreground">
-                You aren't monitoring a session right now. Create one, join a team session below, or resume a draft.
+                You aren't monitoring a session right now. Create one or join with a Session ID and PIN.
               </p>
             </div>
           )}
         </section>
 
-        {/* Team Active */}
-        {grouped.teamActive.length > 0 && (
+        {/* Team Active — demo-only for now */}
+        {showTeamActive && (
           <section>
             <SectionHeader title="Team Active Sessions" count={grouped.teamActive.length} />
             <div className="grid gap-3 md:grid-cols-2">
@@ -201,8 +336,8 @@ const Sessions = () => {
           </section>
         )}
 
-        {/* Drafts — member only */}
-        {isMember && grouped.drafts.length > 0 && (
+        {/* Drafts */}
+        {grouped.drafts.length > 0 && (
           <section>
             <SectionHeader title="Drafts" count={grouped.drafts.length} />
             <div className="grid gap-3">
@@ -219,8 +354,8 @@ const Sessions = () => {
           </section>
         )}
 
-        {/* Completed — member only */}
-        {isMember && grouped.completed.length > 0 && (
+        {/* Completed */}
+        {grouped.completed.length > 0 && (
           <section>
             <SectionHeader title="Recent Sessions" count={grouped.completed.length} />
             <div className="grid gap-3">
@@ -237,8 +372,8 @@ const Sessions = () => {
           </section>
         )}
 
-        {/* Archived — member only */}
-        {isMember && grouped.archived.length > 0 && (
+        {/* Archived */}
+        {grouped.archived.length > 0 && (
           <section>
             <SectionHeader
               title="Archived"
@@ -262,31 +397,6 @@ const Sessions = () => {
             )}
           </section>
         )}
-
-        {/* Guest — educational empty states in place of Drafts/Recent/Archived */}
-        {!isMember && (
-          <section className="space-y-4 pt-2">
-            <SectionHeader title="Available After Signing In" count={0} />
-            <div className="grid gap-3 md:grid-cols-3">
-              <GatedEmptyState
-                title="Recent Sessions"
-                body="Sign in to keep your monitoring history across devices."
-                icon={<BookOpen className="h-5 w-5" />}
-              />
-              <GatedEmptyState
-                title="Address Book"
-                body="Save SRT endpoints for one-click reuse."
-                icon={<Users className="h-5 w-5" />}
-              />
-              <GatedEmptyState
-                title="Drafts &amp; Archive"
-                body="Save configurations, revisit archived sessions, sync layouts."
-                icon={<Archive className="h-5 w-5" />}
-              />
-            </div>
-          </section>
-        )}
-
 
         <SessionActionsDialog
           session={actionSession}
