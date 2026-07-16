@@ -16,8 +16,11 @@ import JoinConfirmDialog from "@/components/session/JoinConfirmDialog";
 
 const JoinSession = () => {
   const navigate = useNavigate();
+  const params = useParams();
   const [searchParams] = useSearchParams();
-  const [sessionId, setSessionId] = useState(searchParams.get("session") || "");
+  const preId = params.sessionId || searchParams.get("session") || "";
+  const idLocked = Boolean(params.sessionId);
+  const [sessionId, setSessionId] = useState(preId);
   const [pin, setPin] = useState(searchParams.get("pin") || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
