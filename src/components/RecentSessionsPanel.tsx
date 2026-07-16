@@ -49,6 +49,7 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
   const [pendingJoin, setPendingJoin] = useState<SessionRecord | null>(null);
   const [pendingSwitch, setPendingSwitch] = useState<SessionRecord | null>(null);
   const [expiredSession, setExpiredSession] = useState<Session | null>(null);
+  const [expiredIsOwner, setExpiredIsOwner] = useState(false);
 
   useEffect(() => {
     if (location.pathname.startsWith("/session/")) {
