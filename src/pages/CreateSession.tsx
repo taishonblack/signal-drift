@@ -26,6 +26,7 @@ import {
   diffSessionConfig, appendChangeLog,
 } from "@/lib/session-store";
 import { ensureIdentity, useIdentity } from "@/lib/identity";
+import { saveSessionRemote } from "@/lib/sessions-remote";
 import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 import { toast } from "@/components/ui/sonner";
 
@@ -226,6 +227,11 @@ const CreateSession = () => {
       ],
     };
     addSession(session);
+    if (!isGuest) {
+      saveSessionRemote(session).catch((e) => {
+        toast(`Saved locally — cloud sync failed: ${e?.message ?? "unknown error"}`);
+      });
+    }
     navigate(`/session/${session.id}`);
   };
 
