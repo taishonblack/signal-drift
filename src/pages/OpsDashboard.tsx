@@ -25,6 +25,11 @@ export default function OpsDashboard() {
   const refresh = useCallback(() => setIncidents(getIncidents()), []);
   useQuinnSimulator(refresh);
 
+  const sessionIncidents = useMemo(
+    () => (session ? incidents.filter((i) => i.sessionId === session.id) : []),
+    [incidents, session],
+  );
+
   // Empty state — no session in progress.
   if (!session) {
     return (
@@ -48,10 +53,6 @@ export default function OpsDashboard() {
     );
   }
 
-  const sessionIncidents = useMemo(
-    () => incidents.filter((i) => i.sessionId === session.id),
-    [incidents, session.id],
-  );
   const openIncidents = sessionIncidents.filter((i) => i.status === "open");
   const criticalNow = sessionIncidents.filter((i) => i.severity === "critical" && i.status === "open");
   const enabledSources = session.lines.filter((l) => l.enabled);
