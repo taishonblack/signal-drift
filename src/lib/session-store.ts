@@ -1079,7 +1079,14 @@ export function formatDuration(startIso: string, endIso?: string): string {
 }
 
 export function generateSessionId(): string {
-  return `sess-${Date.now().toString(36)}`;
+  // Non-sequential, hard-to-guess: 10 chars from a URL-safe alphabet
+  // sourced from crypto.getRandomValues (~52 bits of entropy).
+  const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const bytes = new Uint8Array(10);
+  (globalThis.crypto ?? crypto).getRandomValues(bytes);
+  let out = "";
+  for (let i = 0; i < bytes.length; i++) out += alphabet[bytes[i] % alphabet.length];
+  return `sess-${out}`;
 }
 
 export function generatePin(): string {
