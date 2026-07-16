@@ -106,6 +106,27 @@ const ViewersPanel = ({
     onChange?.();
   };
 
+  const handleRevoke = async (viewer: SessionViewer) => {
+    if (!sessionId) return;
+    setRevokingId(viewer.userId);
+    // Always drop them from the local viewer list.
+    leaveSession(sessionId, viewer.userId);
+    // Members: also revoke their persistent shared_session_access row so
+    // they can't silently re-enter without another PIN.
+    if (identity.kind === "member") {
+      try {
+        await revokeViewerAccess(sessionId, viewer.userId);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Could not revoke access.";
+        toast.error(msg);
+      }
+    }
+    toast.success(`Removed ${viewer.name}`);
+    setRevokingId(null);
+    onChange?.();
+  };
+
+
   return (
     <Popover>
       <PopoverTrigger asChild>
