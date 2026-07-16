@@ -29,7 +29,7 @@ import {
 } from "@/lib/session-store";
 import { useIdentity, ensureIdentity } from "@/lib/identity";
 import ViewersPanel from "@/components/session/ViewersPanel";
-import OwnershipTransferDialog from "@/components/session/OwnershipTransferDialog";
+
 import OwnerLeftDialog from "@/components/session/OwnerLeftDialog";
 import SaveSessionPrompt from "@/components/session/SaveSessionPrompt";
 import SessionChangeLogPanel from "@/components/session/SessionChangeLogPanel";
