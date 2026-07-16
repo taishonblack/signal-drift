@@ -85,11 +85,9 @@ const SessionRoom = () => {
   const [scheduledEndAt, setScheduledEndAt] = useState<string | null>(
     record?.scheduledEndAt || null,
   );
-  const [ownershipDialogOpen, setOwnershipDialogOpen] = useState(false);
   const [ownerLeftOpen, setOwnerLeftOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
-  const [previousOwnerName, setPreviousOwnerName] = useState<string | undefined>();
-  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+
 
   // Join on mount, leave on unmount.
   useEffect(() => {
