@@ -266,6 +266,17 @@ const ViewersPanel = ({
                     </div>
                   )}
                 </div>
+                {isOwner && !v.isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => handleRevoke(v)}
+                    disabled={revokingId === v.userId}
+                    title={`Remove ${v.name}`}
+                    className="shrink-0 h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                  >
+                    <UserMinus className="h-3 w-3" />
+                  </button>
+                )}
               </div>
             );
           })}
