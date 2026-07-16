@@ -40,8 +40,10 @@ interface Props {
 const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const identity = useIdentity();
   const currentUser = getCurrentUserRef();
   const [collapsed, setCollapsed] = useState(() => readPref(location.pathname));
+
   const [sessions, setSessions] = useState<SessionRecord[]>(() => getSessions());
   const [pendingJoin, setPendingJoin] = useState<SessionRecord | null>(null);
   const [pendingSwitch, setPendingSwitch] = useState<SessionRecord | null>(null);
