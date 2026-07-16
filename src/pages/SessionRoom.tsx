@@ -71,9 +71,14 @@ const SessionRoom = () => {
   const session = mockSessions.find((s) => s.id === id) || mockSessions[0];
   const activeInputs = session.inputs.filter((i) => i.enabled);
   const isMobile = useIsMobile();
+  const identity = useIdentity();
 
-  // Persisted session record — updated via polling for viewers/ownership changes.
-  const currentUserRef = getCurrentUserRef();
+  // Ensure a persistent identity (guest, if not member) before joining.
+  const currentUserRef = (() => {
+    ensureIdentity();
+    return getCurrentUserRef();
+  })();
+
   const [record, setRecord] = useState<SessionRecord | undefined>(() =>
     id ? getSessionById(id) : undefined,
   );
@@ -81,7 +86,10 @@ const SessionRoom = () => {
     record?.scheduledEndAt || null,
   );
   const [ownershipDialogOpen, setOwnershipDialogOpen] = useState(false);
+  const [ownerLeftOpen, setOwnerLeftOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
   const [previousOwnerName, setPreviousOwnerName] = useState<string | undefined>();
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
 
   // Join on mount, leave on unmount.
   useEffect(() => {
@@ -93,6 +101,7 @@ const SessionRoom = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
 
   // Track last-seen change-log entry to fire toasts for new configuration changes.
   const [lastSeenChangeId, setLastSeenChangeId] = useState<string | undefined>(
