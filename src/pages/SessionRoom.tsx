@@ -514,7 +514,7 @@ const SessionRoom = () => {
         onApply={applyEdit}
       />
 
-      <div className="flex flex-col h-[calc(100vh-3rem-2rem)] md:h-[calc(100vh-3rem-3rem)] gap-4 w-full max-w-full overflow-x-hidden" style={{ touchAction: "pan-y" }}>
+      <div ref={workspaceRef} className="flex flex-col h-[calc(100vh-3rem-2rem)] md:h-[calc(100vh-3rem-3rem)] gap-4 w-full max-w-full overflow-x-hidden" style={{ touchAction: "pan-y" }}>
         <SessionToolbar
           sessionName={session.name}
           sessionStatus={session.status}
@@ -524,13 +524,22 @@ const SessionRoom = () => {
           timePrefs={timePrefs}
           onTimePrefsChange={handleTimePrefsChange}
           showNotes={showNotes}
-          onToggleNotes={() => setShowNotes(!showNotes)}
+          onToggleNotes={() => {
+            const next = !showNotes;
+            setShowNotes(next);
+            updateWorkspacePrefs({ notesCollapsed: !next });
+          }}
           showInspector={showInspector}
-          onToggleInspector={() => setShowInspector(!showInspector)}
+          onToggleInspector={() => {
+            const next = !showInspector;
+            setShowInspector(next);
+            updateWorkspacePrefs({ inspectorOpen: next });
+          }}
           showSafeArea={showSafeArea}
           onToggleSafeArea={() => setShowSafeArea(!showSafeArea)}
           onShare={() => setShareOpen(true)}
         />
+
 
         <ShareSessionDialog
           open={shareOpen}
