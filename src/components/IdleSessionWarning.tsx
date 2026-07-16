@@ -160,6 +160,7 @@ const IdleSessionWarning = () => {
     setShowConfirmEnd(false);
     setEnding(false);
     toast({ title: "Session ended", description: session.name });
+    navigate("/sessions");
   };
 
   return (
