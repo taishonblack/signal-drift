@@ -888,8 +888,11 @@ const seedAddressBook: AddressBookEntry[] = [
 export function getAddressBook(): AddressBookEntry[] {
   const stored = read<AddressBookEntry[] | null>(ADDRESS_BOOK_KEY, null);
   if (!stored) {
-    write(ADDRESS_BOOK_KEY, seedAddressBook);
-    return seedAddressBook;
+    if (DEMO_DATA_ENABLED) {
+      write(ADDRESS_BOOK_KEY, seedAddressBook);
+      return seedAddressBook;
+    }
+    return [];
   }
   return stored;
 }
