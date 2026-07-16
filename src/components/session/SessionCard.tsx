@@ -71,8 +71,9 @@ const SessionCard = ({ session, variant = "grid", onClick, currentUserId }: Prop
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <SessionStatusBadge status={session.status} />
+              {isActive && isShared && <SharedSessionBadge asViewer={!isMine} />}
               {session.purpose && (
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                   {session.purpose}
@@ -139,8 +140,9 @@ const SessionCard = ({ session, variant = "grid", onClick, currentUserId }: Prop
     >
       <div className="flex items-start justify-between gap-3 min-w-0">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <SessionStatusBadge status={session.status} />
+            {isActive && isShared && <SharedSessionBadge asViewer={!isMine} />}
             {session.purpose && (
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
                 {session.purpose}
