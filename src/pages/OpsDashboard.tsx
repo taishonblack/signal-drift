@@ -1,9 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Activity, AlertTriangle, Zap, ExternalLink, ShieldAlert } from "lucide-react";
+import { Activity, AlertTriangle, Zap, ExternalLink, Radio, LogIn, Plus } from "lucide-react";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
 import IncidentDetailDrawer from "@/components/quinn/IncidentDetailDrawer";
 import {
@@ -11,100 +11,120 @@ import {
   type Incident,
   severityBg,
   statusBg,
-  isOps,
   getCurrentUser,
 } from "@/lib/quinn-store";
-import { mockSessions } from "@/lib/mock-data";
+import { useCurrentSession } from "@/hooks/use-current-session";
 import { useQuinnSimulator } from "@/hooks/use-quinn-simulator";
 
 export default function OpsDashboard() {
   const user = getCurrentUser();
+  const { session, isTemporary } = useCurrentSession();
   const [incidents, setIncidents] = useState<Incident[]>(() => getIncidents());
   const [selected, setSelected] = useState<Incident | null>(null);
 
   const refresh = useCallback(() => setIncidents(getIncidents()), []);
-
-  // Live simulation — refresh dashboard when new incidents arrive
   useQuinnSimulator(refresh);
 
-  if (!isOps()) {
+  // Empty state — no session in progress.
+  if (!session) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-        <ShieldAlert className="h-12 w-12 text-muted-foreground/40" />
-        <h1 className="text-lg font-medium text-foreground">Access Restricted</h1>
-        <p className="text-sm text-muted-foreground">The Ops Dashboard requires the <span className="text-primary">ops</span> role.</p>
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-center px-4">
+        <Radio className="h-10 w-10 text-muted-foreground/40" />
+        <div>
+          <h1 className="text-base font-medium text-foreground">No monitoring session selected</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Start a session or join one before opening Ops.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 justify-center">
+          <Button asChild size="sm" className="gap-1.5">
+            <Link to="/create"><Plus className="h-3.5 w-3.5" /> Start Monitoring</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="gap-1.5 border-border/40">
+            <Link to="/join"><LogIn className="h-3.5 w-3.5" /> Join Session</Link>
+          </Button>
+        </div>
       </div>
     );
   }
 
-  const activeSessions = mockSessions.filter((s) => s.status === "live");
-  const openIncidents = incidents.filter((i) => i.status === "open");
-  const criticalNow = incidents.filter((i) => i.severity === "critical" && i.status === "open");
-
-  const worstSeverity = (sessionId: string) => {
-    const si = incidents.filter((i) => i.sessionId === sessionId && i.status !== "resolved");
-    if (si.some((i) => i.severity === "critical")) return "critical";
-    if (si.some((i) => i.severity === "warn")) return "warn";
-    if (si.length > 0) return "info";
-    return null;
-  };
-
-  const lastIncidentTime = (sessionId: string) => {
-    const si = incidents.filter((i) => i.sessionId === sessionId).sort((a, b) => b.startedAtUtc.localeCompare(a.startedAtUtc));
-    if (si.length === 0) return "—";
-    return new Date(si[0].startedAtUtc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
+  const sessionIncidents = useMemo(
+    () => incidents.filter((i) => i.sessionId === session.id),
+    [incidents, session.id],
+  );
+  const openIncidents = sessionIncidents.filter((i) => i.status === "open");
+  const criticalNow = sessionIncidents.filter((i) => i.severity === "critical" && i.status === "open");
+  const enabledSources = session.lines.filter((l) => l.enabled);
 
   return (
     <div className="flex gap-4 h-[calc(100vh-3rem-2rem)] md:h-[calc(100vh-3rem-3rem)]">
       {/* Main content */}
       <div className="flex-1 flex flex-col gap-4 min-w-0">
-        <h1 className="text-sm font-medium text-foreground">Ops Dashboard</h1>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <h1 className="text-sm font-medium text-foreground truncate">
+              Ops · {session.name}
+            </h1>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Session ID <span className="font-mono">{session.id}</span> ·{" "}
+              {enabledSources.length} source{enabledSources.length === 1 ? "" : "s"} ·{" "}
+              {isTemporary ? "Temporary" : "Saved"}
+            </p>
+          </div>
+          <Link to={`/session/${session.id}`}>
+            <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs border-border/40">
+              <Radio className="h-3.5 w-3.5" /> Return to Session
+            </Button>
+          </Link>
+        </div>
 
         {/* KPIs */}
         <div className="grid grid-cols-3 gap-3">
-          <KpiCard icon={<Activity className="h-4 w-4 text-primary" />} label="Active Sessions" value={activeSessions.length} />
+          <KpiCard icon={<Activity className="h-4 w-4 text-primary" />} label="Sources Monitored" value={enabledSources.length} />
           <KpiCard icon={<AlertTriangle className="h-4 w-4 text-[hsl(var(--warning))]" />} label="Open Incidents" value={openIncidents.length} />
           <KpiCard icon={<Zap className="h-4 w-4 text-destructive" />} label="Critical Now" value={criticalNow.length} />
         </div>
 
-        {/* Sessions table */}
+        {/* Sources */}
         <div className="mako-glass rounded-lg overflow-hidden">
           <div className="px-3 py-2 border-b border-border/10">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Sessions</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+              Sources in this session
+            </p>
           </div>
           <ScrollArea className="max-h-[240px]">
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-[10px] text-muted-foreground uppercase tracking-wider border-b border-border/10">
-                  <th className="text-left px-3 py-2 font-medium">Session</th>
-                  <th className="text-left px-3 py-2 font-medium">Status</th>
-                  <th className="text-left px-3 py-2 font-medium">Lines</th>
-                  <th className="text-left px-3 py-2 font-medium">Severity</th>
-                  <th className="text-left px-3 py-2 font-medium">Last Incident</th>
+                  <th className="text-left px-3 py-2 font-medium">Source</th>
+                  <th className="text-left px-3 py-2 font-medium">Address</th>
+                  <th className="text-left px-3 py-2 font-medium">Open Incidents</th>
                   <th className="text-right px-3 py-2 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
-                {mockSessions.map((s) => {
-                  const sev = worstSeverity(s.id);
+                {enabledSources.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-6 text-center text-muted-foreground/60">
+                      No sources configured yet.
+                    </td>
+                  </tr>
+                )}
+                {enabledSources.map((l) => {
+                  const openForLine = openIncidents.filter(
+                    (i) => i.primaryLineLabel === l.label || i.primaryLineLabel === `Source ${l.id}`,
+                  ).length;
+                  const isDefault = /^Line \d+$/.test(l.label);
+                  const display = isDefault ? `Source ${l.id}` : l.label;
                   return (
-                    <tr key={s.id} className="border-b border-border/5 hover:bg-muted/10 transition-colors">
-                      <td className="px-3 py-2 text-foreground font-medium truncate max-w-[200px]">{s.name}</td>
-                      <td className="px-3 py-2">
-                        <Badge variant="outline" className={`text-[10px] border-0 ${s.status === "live" ? "bg-primary/15 text-primary" : "bg-muted/30 text-muted-foreground"}`}>
-                          {s.status}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">{s.inputCount}</td>
-                      <td className="px-3 py-2">
-                        {sev ? <Badge className={`${severityBg[sev]} text-[10px] uppercase border-0`}>{sev}</Badge> : <span className="text-muted-foreground/40">—</span>}
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">{lastIncidentTime(s.id)}</td>
+                    <tr key={l.id} className="border-b border-border/5 hover:bg-muted/10 transition-colors">
+                      <td className="px-3 py-2 text-foreground font-medium truncate max-w-[200px]">{display}</td>
+                      <td className="px-3 py-2 text-muted-foreground font-mono truncate max-w-[240px]">{l.srtAddress || "—"}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{openForLine}</td>
                       <td className="px-3 py-2 text-right">
-                        <Link to={`/session/${s.id}`}>
+                        <Link to={`/session/${session.id}/configure`}>
                           <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1 text-muted-foreground hover:text-foreground">
-                            Open <ExternalLink className="h-3 w-3" />
+                            Configure <ExternalLink className="h-3 w-3" />
                           </Button>
                         </Link>
                       </td>
@@ -116,14 +136,21 @@ export default function OpsDashboard() {
           </ScrollArea>
         </div>
 
-        {/* Global incident stream */}
+        {/* Incident stream — scoped to current session */}
         <div className="mako-glass rounded-lg flex-1 min-h-0 flex flex-col overflow-hidden">
           <div className="px-3 py-2 border-b border-border/10">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Incident Stream</p>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+              Incident Stream · {session.name}
+            </p>
           </div>
           <ScrollArea className="flex-1 px-3 py-2">
             <div className="space-y-1.5">
-              {incidents
+              {sessionIncidents.length === 0 && (
+                <p className="text-xs text-muted-foreground/60 text-center py-6">
+                  No incidents yet for this session.
+                </p>
+              )}
+              {sessionIncidents
                 .sort((a, b) => b.startedAtUtc.localeCompare(a.startedAtUtc))
                 .map((inc) => (
                   <button
@@ -134,10 +161,12 @@ export default function OpsDashboard() {
                     <div className="flex items-center gap-2 mb-0.5">
                       <Badge className={`${severityBg[inc.severity]} text-[10px] uppercase border-0`}>{inc.severity}</Badge>
                       <Badge className={`${statusBg[inc.status]} text-[10px] uppercase border-0`}>{inc.status}</Badge>
-                      <span className="text-[10px] text-muted-foreground ml-auto">{new Date(inc.startedAtUtc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                      <span className="text-[10px] text-muted-foreground ml-auto">
+                        {new Date(inc.startedAtUtc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </span>
                     </div>
                     <p className="text-xs text-foreground/90 line-clamp-1">{inc.summary}</p>
-                    <p className="text-[10px] text-muted-foreground">{inc.sessionName} · {inc.primaryLineLabel}</p>
+                    <p className="text-[10px] text-muted-foreground">{inc.primaryLineLabel}</p>
                   </button>
                 ))}
             </div>
