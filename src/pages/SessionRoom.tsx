@@ -308,14 +308,28 @@ const SessionRoom = () => {
   }, []);
   const focusedOriginTZ = getOriginTZ(focusedId);
 
-  // Escape to exit fullscreen
+  // Escape to exit fullscreen; "M" toggles global mute-all (spec §32).
   useEffect(() => {
+    const isTyping = (el: EventTarget | null) => {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName?.toLowerCase();
+      return tag === "input" || tag === "textarea" || el.isContentEditable;
+    };
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && fullscreenId) setFullscreenId(null);
+      if (e.key === "Escape" && fullscreenId) {
+        setFullscreenId(null);
+        return;
+      }
+      if ((e.key === "m" || e.key === "M") && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        if (isTyping(e.target)) return;
+        e.preventDefault();
+        setMuteAll((m) => !m);
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [fullscreenId]);
+
 
   // Global keyboard shortcuts (1-4 jump + arrow cycling) — single-stream mode only
   useSessionKeyboardShortcuts({
