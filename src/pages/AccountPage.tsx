@@ -41,69 +41,84 @@ const AccountPage = () => {
     );
   }
 
+  // Signed-out view uses the narrower auth form layout.
+  if (!user) {
+    return (
+      <div className="max-w-lg mx-auto space-y-8">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Account</h1>
+          <p className="text-sm text-muted-foreground">
+            {claim
+              ? "Create an account to save your monitoring session, notes, and diagnostics."
+              : "Optional. MAKO works fully without an account — sign in to save history and layouts."}
+          </p>
+        </div>
+        <AuthForm onSignIn={signIn} onSignUp={signUp} initialMode={claim ? "signup" : initialMode} />
+      </div>
+    );
+  }
+
+  // Signed-in view — desktop dashboard layout.
   return (
-    <div className="max-w-lg mx-auto space-y-8">
+    <div className="max-w-[1200px] mx-auto space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-foreground">Account</h1>
-        <p className="text-sm text-muted-foreground">
-          {user
-            ? user.email
-            : claim
-              ? "Create an account to save your monitoring session, notes, and diagnostics."
-              : "Optional. MAKO works fully without an account — sign in to save history, drafts, and layouts."}
-        </p>
+        <p className="text-sm text-muted-foreground">{user.email}</p>
       </div>
 
-      {user ? (
-        <>
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Left column — identity & security */}
+        <div className="space-y-6 min-w-0">
+          <SectionTitle>Account</SectionTitle>
           <SignedInView email={user.email ?? ""} onSignOut={signOut} />
+
+          <SectionTitle>Security</SectionTitle>
           <PasswordSection user={user} />
           <TwoFactorSection />
-        </>
-      ) : (
-        <AuthForm onSignIn={signIn} onSignUp={signUp} initialMode={claim ? "signup" : initialMode} />
-      )}
-
-
-      {/* Settings section */}
-      <div>
-        <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">Preferences</h2>
-        <div className="mako-glass rounded-lg divide-y divide-border/10">
-          <SettingRow label="Dark mode" description="MAKO uses dark mode only" disabled checked />
-          <SettingRow label="Show metric overlays" description="Display bitrate/loss on stream tiles" checked />
         </div>
-      </div>
 
-      {/* Retention (scaffold — team admin only) */}
-      <div>
-        <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">Team Retention</h2>
-        <div className="mako-glass rounded-lg p-4 space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm text-foreground">Completed session retention</p>
-              <p className="text-xs text-muted-foreground">
-                How long completed sessions stay in history before archiving.
-              </p>
-            </div>
-            <select
-              disabled
-              defaultValue="90"
-              className="h-8 rounded-md bg-muted/20 border border-border/20 text-xs px-2 text-muted-foreground cursor-not-allowed"
-            >
-              <option value="30">30 days</option>
-              <option value="90">90 days</option>
-              <option value="365">1 year</option>
-              <option value="0">Indefinite</option>
-            </select>
+        {/* Right column — preferences & session settings */}
+        <div className="space-y-6 min-w-0">
+          <SectionTitle>Preferences</SectionTitle>
+          <div className="mako-glass rounded-lg divide-y divide-border/10">
+            <SettingRow label="Dark mode" description="MAKO uses dark mode only" disabled checked />
+            <SettingRow label="Show metric overlays" description="Display bitrate/loss on stream tiles" checked />
           </div>
-          <p className="text-[10px] text-muted-foreground/60">
-            Team Admin only — coming soon.
-          </p>
+
+          <SectionTitle>Session Settings</SectionTitle>
+          <div className="mako-glass rounded-lg p-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm text-foreground">Completed session retention</p>
+                <p className="text-xs text-muted-foreground">
+                  How long ended sessions stay in history before archiving.
+                </p>
+              </div>
+              <select
+                disabled
+                defaultValue="90"
+                className="h-8 rounded-md bg-muted/20 border border-border/20 text-xs px-2 text-muted-foreground cursor-not-allowed shrink-0"
+              >
+                <option value="30">30 days</option>
+                <option value="90">90 days</option>
+                <option value="365">1 year</option>
+                <option value="0">Indefinite</option>
+              </select>
+            </div>
+            <p className="text-[10px] text-muted-foreground/60">Coming soon.</p>
+          </div>
         </div>
       </div>
     </div>
   );
 };
+
+/* ── Section title ── */
+const SectionTitle = ({ children }: { children: React.ReactNode }) => (
+  <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+    {children}
+  </h2>
+);
 
 /* ── Auth Form ── */
 
