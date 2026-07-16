@@ -298,12 +298,25 @@ const Sessions = () => {
         <section>
           <SectionHeader title="Your Active Session" count={grouped.yourActive ? 1 : 0} />
           {grouped.yourActive ? (
-            <SessionCard
-              session={grouped.yourActive}
-              variant="hero"
-              currentUserId={currentUser.id}
-              onClick={() => handleActiveCardClick(grouped.yourActive!)}
-            />
+            <div className="relative">
+              <SessionCard
+                session={grouped.yourActive}
+                variant="hero"
+                currentUserId={currentUser.id}
+                onClick={() => handleActiveCardClick(grouped.yourActive!)}
+              />
+              <Button
+                size="sm"
+                variant="outline"
+                className="absolute top-3 right-3 gap-1.5 h-7 text-xs border-border/40"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShareSession(grouped.yourActive!);
+                }}
+              >
+                <Share2 className="h-3 w-3" /> Share
+              </Button>
+            </div>
           ) : (
             <div className="mako-glass rounded-lg p-5 border border-dashed border-border/30 text-center">
               <Radio className="h-5 w-5 text-muted-foreground/60 mx-auto mb-1.5" />
@@ -313,6 +326,7 @@ const Sessions = () => {
             </div>
           )}
         </section>
+
 
         {/* Team Active — demo-only for now */}
         {showTeamActive && (
