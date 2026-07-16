@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Circle, Crown, ShieldCheck, Hand, Check, X, Clock } from "lucide-react";
+import { Users, Circle, Crown, ShieldCheck, Hand, Check, X, Clock, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { SessionViewer, SessionOwnershipRequest, OwnershipRequestKind } from "@/lib/session-store";
@@ -9,8 +9,11 @@ import {
   requestOwnership,
   resolveOwnershipRequest,
   cancelOwnershipRequest,
+  leaveSession,
   getCurrentUserRef,
 } from "@/lib/session-store";
+import { revokeViewerAccess } from "@/lib/sessions-remote";
+import { useIdentity } from "@/lib/identity";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -40,6 +43,8 @@ const ViewersPanel = ({
   onChange,
 }: Props) => {
   const [choosingKind, setChoosingKind] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const identity = useIdentity();
   const count = viewers.length;
 
   // Live-read requests/owner from store so approvals refresh immediately.
@@ -100,6 +105,27 @@ const ViewersPanel = ({
     toast.success("Ownership request cancelled");
     onChange?.();
   };
+
+  const handleRevoke = async (viewer: SessionViewer) => {
+    if (!sessionId) return;
+    setRevokingId(viewer.userId);
+    // Always drop them from the local viewer list.
+    leaveSession(sessionId, viewer.userId);
+    // Members: also revoke their persistent shared_session_access row so
+    // they can't silently re-enter without another PIN.
+    if (identity.kind === "member") {
+      try {
+        await revokeViewerAccess(sessionId, viewer.userId);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Could not revoke access.";
+        toast.error(msg);
+      }
+    }
+    toast.success(`Removed ${viewer.name}`);
+    setRevokingId(null);
+    onChange?.();
+  };
+
 
   return (
     <Popover>
@@ -240,6 +266,17 @@ const ViewersPanel = ({
                     </div>
                   )}
                 </div>
+                {isOwner && !v.isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => handleRevoke(v)}
+                    disabled={revokingId === v.userId}
+                    title={`Remove ${v.name}`}
+                    className="shrink-0 h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                  >
+                    <UserMinus className="h-3 w-3" />
+                  </button>
+                )}
               </div>
             );
           })}

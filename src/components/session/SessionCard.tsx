@@ -3,6 +3,7 @@ import { Clock, Radio, Download, Users, Circle } from "lucide-react";
 import type { SessionRecord } from "@/lib/session-store";
 import { formatDuration, formatStartedTime } from "@/lib/session-store";
 import SessionStatusBadge from "@/components/session/SessionStatusBadge";
+import SharedSessionBadge from "@/components/session/SharedSessionBadge";
 import ViewersPanel from "@/components/session/ViewersPanel";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -24,12 +25,16 @@ const SessionCard = ({ session, variant = "grid", onClick, currentUserId }: Prop
   const viewers = session.viewers ?? [];
   const isActive = session.status === "active";
   const isCompleted = session.status === "completed";
-  const ownerName =
-    (session.ownerUserId ?? session.hostUserId) === currentUserId ? "You" : session.host;
+  const ownerId = session.ownerUserId ?? session.hostUserId;
+  const isMine = ownerId === currentUserId;
+  const ownerName = isMine ? "You" : session.host;
+  const nonOwnerViewers = viewers.filter((v) => v.userId !== ownerId);
+  const isShared = viewers.length > 1 || (!isMine && viewers.some((v) => v.userId === currentUserId));
 
   // Owner focus (from viewer list) — small presence teaser.
   const ownerViewer = viewers.find((v) => v.isOwner);
   const focusHint = ownerViewer?.focus;
+  void nonOwnerViewers;
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -66,8 +71,9 @@ const SessionCard = ({ session, variant = "grid", onClick, currentUserId }: Prop
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <SessionStatusBadge status={session.status} />
+              {isActive && isShared && <SharedSessionBadge asViewer={!isMine} />}
               {session.purpose && (
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
                   {session.purpose}
@@ -134,8 +140,9 @@ const SessionCard = ({ session, variant = "grid", onClick, currentUserId }: Prop
     >
       <div className="flex items-start justify-between gap-3 min-w-0">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <SessionStatusBadge status={session.status} />
+            {isActive && isShared && <SharedSessionBadge asViewer={!isMine} />}
             {session.purpose && (
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
                 {session.purpose}
