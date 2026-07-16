@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ensureIdentity } from "@/lib/identity";
 
 const JoinSession = () => {
   const navigate = useNavigate();
@@ -11,8 +12,11 @@ const JoinSession = () => {
   const [pin, setPin] = useState(searchParams.get("pin") || "");
 
   const handleJoin = () => {
-    if (sessionId) navigate(`/session/${sessionId}`);
+    if (!sessionId) return;
+    ensureIdentity(); // promote anon → Temporary Operator
+    navigate(`/session/${sessionId}`);
   };
+
 
   return (
     <div className="max-w-md mx-auto space-y-8 pt-12">
