@@ -134,6 +134,8 @@ const Sessions = () => {
     navigate(`/session/${id}`);
   }, [pendingSwitch, grouped.yourActive, currentUser, navigate]);
 
+  const [expiredIsOwner, setExpiredIsOwner] = useState(false);
+
   const handleCompletedClick = useCallback((s: SessionRecord) => {
     const legacy = mockSessions.find((m) => m.id === s.id) ?? {
       id: s.id,
@@ -144,12 +146,9 @@ const Sessions = () => {
       pin: s.pin,
       inputs: [],
     };
+    setExpiredIsOwner((s.ownerUserId ?? s.hostUserId) === currentUser.id);
     setExpiredSession(legacy as Session);
-  }, []);
-
-  const handleDraftClick = useCallback((s: SessionRecord) => {
-    navigate(`/session/${s.id}/configure`);
-  }, [navigate]);
+  }, [currentUser.id]);
 
   // ─── Guest view ──────────────────────────────────────────────
   if (!isMember) {
