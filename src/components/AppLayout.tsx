@@ -3,12 +3,16 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import MobileNav from "@/components/MobileNav";
 import MakoBackground from "@/components/MakoBackground";
+import IdentityChip from "@/components/IdentityChip";
+import { useIdentityBootstrap } from "@/lib/identity";
 
 interface AppLayoutProps {
   children: React.ReactNode;
 }
 
 const AppLayout = ({ children }: AppLayoutProps) => {
+  useIdentityBootstrap();
+
   // "B" keyboard shortcut for sidebar toggle
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -32,6 +36,9 @@ const AppLayout = ({ children }: AppLayoutProps) => {
         <div className="flex-1 flex flex-col min-w-0">
           <header className="hidden md:flex items-center h-12 px-4 border-b border-border/20">
             <SidebarTrigger data-sidebar="trigger" className="text-muted-foreground hover:text-foreground" />
+            <div className="ml-auto">
+              <IdentityChip />
+            </div>
           </header>
           <MobileNav />
           <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6 overflow-x-hidden overflow-y-auto">
@@ -44,3 +51,4 @@ const AppLayout = ({ children }: AppLayoutProps) => {
 };
 
 export default AppLayout;
+
