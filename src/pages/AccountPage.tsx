@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,9 +7,29 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/components/ui/sonner";
 import { LogOut, Mail } from "lucide-react";
+import { clearGuestIdentity } from "@/lib/identity";
 
 const AccountPage = () => {
   const { user, loading, signUp, signIn, signOut } = useAuth();
+  const [params] = useSearchParams();
+  const initialMode = params.get("mode") === "signup" ? "signup" : "login";
+  const claim = params.get("claim") === "1";
+
+  // When a signed-in user lands with pending save data, claim it.
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const pending = localStorage.getItem("mako_pending_save");
+      if (pending) {
+        localStorage.removeItem("mako_pending_save");
+        clearGuestIdentity();
+        toast("Session saved to your account");
+      }
+    } catch {
+      /* noop */
+    }
+  }, [user]);
+
 
   if (loading) {
     return (
@@ -23,15 +44,20 @@ const AccountPage = () => {
       <div>
         <h1 className="text-xl font-semibold text-foreground">Account</h1>
         <p className="text-sm text-muted-foreground">
-          {user ? user.email : "Sign in to save sessions and sync across devices"}
+          {user
+            ? user.email
+            : claim
+              ? "Create an account to save your monitoring session, notes, and diagnostics."
+              : "Optional. MAKO works fully without an account — sign in to save history, drafts, and layouts."}
         </p>
       </div>
 
       {user ? (
         <SignedInView email={user.email ?? ""} onSignOut={signOut} />
       ) : (
-        <AuthForm onSignIn={signIn} onSignUp={signUp} />
+        <AuthForm onSignIn={signIn} onSignUp={signUp} initialMode={claim ? "signup" : initialMode} />
       )}
+
 
       {/* Settings section */}
       <div>
@@ -78,11 +104,13 @@ const AccountPage = () => {
 const AuthForm = ({
   onSignIn,
   onSignUp,
+  initialMode = "login",
 }: {
   onSignIn: (e: string, p: string) => Promise<{ error: any }>;
   onSignUp: (e: string, p: string) => Promise<{ error: any }>;
+  initialMode?: "login" | "signup";
 }) => {
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup">(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);

@@ -25,6 +25,7 @@ import {
   canConfigureSession, getCurrentUserRef,
   diffSessionConfig, appendChangeLog,
 } from "@/lib/session-store";
+import { ensureIdentity } from "@/lib/identity";
 import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 import { toast } from "@/components/ui/sonner";
 
@@ -53,6 +54,8 @@ const statusDot: Record<LineStatus, string> = {
 const CreateSession = () => {
   const navigate = useNavigate();
   const { id: routeId } = useParams<{ id: string }>();
+  // Promote anon → Temporary Operator on first session touch.
+  ensureIdentity();
   const currentUser = getCurrentUserRef();
 
   // Configure mode: session id in URL.

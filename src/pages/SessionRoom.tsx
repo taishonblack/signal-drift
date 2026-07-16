@@ -18,16 +18,22 @@ import {
   endSession as endSessionRecord,
   joinSession,
   leaveSession,
-  transferOwnership,
+  
+  claimOwnership,
+  orphanSweep,
   updateViewerFocus,
   getCurrentUserRef,
   canConfigureSession,
   type SessionRecord,
   type SessionChangeEntry,
 } from "@/lib/session-store";
+import { useIdentity, ensureIdentity } from "@/lib/identity";
 import ViewersPanel from "@/components/session/ViewersPanel";
-import OwnershipTransferDialog from "@/components/session/OwnershipTransferDialog";
+
+import OwnerLeftDialog from "@/components/session/OwnerLeftDialog";
+import SaveSessionPrompt from "@/components/session/SaveSessionPrompt";
 import SessionChangeLogPanel from "@/components/session/SessionChangeLogPanel";
+
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { History, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -65,17 +71,23 @@ const SessionRoom = () => {
   const session = mockSessions.find((s) => s.id === id) || mockSessions[0];
   const activeInputs = session.inputs.filter((i) => i.enabled);
   const isMobile = useIsMobile();
+  const identity = useIdentity();
 
-  // Persisted session record — updated via polling for viewers/ownership changes.
-  const currentUserRef = getCurrentUserRef();
+  // Ensure a persistent identity (guest, if not member) before joining.
+  const currentUserRef = (() => {
+    ensureIdentity();
+    return getCurrentUserRef();
+  })();
+
   const [record, setRecord] = useState<SessionRecord | undefined>(() =>
     id ? getSessionById(id) : undefined,
   );
   const [scheduledEndAt, setScheduledEndAt] = useState<string | null>(
     record?.scheduledEndAt || null,
   );
-  const [ownershipDialogOpen, setOwnershipDialogOpen] = useState(false);
-  const [previousOwnerName, setPreviousOwnerName] = useState<string | undefined>();
+  const [ownerLeftOpen, setOwnerLeftOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+
 
   // Join on mount, leave on unmount.
   useEffect(() => {
@@ -88,6 +100,7 @@ const SessionRoom = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+
   // Track last-seen change-log entry to fire toasts for new configuration changes.
   const [lastSeenChangeId, setLastSeenChangeId] = useState<string | undefined>(
     () => record?.changeLog?.[record.changeLog.length - 1]?.id,
@@ -97,10 +110,18 @@ const SessionRoom = () => {
   useEffect(() => {
     if (!id) return;
     const t = window.setInterval(() => {
+      orphanSweep();
       const next = getSessionById(id);
       setRecord(next);
-      if (next && !next.ownerUserId && (next.viewers ?? []).some((v) => v.userId === currentUserRef.id)) {
-        setOwnershipDialogOpen(true);
+      const iAmParticipant = (next?.viewers ?? []).some((v) => v.userId === currentUserRef.id);
+      if (next && !next.ownerUserId && iAmParticipant && next.status === "active") {
+        setOwnerLeftOpen(true);
+      } else if (next?.ownerUserId) {
+        setOwnerLeftOpen(false);
+      }
+      // If the session terminated (orphan-swept), navigate out.
+      if (next && next.status !== "active" && iAmParticipant === false) {
+        // leave-of-session cleanup happens in unmount
       }
       // Change log deltas → toast for changes by other users.
       const log = next?.changeLog ?? [];
@@ -126,9 +147,26 @@ const SessionRoom = () => {
           setLastSeenChangeId(log[log.length - 1].id);
         }
       }
-    }, 2000);
+    }, 1000);
     return () => window.clearInterval(t);
   }, [id, currentUserRef.id, lastSeenChangeId]);
+
+  // beforeunload warning for owner with other viewers
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      const cur = id ? getSessionById(id) : undefined;
+      if (!cur || cur.status !== "active") return;
+      const iAmOwner = (cur.ownerUserId ?? cur.hostUserId) === currentUserRef.id;
+      const otherViewers = (cur.viewers ?? []).filter((v) => v.userId !== currentUserRef.id);
+      if (iAmOwner && otherViewers.length > 0) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [id, currentUserRef.id]);
+
 
   const viewers = record?.viewers ?? [];
   const isOwner = (record?.ownerUserId ?? record?.hostUserId) === currentUserRef.id;
@@ -191,18 +229,31 @@ const SessionRoom = () => {
 
   const handleBecomeOwner = useCallback(() => {
     if (!id) return;
-    transferOwnership(id, currentUserRef.id);
+    const won = claimOwnership(id, currentUserRef);
     setRecord(getSessionById(id));
-    setOwnershipDialogOpen(false);
-    toast({ title: "You are now the session owner" });
-  }, [id, currentUserRef.id]);
+    setOwnerLeftOpen(false);
+    if (won) {
+      toast({ title: "You are now the session owner" });
+    } else {
+      toast({ title: "Another viewer claimed ownership first" });
+    }
+  }, [id, currentUserRef]);
 
   const handleLeaveAsViewer = useCallback(() => {
     if (!id) return;
     leaveSession(id, currentUserRef.id);
-    setOwnershipDialogOpen(false);
+    setOwnerLeftOpen(false);
     navigate("/sessions");
   }, [id, currentUserRef.id, navigate]);
+
+  const handleOrphanExpired = useCallback(() => {
+    if (!id) return;
+    endSessionRecord(id);
+    setOwnerLeftOpen(false);
+    toast({ title: "Session ended", description: "No owner claimed the session." });
+    navigate("/sessions");
+  }, [id, navigate]);
+
 
 
   const getOriginTZ = useCallback((_inputId: string) => {
@@ -317,10 +368,30 @@ const SessionRoom = () => {
   );
 
   const handleEndSession = useCallback(() => {
+    // Guest owner ending a session → offer to save via account creation.
+    const cur = id ? getSessionById(id) : undefined;
+    const iAmOwner = cur && (cur.ownerUserId ?? cur.hostUserId) === currentUserRef.id;
+    if (identity.kind !== "member" && iAmOwner) {
+      setSaveOpen(true);
+      return;
+    }
     if (id) endSessionRecord(id);
     toast({ title: "Session ended" });
     navigate("/sessions");
-  }, [id, navigate]);
+  }, [id, navigate, identity.kind, currentUserRef.id]);
+
+  const finalizeEnd = useCallback(
+    (mode: "keep" | "discard") => {
+      setSaveOpen(false);
+      if (id) endSessionRecord(id);
+      toast({
+        title: mode === "discard" ? "Session discarded" : "Session ended",
+      });
+      navigate("/sessions");
+    },
+    [id, navigate],
+  );
+
 
   return (
     <>
@@ -330,12 +401,21 @@ const SessionRoom = () => {
         onEnd={handleEndSession}
       />
 
-      <OwnershipTransferDialog
-        open={ownershipDialogOpen}
-        previousOwner={previousOwnerName}
-        onBecomeOwner={handleBecomeOwner}
+      <OwnerLeftDialog
+        open={ownerLeftOpen}
+        noOwnerSince={record?.noOwnerSince ?? null}
+        onClaim={handleBecomeOwner}
         onLeave={handleLeaveAsViewer}
+        onCountdownExpired={handleOrphanExpired}
       />
+
+      <SaveSessionPrompt
+        open={saveOpen}
+        session={record}
+        onDismiss={() => finalizeEnd("keep")}
+        onDiscard={() => finalizeEnd("discard")}
+      />
+
 
 
       {fullscreenInput && (

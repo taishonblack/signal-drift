@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, LogIn, ChevronDown, ChevronRight, Radio } from "lucide-react";
+import { Plus, LogIn, ChevronDown, ChevronRight, Radio, BookOpen, Users, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -12,11 +12,14 @@ import {
   endSession,
   type SessionRecord,
 } from "@/lib/session-store";
+import { useIdentity } from "@/lib/identity";
 import SessionCard from "@/components/session/SessionCard";
 import SessionActionsDialog from "@/components/session/SessionActionsDialog";
 import SwitchMonitoringSessionDialog from "@/components/session/SwitchMonitoringSessionDialog";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
+import GatedEmptyState from "@/components/GatedEmptyState";
 import { mockSessions, type Session } from "@/lib/mock-data";
+
 
 interface SectionHeaderProps {
   title: string;
@@ -48,7 +51,9 @@ const SectionHeader = ({ title, count, collapsible, collapsed, onToggle, right }
 
 const Sessions = () => {
   const navigate = useNavigate();
+  const identity = useIdentity();
   const currentUser = getCurrentUserRef();
+  const isMember = identity.kind === "member";
 
   const [sessions, setSessions] = useState<SessionRecord[]>(() => getSessions());
   const refresh = useCallback(() => setSessions(getSessions()), []);
@@ -196,8 +201,8 @@ const Sessions = () => {
           </section>
         )}
 
-        {/* Drafts */}
-        {grouped.drafts.length > 0 && (
+        {/* Drafts — member only */}
+        {isMember && grouped.drafts.length > 0 && (
           <section>
             <SectionHeader title="Drafts" count={grouped.drafts.length} />
             <div className="grid gap-3">
@@ -214,8 +219,8 @@ const Sessions = () => {
           </section>
         )}
 
-        {/* Completed */}
-        {grouped.completed.length > 0 && (
+        {/* Completed — member only */}
+        {isMember && grouped.completed.length > 0 && (
           <section>
             <SectionHeader title="Recent Sessions" count={grouped.completed.length} />
             <div className="grid gap-3">
@@ -232,8 +237,8 @@ const Sessions = () => {
           </section>
         )}
 
-        {/* Archived */}
-        {grouped.archived.length > 0 && (
+        {/* Archived — member only */}
+        {isMember && grouped.archived.length > 0 && (
           <section>
             <SectionHeader
               title="Archived"
@@ -257,6 +262,31 @@ const Sessions = () => {
             )}
           </section>
         )}
+
+        {/* Guest — educational empty states in place of Drafts/Recent/Archived */}
+        {!isMember && (
+          <section className="space-y-4 pt-2">
+            <SectionHeader title="Available After Signing In" count={0} />
+            <div className="grid gap-3 md:grid-cols-3">
+              <GatedEmptyState
+                title="Recent Sessions"
+                body="Sign in to keep your monitoring history across devices."
+                icon={<BookOpen className="h-5 w-5" />}
+              />
+              <GatedEmptyState
+                title="Address Book"
+                body="Save SRT endpoints for one-click reuse."
+                icon={<Users className="h-5 w-5" />}
+              />
+              <GatedEmptyState
+                title="Drafts &amp; Archive"
+                body="Save configurations, revisit archived sessions, sync layouts."
+                icon={<Archive className="h-5 w-5" />}
+              />
+            </div>
+          </section>
+        )}
+
 
         <SessionActionsDialog
           session={actionSession}

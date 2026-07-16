@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import {
   getSessions,
@@ -10,12 +10,14 @@ import {
   endSession,
   type SessionRecord,
 } from "@/lib/session-store";
+import { useIdentity } from "@/lib/identity";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import SessionCard from "@/components/session/SessionCard";
 import JoinActiveSessionDialog from "@/components/session/JoinActiveSessionDialog";
 import SwitchMonitoringSessionDialog from "@/components/session/SwitchMonitoringSessionDialog";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
 import { mockSessions, type Session } from "@/lib/mock-data";
+
 
 const LS_KEY = "mako_recent_sessions_collapsed";
 
@@ -38,8 +40,10 @@ interface Props {
 const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const identity = useIdentity();
   const currentUser = getCurrentUserRef();
   const [collapsed, setCollapsed] = useState(() => readPref(location.pathname));
+
   const [sessions, setSessions] = useState<SessionRecord[]>(() => getSessions());
   const [pendingJoin, setPendingJoin] = useState<SessionRecord | null>(null);
   const [pendingSwitch, setPendingSwitch] = useState<SessionRecord | null>(null);
@@ -153,10 +157,25 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
         {!collapsed && (
           <div className="px-2 pb-2 space-y-0.5 max-h-72 overflow-y-auto">
             <Group title="Active" items={activeList} onItemClick={handleActiveClick} />
-            <Group title="Draft" items={grouped.drafts} onItemClick={(s) => navigate(`/create?draft=${s.id}`)} />
-            <Group title="Completed" items={grouped.completed.slice(0, 5)} onItemClick={handleCompletedClick} />
+            {identity.kind === "member" ? (
+              <>
+                <Group title="Draft" items={grouped.drafts} onItemClick={(s) => navigate(`/create?draft=${s.id}`)} />
+                <Group title="Completed" items={grouped.completed.slice(0, 5)} onItemClick={handleCompletedClick} />
+              </>
+            ) : (
+              <div className="mt-2 mx-1 rounded-md border border-dashed border-border/30 p-3 text-center">
+                <p className="text-[11px] text-foreground/80">No saved sessions yet.</p>
+                <p className="text-[10px] text-muted-foreground/80 leading-relaxed mt-1">
+                  Sign in to keep your monitoring history.
+                </p>
+                <Link to="/account?mode=login" className="text-[10px] text-primary hover:underline mt-1 inline-block">
+                  Sign In
+                </Link>
+              </div>
+            )}
           </div>
         )}
+
 
         <JoinActiveSessionDialog
           session={pendingJoin}
