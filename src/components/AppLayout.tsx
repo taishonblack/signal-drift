@@ -7,6 +7,8 @@ import IdentityChip from "@/components/IdentityChip";
 import { useIdentityBootstrap } from "@/lib/identity";
 import { useRemoteSessionSync } from "@/hooks/use-remote-session-sync";
 import ActiveSessionReturnBar from "@/components/ActiveSessionReturnBar";
+import IdleSessionWarning from "@/components/IdleSessionWarning";
+import { usePresenceLifecycle } from "@/hooks/use-presence-lifecycle";
 
 interface AppLayoutProps {
   children: React.ReactNode;
