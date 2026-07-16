@@ -4,6 +4,7 @@ import { NavLink } from "@/components/NavLink";
 import MakoFinMark from "@/components/MakoFinMark";
 import { useSidebar } from "@/components/ui/sidebar";
 import RecentSessionsPanel from "@/components/RecentSessionsPanel";
+import CurrentSessionIndicator from "@/components/CurrentSessionIndicator";
 import FeedbackModal from "@/components/FeedbackModal";
 import {
   Sidebar,
