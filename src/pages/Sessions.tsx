@@ -262,8 +262,8 @@ const Sessions = () => {
                 icon={<Users className="h-5 w-5" />}
               />
               <GatedEmptyState
-                title="Drafts &amp; Archive"
-                body="Save configurations, revisit archived sessions, sync layouts."
+                title="Archive"
+                body="Revisit ended sessions, download reports, and sync layouts."
                 icon={<Archive className="h-5 w-5" />}
               />
             </div>
@@ -332,23 +332,6 @@ const Sessions = () => {
           </section>
         )}
 
-        {/* Drafts */}
-        {grouped.drafts.length > 0 && (
-          <section>
-            <SectionHeader title="Drafts" count={grouped.drafts.length} />
-            <div className="grid gap-3">
-              {grouped.drafts.map((s) => (
-                <SessionCard
-                  key={s.id}
-                  session={s}
-                  variant="grid"
-                  currentUserId={currentUser.id}
-                  onClick={() => handleDraftClick(s)}
-                />
-              ))}
-            </div>
-          </section>
-        )}
 
         {/* Completed */}
         {grouped.completed.length > 0 && (
