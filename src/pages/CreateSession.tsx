@@ -314,14 +314,21 @@ const CreateSession = () => {
     if (start) start();
   };
 
-  const handleSaveDraft = () => {
-    saveDraft({
-      id: `draft-${Date.now()}`,
-      name: name || "Untitled Draft",
-      lines,
-      createdAt: new Date().toISOString(),
-    });
-    toast("Draft saved to Recent Sessions.");
+  // Track whether the form has meaningful user input so Cancel can prompt for confirmation.
+  const isDirty = useMemo(() => {
+    if (mode === "configure") return false;
+    if (name.trim()) return true;
+    return lines.some((l) => l.enabled && (l.srtAddress.trim() || l.passphrase.trim() || l.notes.trim()));
+  }, [mode, name, lines]);
+
+  const handleCancel = () => {
+    if (isDirty) setShowCancelConfirm(true);
+    else navigate(-1);
+  };
+
+  const discardAndLeave = () => {
+    setShowCancelConfirm(false);
+    navigate(-1);
   };
 
   const handleClearLine = () => {
