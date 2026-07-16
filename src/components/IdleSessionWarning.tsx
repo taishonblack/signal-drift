@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Clock } from "lucide-react";
 import {
@@ -5,6 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useCurrentSession } from "@/hooks/use-current-session";
@@ -12,132 +14,234 @@ import {
   getCurrentUserRef,
   endSession,
   resumeSession,
+  getSessionById,
 } from "@/lib/session-store";
-import { formatEndsAt } from "@/lib/session-timing";
+import { saveSessionRemote } from "@/lib/sessions-remote";
+import { useIdentity } from "@/lib/identity";
 import { toast } from "@/hooks/use-toast";
 
 /**
- * Global idle warning modal. Rendered inside AppLayout.
+ * Global monitoring-session idle modal.
  *
- * Shown when the current session is idle (no fresh presence for the
- * grace period) and the user is on any app page other than the Session
- * Room / fullscreen / landing. The dialog is a purely idle-driven
- * lifecycle — it never triggers off scheduled_end_at.
+ * Timer semantics:
+ *  - Starts a single 15-minute setTimeout when the user has an active
+ *    session AND is NOT on the Session Room (or fullscreen) page.
+ *  - Returning to the Session Room clears the timer and hides the modal.
+ *  - Any active-session or route change resets the timer.
+ *  - On fire, verifies the session is still `active` and has no fresh
+ *    viewers; otherwise cancels silently.
  */
+
+const IDLE_TIMEOUT_MS = 15 * 60_000;
+const VIEWER_FRESH_MS = 90_000;
+
 const IdleSessionWarning = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { session, isIdle, msUntilIdleEnd } = useCurrentSession(1000);
+  const identity = useIdentity();
+  const { session } = useCurrentSession(5000);
+
+  const [showIdle, setShowIdle] = useState(false);
+  const [showConfirmEnd, setShowConfirmEnd] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const timerRef = useRef<number | null>(null);
+  // Sessions the user has explicitly ended in this tab — never re-open modal.
+  const endedIdsRef = useRef<Set<string>>(new Set());
 
   const path = location.pathname;
   const inSessionRoom =
     path.startsWith("/session/") && !path.endsWith("/configure");
-  const isLanding = path === "/";
   const isFullscreen =
     new URLSearchParams(location.search).get("fullscreen") === "1";
 
-  if (!session || !isIdle || inSessionRoom || isLanding || isFullscreen) {
+  const clearTimer = useCallback(() => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const scheduleIdle = useCallback(
+    (sessionId: string) => {
+      clearTimer();
+      timerRef.current = window.setTimeout(() => {
+        timerRef.current = null;
+        const current = getSessionById(sessionId);
+        if (!current) return;
+        if (current.status !== "active") return;
+        if (current.endedAt) return;
+        if (endedIdsRef.current.has(sessionId)) return;
+        const now = Date.now();
+        const fresh = (current.viewers ?? []).filter(
+          (v) => v.lastHeartbeatAt && now - v.lastHeartbeatAt < VIEWER_FRESH_MS,
+        );
+        if (fresh.length > 0) {
+          // Viewers are still present — reschedule.
+          scheduleIdle(sessionId);
+          return;
+        }
+        setShowIdle(true);
+      }, IDLE_TIMEOUT_MS);
+    },
+    [clearTimer],
+  );
+
+  // Drive the timer from session identity + route.
+  useEffect(() => {
+    if (!session || session.status !== "active") {
+      clearTimer();
+      setShowIdle(false);
+      return;
+    }
+    if (endedIdsRef.current.has(session.id)) {
+      clearTimer();
+      setShowIdle(false);
+      return;
+    }
+    if (inSessionRoom || isFullscreen) {
+      // On the session page — reset everything.
+      clearTimer();
+      setShowIdle(false);
+      return;
+    }
+    // Away from session — start a fresh 15-min timer.
+    if (!showIdle) scheduleIdle(session.id);
+    return () => clearTimer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id, session?.status, path, inSessionRoom, isFullscreen]);
+
+  // If the session ends externally (e.g. remote hydrate), close the modal.
+  useEffect(() => {
+    if (!session || session.status !== "active") {
+      setShowIdle(false);
+      setShowConfirmEnd(false);
+    }
+  }, [session?.status]);
+
+  if (!session || session.status !== "active" || endedIdsRef.current.has(session.id)) {
     return null;
   }
 
-  const remainingMs = msUntilIdleEnd ?? 0;
-  const mins = Math.floor(remainingMs / 60_000);
-  const secs = Math.floor((remainingMs % 60_000) / 1000);
-  const scheduledEndLabel = session.scheduledEndAt
-    ? formatEndsAt(session.scheduledEndAt, session.defaultOriginTimeZone)
-    : null;
+  const scheduledEndLabel = null; // scheduled-end display owned by ScheduledEndDialog
 
-  const handleResume = () => {
+  const handleContinue = () => {
     resumeSession(session.id, getCurrentUserRef());
+    setShowIdle(false);
+    scheduleIdle(session.id);
     toast({ title: "Monitoring resumed", description: session.name });
   };
 
   const handleReturn = () => {
     resumeSession(session.id, getCurrentUserRef());
+    setShowIdle(false);
+    clearTimer();
     navigate(`/session/${session.id}`);
   };
 
-  const handleEndNow = () => {
-    endSession(session.id, new Date().toISOString(), "owner_ended");
-    toast({ title: "Session ended" });
+  const handleRequestEnd = () => setShowConfirmEnd(true);
+
+  const handleConfirmEnd = async () => {
+    if (!session) return;
+    setEnding(true);
+    const sid = session.id;
+    endedIdsRef.current.add(sid);
+    clearTimer();
+    setShowIdle(false);
+    endSession(sid, new Date().toISOString(), "owner_ended");
+    // Persist to remote so hydrate can't resurrect it.
+    if (identity.kind === "member") {
+      try {
+        const updated = getSessionById(sid);
+        if (updated) await saveSessionRemote(updated);
+      } catch {
+        /* soft-fail: local end is authoritative for this tab */
+      }
+    }
+    setShowConfirmEnd(false);
+    setEnding(false);
+    toast({ title: "Session ended", description: session.name });
   };
 
   return (
-    <Dialog open>
-      <DialogContent
-        className="mako-glass-solid border-border/20 sm:max-w-[720px]"
-      >
-        <DialogHeader>
-          <DialogTitle className="text-sm flex items-center gap-2">
-            <Clock className="h-4 w-4 text-[hsl(var(--warning))]" />
-            Monitoring session idle
-          </DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={showIdle && !showConfirmEnd}>
+        <DialogContent className="mako-glass-solid border-border/20 sm:max-w-[720px]">
+          <DialogHeader>
+            <DialogTitle className="text-sm flex items-center gap-2">
+              <Clock className="h-4 w-4 text-[hsl(var(--warning))]" />
+              Monitoring session idle
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1">
+              No one has been viewing{" "}
+              <span className="text-foreground">{session.name}</span> for
+              15&nbsp;minutes.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-3 pt-1 text-xs">
-          <p className="text-muted-foreground">
-            No one is currently viewing{" "}
-            <span className="text-foreground">{session.name}</span>.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="rounded-md border border-[hsl(var(--warning))]/30 bg-[hsl(var(--warning))]/[0.06] px-3 py-2">
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
-                Idle timeout
-              </p>
-              <p className="font-mono text-base text-foreground mt-0.5">
-                {mins}:{String(secs).padStart(2, "0")}
-              </p>
-              <p className="text-[10px] text-muted-foreground/70">
-                Session will end automatically if no one returns.
-              </p>
-            </div>
-
-            {scheduledEndLabel && (
-              <div className="rounded-md border border-border/20 bg-muted/10 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground/80">
-                  Scheduled end
-                </p>
-                <p className="font-mono text-base text-foreground mt-0.5">
-                  {scheduledEndLabel}
-                </p>
-                <p className="text-[10px] text-muted-foreground/70">
-                  Separate from the idle timer.
-                </p>
-              </div>
-            )}
+          <div className="pt-4 flex flex-col-reverse sm:grid sm:grid-cols-3 gap-2 sm:gap-3">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleRequestEnd}
+              className="w-full sm:order-1"
+            >
+              End Session
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleContinue}
+              className="w-full sm:order-2"
+            >
+              Continue Monitoring
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleReturn}
+              className="w-full sm:order-3"
+            >
+              Return to Session
+            </Button>
           </div>
-        </div>
+          {scheduledEndLabel}
+        </DialogContent>
+      </Dialog>
 
-        {/* Desktop: single row of three balanced actions.
-            Mobile: stacked, Return-first / End-last per spec. */}
-        <div className="pt-4 flex flex-col-reverse sm:grid sm:grid-cols-3 gap-2 sm:gap-3">
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleEndNow}
-            className="w-full sm:order-1"
-          >
-            End Session
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleResume}
-            className="w-full sm:order-2"
-          >
-            Continue Monitoring
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleReturn}
-            className="w-full sm:order-3"
-          >
-            Return to Session
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      <Dialog
+        open={showConfirmEnd}
+        onOpenChange={(o) => !o && !ending && setShowConfirmEnd(false)}
+      >
+        <DialogContent className="mako-glass-solid border-border/20 sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              End this monitoring session?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1">
+              This will stop monitoring and move the session to recent
+              sessions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="pt-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowConfirmEnd(false)}
+              disabled={ending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleConfirmEnd}
+              disabled={ending}
+            >
+              End Session
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
