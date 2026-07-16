@@ -92,6 +92,7 @@ const SessionRoom = () => {
   const scheduledEndAt = record?.scheduledEndAt || null;
   const [ownerLeftOpen, setOwnerLeftOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
 
   // Join on mount. Presence heartbeat continues via AppLayout's
