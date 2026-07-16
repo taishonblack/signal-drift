@@ -411,12 +411,23 @@ export function updateSession(id: string, patch: Partial<SessionRecord>) {
   write(SESSIONS_KEY, next);
 }
 
-export function endSession(id: string, endedAt: string = new Date().toISOString()) {
-  updateSession(id, { status: "completed", endedAt, viewers: [] });
+export function endSession(
+  id: string,
+  endedAt: string = new Date().toISOString(),
+  reason: EndReason = "owner_ended",
+) {
+  updateSession(id, {
+    status: "completed",
+    endedAt,
+    endReason: reason,
+    idleStartedAt: null,
+    idleDeadline: null,
+  });
 }
 
 /**
  * Returns any active session the user owns OR is a viewer in.
+ * Includes idle-active sessions so the user can recover on return.
  */
 export function getActiveSessionForUser(userId: string): SessionRecord | undefined {
   return getSessions().find(
@@ -433,17 +444,109 @@ export function joinSession(
 ) {
   const s = getSessionById(sessionId);
   if (!s) return;
-  const viewers = s.viewers ?? [];
-  if (viewers.some((v) => v.userId === user.id)) return;
-  const isOwner = (s.ownerUserId ?? s.hostUserId) === user.id;
-  viewers.push({
-    userId: user.id,
-    name: user.name,
-    isOwner,
-    joinedAt: new Date().toISOString(),
+  const now = Date.now();
+  let viewers = s.viewers ?? [];
+  const existing = viewers.find((v) => v.userId === user.id);
+  if (existing) {
+    viewers = viewers.map((v) =>
+      v.userId === user.id ? { ...v, lastHeartbeatAt: now } : v,
+    );
+  } else {
+    const isOwner = (s.ownerUserId ?? s.hostUserId) === user.id;
+    viewers = [
+      ...viewers,
+      {
+        userId: user.id,
+        name: user.name,
+        isOwner,
+        joinedAt: new Date().toISOString(),
+        lastHeartbeatAt: now,
+      },
+    ];
+  }
+  // Any join clears idle state.
+  updateSession(sessionId, {
+    viewers,
+    idleStartedAt: null,
+    idleDeadline: null,
   });
-  updateSession(sessionId, { viewers });
 }
+
+/** Presence heartbeat — updates the viewer's lastHeartbeatAt and clears idle. */
+export function heartbeat(sessionId: string, userId: string) {
+  const s = getSessionById(sessionId);
+  if (!s || s.status !== "active") return;
+  const viewers = s.viewers ?? [];
+  const idx = viewers.findIndex((v) => v.userId === userId);
+  if (idx === -1) return;
+  const now = Date.now();
+  const next = viewers.map((v, i) =>
+    i === idx ? { ...v, lastHeartbeatAt: now } : v,
+  );
+  const patch: Partial<SessionRecord> = { viewers: next };
+  if (s.idleStartedAt || s.idleDeadline) {
+    patch.idleStartedAt = null;
+    patch.idleDeadline = null;
+  }
+  updateSession(sessionId, patch);
+}
+
+/**
+ * Presence & idle sweep. For each active session:
+ *  - Compute fresh-viewer count (heartbeat within staleMs).
+ *  - If zero and not yet idle: mark idleStartedAt / idleDeadline.
+ *  - If idle and past idleDeadline: end with reason=idle_timeout.
+ */
+export function sweepPresence(
+  staleMs = 90_000,
+  idleGraceMs = 30 * 60_000,
+) {
+  const now = Date.now();
+  const sessions = getSessions();
+  let dirty = false;
+  const next = sessions.map((s) => {
+    if (s.status !== "active") return s;
+    const viewers = s.viewers ?? [];
+    const fresh = viewers.filter(
+      (v) => v.lastHeartbeatAt && now - v.lastHeartbeatAt < staleMs,
+    );
+    // Idle expiry
+    if (s.idleDeadline && now >= s.idleDeadline) {
+      dirty = true;
+      return {
+        ...s,
+        status: "completed" as const,
+        endedAt: new Date(now).toISOString(),
+        endReason: "idle_timeout" as EndReason,
+        idleStartedAt: null,
+        idleDeadline: null,
+      };
+    }
+    if (fresh.length === 0 && !s.idleStartedAt) {
+      dirty = true;
+      return {
+        ...s,
+        idleStartedAt: now,
+        idleDeadline: now + idleGraceMs,
+      };
+    }
+    if (fresh.length > 0 && s.idleStartedAt) {
+      dirty = true;
+      return { ...s, idleStartedAt: null, idleDeadline: null };
+    }
+    return s;
+  });
+  if (dirty) write(SESSIONS_KEY, next);
+}
+
+/** Restore user's presence in a session — used by Continue Monitoring. */
+export function resumeSession(
+  sessionId: string,
+  user: { id: string; name: string },
+) {
+  joinSession(sessionId, user);
+}
+
 
 export function leaveSession(sessionId: string, userId: string) {
   const s = getSessionById(sessionId);
