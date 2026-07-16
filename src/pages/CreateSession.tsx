@@ -213,6 +213,7 @@ const CreateSession = () => {
       notes: [],
       markers: [],
       viewers: [],
+      guestOwned: isGuest,
       changeLog: [
         {
           id: `cl-${Date.now()}`,
