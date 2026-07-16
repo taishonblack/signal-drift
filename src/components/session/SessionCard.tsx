@@ -3,6 +3,7 @@ import { Clock, Radio, Download, Users, Circle } from "lucide-react";
 import type { SessionRecord } from "@/lib/session-store";
 import { formatDuration, formatStartedTime } from "@/lib/session-store";
 import SessionStatusBadge from "@/components/session/SessionStatusBadge";
+import SharedSessionBadge from "@/components/session/SharedSessionBadge";
 import ViewersPanel from "@/components/session/ViewersPanel";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -24,12 +25,16 @@ const SessionCard = ({ session, variant = "grid", onClick, currentUserId }: Prop
   const viewers = session.viewers ?? [];
   const isActive = session.status === "active";
   const isCompleted = session.status === "completed";
-  const ownerName =
-    (session.ownerUserId ?? session.hostUserId) === currentUserId ? "You" : session.host;
+  const ownerId = session.ownerUserId ?? session.hostUserId;
+  const isMine = ownerId === currentUserId;
+  const ownerName = isMine ? "You" : session.host;
+  const nonOwnerViewers = viewers.filter((v) => v.userId !== ownerId);
+  const isShared = viewers.length > 1 || (!isMine && viewers.some((v) => v.userId === currentUserId));
 
   // Owner focus (from viewer list) — small presence teaser.
   const ownerViewer = viewers.find((v) => v.isOwner);
   const focusHint = ownerViewer?.focus;
+  void nonOwnerViewers;
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
