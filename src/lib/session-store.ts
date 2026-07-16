@@ -122,6 +122,12 @@ export interface SessionRecord {
   noOwnerSince?: number | null;
   /** True when the creator was a temporary Operator (unauthenticated). */
   guestOwned?: boolean;
+  /** Epoch ms marking when the session became idle (no fresh presence). */
+  idleStartedAt?: number | null;
+  /** Epoch ms deadline for auto-ending an idle session. */
+  idleDeadline?: number | null;
+  /** Recorded reason the session ended. */
+  endReason?: EndReason;
 }
 
 
