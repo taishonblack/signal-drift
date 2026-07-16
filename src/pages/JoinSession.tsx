@@ -8,9 +8,11 @@ import {
   joinSessionRemote,
   hydrateMemberSessions,
   upsertLocalStub,
+  type JoinRemoteResult,
 } from "@/lib/sessions-remote";
 import { getCurrentUserRef, joinSession } from "@/lib/session-store";
 import { toast } from "@/components/ui/sonner";
+import JoinConfirmDialog from "@/components/session/JoinConfirmDialog";
 
 const JoinSession = () => {
   const navigate = useNavigate();
@@ -19,8 +21,9 @@ const JoinSession = () => {
   const [pin, setPin] = useState(searchParams.get("pin") || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<JoinRemoteResult | null>(null);
 
-  const handleJoin = async () => {
+  const handleVerify = async () => {
     if (!sessionId || !pin) {
       setError("Enter both a Session ID and a PIN.");
       return;
@@ -28,21 +31,9 @@ const JoinSession = () => {
     setBusy(true);
     setError(null);
     try {
-      // Promote anon → Temporary Operator so we have a stable user ref.
       ensureIdentity();
-      const self = getCurrentUserRef();
-
       const result = await joinSessionRemote(sessionId.trim(), pin.trim());
-
-      // Members: server granted persistent access, hydrate the full record.
-      // Guests: keep the returned summary as a local stub.
-      if (result.granted) {
-        await hydrateMemberSessions();
-      } else {
-        upsertLocalStub(result.session, self);
-      }
-      joinSession(result.session.id, self);
-      navigate(`/session/${result.session.id}`);
+      setPending(result);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Could not join session.";
       setError(msg);
@@ -52,6 +43,24 @@ const JoinSession = () => {
     }
   };
 
+  const handleConfirm = async () => {
+    if (!pending) return;
+    const self = getCurrentUserRef();
+    try {
+      if (pending.granted) {
+        await hydrateMemberSessions();
+      } else {
+        upsertLocalStub(pending.session, self);
+      }
+      joinSession(pending.session.id, self);
+      const id = pending.session.id;
+      setPending(null);
+      navigate(`/session/${id}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not enter session.";
+      toast(msg);
+    }
+  };
 
   return (
     <div className="max-w-md mx-auto space-y-8 pt-12">
@@ -82,18 +91,23 @@ const JoinSession = () => {
             className="bg-muted/30 border-border/30 text-foreground placeholder:text-muted-foreground/50"
           />
         </div>
-        {error && (
-          <p className="text-xs text-destructive" role="alert">{error}</p>
-        )}
-        <Button onClick={handleJoin} disabled={busy} className="w-full gap-2">
+        {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
+        <Button onClick={handleVerify} disabled={busy} className="w-full gap-2">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-          {busy ? "Joining…" : "Join"}
+          {busy ? "Verifying…" : "Join"}
         </Button>
         <p className="text-[11px] text-muted-foreground/70 text-center">
-          Not signed in? You'll join as a Temporary Operator. Sign in later
-          to keep the session in your history.
+          Not signed in? You'll join as a Temporary Operator. Sign in later to
+          keep the session in your history.
         </p>
       </div>
+
+      <JoinConfirmDialog
+        summary={pending?.session ?? null}
+        granted={!!pending?.granted}
+        onCancel={() => setPending(null)}
+        onConfirm={handleConfirm}
+      />
     </div>
   );
 };
