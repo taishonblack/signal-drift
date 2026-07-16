@@ -1,13 +1,17 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Play, Save, Eraser, User,
-  ChevronDown, ChevronRight, Zap, Circle, PlugZap, Plus, Radio, Lock,
+  ChevronDown, ChevronRight, Zap, Circle, PlugZap, Plus, Radio, Lock, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import AddressBookModal from "@/components/AddressBookModal";
 import PurposeSelect from "@/components/session/PurposeSelect";
@@ -18,7 +22,7 @@ import SessionChangeLogPanel from "@/components/session/SessionChangeLogPanel";
 import {
   type SrtLine, type SessionRecord,
   createDefaultLine, getSessions, addSession, getSessionById, updateSession,
-  generateSessionId, generatePin, saveDraft,
+  generateSessionId, generatePin,
   parseSrtInput, composeSrt,
   getActiveSessionForUser, endSession,
   getAddressBook, saveAddressBook,
