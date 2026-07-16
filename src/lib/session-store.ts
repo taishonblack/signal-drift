@@ -3,7 +3,6 @@
 export type SrtMode = "caller" | "listener";
 
 export type SessionStatus =
-  | "draft"
   | "scheduled"
   | "active"
   | "paused"
@@ -280,24 +279,6 @@ const seedSessions: SessionRecord[] = [
       { userId: "u4", name: "Chris Martin", isOwner: true, joinedAt: iso(-12 * 60_000), focus: "Line 1" },
     ],
   },
-  // Drafts
-  {
-    id: "sess-draft-1",
-    name: "Grammys — Multicam Setup",
-    status: "draft",
-    purpose: "Review",
-    createdAt: iso(-2 * 60 * 60_000),
-    host: CURRENT_USER_NAME,
-    hostUserId: CURRENT_USER_ID,
-    ownerUserId: CURRENT_USER_ID,
-    team: "Broadcast Ops",
-    pin: "0000",
-    defaultOriginTimeZone: "America/Los_Angeles",
-    lines: [createDefaultLine(1)],
-    notes: [],
-    markers: [],
-    viewers: [],
-  },
   // Completed
   {
     id: "sess-004",
@@ -371,9 +352,9 @@ const seedSessions: SessionRecord[] = [
 ];
 
 function migrateStatus(s: any): SessionStatus {
-  if (s === "expired" || s === "ended") return "completed";
+  if (s === "expired" || s === "ended" || s === "draft") return "completed";
   if (s === "live") return "active";
-  if (["draft","scheduled","active","paused","completed","archived"].includes(s)) return s;
+  if (["scheduled","active","paused","completed","archived"].includes(s)) return s;
   return "completed";
 }
 
@@ -578,7 +559,7 @@ export function groupSessions(
         (s.viewers ?? []).some((v) => v.userId === currentUserId)
     ) ?? null;
   const teamActive = active.filter((s) => s.id !== yourActive?.id);
-  const drafts = sessions.filter((s) => s.status === "draft");
+  const drafts: SessionRecord[] = []; // Drafts removed from workflow; kept for API compat.
   const completed = sessions
     .filter((s) => s.status === "completed" || s.status === "paused" || s.status === "scheduled")
     .sort(

@@ -1,13 +1,17 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Play, Save, Eraser, User,
-  ChevronDown, ChevronRight, Zap, Circle, PlugZap, Plus, Radio, Lock,
+  ChevronDown, ChevronRight, Zap, Circle, PlugZap, Plus, Radio, Lock, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import AddressBookModal from "@/components/AddressBookModal";
 import PurposeSelect from "@/components/session/PurposeSelect";
@@ -18,7 +22,7 @@ import SessionChangeLogPanel from "@/components/session/SessionChangeLogPanel";
 import {
   type SrtLine, type SessionRecord,
   createDefaultLine, getSessions, addSession, getSessionById, updateSession,
-  generateSessionId, generatePin, saveDraft,
+  generateSessionId, generatePin,
   parseSrtInput, composeSrt,
   getActiveSessionForUser, endSession,
   getAddressBook, saveAddressBook,
@@ -55,17 +59,24 @@ const statusDot: Record<LineStatus, string> = {
 const CreateSession = () => {
   const navigate = useNavigate();
   const { id: routeId } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const reuseId = searchParams.get("reuse") || undefined;
   // Promote anon → Temporary Operator on first session touch.
   ensureIdentity();
   const identity = useIdentity();
   const currentUser = getCurrentUserRef();
   const isGuest = identity.kind !== "member";
 
-  // Configure mode: session id in URL.
+  // Configure mode: session id in URL. Reuse mode: ?reuse=<id> prefills from an ended session.
   const existing = useMemo(
     () => (routeId ? getSessionById(routeId) : undefined),
     [routeId]
   );
+  const reuseSource = useMemo(
+    () => (reuseId ? getSessionById(reuseId) : undefined),
+    [reuseId]
+  );
+  const isReuse = !routeId && !!reuseSource;
   const mode: "create" | "configure" = routeId ? "configure" : "create";
   const isActiveConfigure = mode === "configure" && existing?.status === "active";
   const isReadOnly =
@@ -74,6 +85,8 @@ const CreateSession = () => {
     (existing.status === "completed" || existing.status === "archived");
   const allowed =
     mode === "create" || (existing ? canConfigureSession(existing, currentUser.id) : false);
+
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // Redirect viewers who can't configure.
   useEffect(() => {
@@ -84,8 +97,9 @@ const CreateSession = () => {
   }, [mode, existing, allowed, navigate]);
 
   const seedLines = (): SrtLine[] => {
-    if (existing) {
-      const base = [...existing.lines];
+    const src = existing ?? reuseSource;
+    if (src) {
+      const base = [...src.lines];
       while (base.length < 4) base.push(createDefaultLine(base.length + 1));
       return base.slice(0, 4);
     }
@@ -97,13 +111,13 @@ const CreateSession = () => {
     ];
   };
 
-  const [name, setName] = useState(existing?.name ?? "");
-  const [purpose, setPurpose] = useState<string>((existing?.purpose as string) ?? "QC");
+  const [name, setName] = useState(existing?.name ?? reuseSource?.name ?? "");
+  const [purpose, setPurpose] = useState<string>((existing?.purpose as string) ?? (reuseSource?.purpose as string) ?? "QC");
   const [scheduledEndAt, setScheduledEndAt] = useState<string>(
     existing?.scheduledEndAt ?? new Date(Date.now() + 60 * 60_000).toISOString(),
   );
   const [defaultOriginTimeZone, setDefaultOriginTimeZone] = useState(
-    existing?.defaultOriginTimeZone ?? "UTC"
+    existing?.defaultOriginTimeZone ?? reuseSource?.defaultOriginTimeZone ?? "UTC"
   );
   const [lines, setLines] = useState<SrtLine[]>(() => seedLines());
   const [activeTab, setActiveTab] = useState(1);
@@ -300,14 +314,21 @@ const CreateSession = () => {
     if (start) start();
   };
 
-  const handleSaveDraft = () => {
-    saveDraft({
-      id: `draft-${Date.now()}`,
-      name: name || "Untitled Draft",
-      lines,
-      createdAt: new Date().toISOString(),
-    });
-    toast("Draft saved to Recent Sessions.");
+  // Track whether the form has meaningful user input so Cancel can prompt for confirmation.
+  const isDirty = useMemo(() => {
+    if (mode === "configure") return false;
+    if (name.trim()) return true;
+    return lines.some((l) => l.enabled && (l.srtAddress.trim() || l.passphrase.trim() || l.notes.trim()));
+  }, [mode, name, lines]);
+
+  const handleCancel = () => {
+    if (isDirty) setShowCancelConfirm(true);
+    else navigate(-1);
+  };
+
+  const discardAndLeave = () => {
+    setShowCancelConfirm(false);
+    navigate(-1);
   };
 
   const handleClearLine = () => {
@@ -329,13 +350,17 @@ const CreateSession = () => {
 
   const pageTitle =
     mode === "create"
-      ? "New Session"
+      ? isReuse
+        ? "Reconfigure Session"
+        : "New Session"
       : isReadOnly
         ? "Session Configuration"
         : "Configure Session";
   const pageHint =
     mode === "create"
-      ? "A session is the workspace where you and your team monitor these feeds together."
+      ? isReuse
+        ? "Prefilled from your ended session. Adjust anything, then start a new monitoring session — your original session and its history stay intact."
+        : "A session is the workspace where you and your team monitor these feeds together."
       : isActiveConfigure
         ? "This session is live — changes are broadcast to everyone watching."
         : isReadOnly
@@ -343,7 +368,9 @@ const CreateSession = () => {
           : "Update the monitoring setup for this session, then start monitoring.";
   const primaryLabel =
     mode === "create"
-      ? "Start Monitoring"
+      ? isReuse
+        ? "Start New Monitoring Session"
+        : "Start Monitoring"
       : isActiveConfigure
         ? "Save Changes"
         : "Start Monitoring";
@@ -710,10 +737,10 @@ const CreateSession = () => {
               <Button
                 variant="outline"
                 size="lg"
-                onClick={handleSaveDraft}
+                onClick={handleCancel}
                 className="gap-2 border-border/30 text-foreground"
               >
-                <Save className="h-4 w-4" /> Save Draft
+                <X className="h-4 w-4" /> Cancel
               </Button>
             )}
             {mode === "configure" && isActiveConfigure && existing && (
@@ -833,6 +860,23 @@ const CreateSession = () => {
         }}
         onConfirm={confirmSwitch}
       />
+
+      <AlertDialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+        <AlertDialogContent className="mako-glass-solid border-border/30 max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">Cancel Session Setup?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Your unsaved source configuration will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border/40">Keep Editing</AlertDialogCancel>
+            <AlertDialogAction onClick={discardAndLeave} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import LiveCamera from "@/components/LiveCamera";
-import { Maximize2, Edit3, Volume2 } from "lucide-react";
+import { Maximize2, Edit3, Volume2, VideoOff, WifiOff, Loader2, PlugZap, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { StreamInput } from "@/lib/mock-data";
@@ -94,7 +94,7 @@ const SignalTile = ({
       <div className={`relative flex items-center justify-center ${isFullscreen ? "flex-1" : "flex-1 min-h-0 w-full"}`} style={{ background: "black" }}>
         {input.id === "line-1" && isActive ? (
           <LiveCamera streamName="cam1" />
-        ) : input.videoSrc && isActive ? (
+        ) : input.videoSrc && input.status === "live" ? (
           <video
             src={input.videoSrc}
             autoPlay
@@ -104,9 +104,7 @@ const SignalTile = ({
             className="absolute inset-0 w-full h-full object-contain"
           />
         ) : (
-          <div className="text-muted-foreground/30 text-xs uppercase tracking-widest">
-            {input.status === "idle" ? "No Signal" : input.label}
-          </div>
+          <PaneStatus status={input.status} label={input.label} onRetry={onEdit} />
         )}
 
         {/* Focus badge */}
@@ -175,6 +173,90 @@ const SignalTile = ({
             {badge.label}
           </span>
         </div>
+      )}
+    </div>
+  );
+};
+
+/**
+ * Explicit, labeled pane state — replaces silent black panes so operators
+ * always know what MAKO is doing with each source.
+ */
+const PaneStatus = ({
+  status,
+  label,
+  onRetry,
+}: {
+  status: string;
+  label: string;
+  onRetry?: () => void;
+}) => {
+  const map: Record<string, { title: string; hint: string; Icon: any; tone: string; showRetry: boolean }> = {
+    idle: {
+      title: "Not Configured",
+      hint: "Add an SRT address to this source.",
+      Icon: PlugZap,
+      tone: "text-muted-foreground/70",
+      showRetry: false,
+    },
+    connecting: {
+      title: "Connecting",
+      hint: `Contacting ${label}…`,
+      Icon: Loader2,
+      tone: "text-primary/80",
+      showRetry: false,
+    },
+    reconnecting: {
+      title: "Reconnecting",
+      hint: "Source interrupted — retrying.",
+      Icon: Loader2,
+      tone: "text-[hsl(var(--warning))]",
+      showRetry: true,
+    },
+    no_video: {
+      title: "No Video Streaming",
+      hint: "Source reached, but no playable video.",
+      Icon: VideoOff,
+      tone: "text-[hsl(var(--warning))]",
+      showRetry: true,
+    },
+    warning: {
+      title: "No Video Streaming",
+      hint: "Signal reached, but nothing to display.",
+      Icon: VideoOff,
+      tone: "text-[hsl(var(--warning))]",
+      showRetry: true,
+    },
+    error: {
+      title: "Connection Failed",
+      hint: "MAKO could not reach this source.",
+      Icon: WifiOff,
+      tone: "text-destructive",
+      showRetry: true,
+    },
+  };
+  const s = map[status] ?? map.idle;
+  const Icon = s.Icon;
+  const spinning = status === "connecting" || status === "reconnecting";
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
+      <Icon className={`h-6 w-6 ${s.tone} ${spinning ? "animate-spin" : ""}`} />
+      <div className={`text-[11px] uppercase tracking-widest font-semibold ${s.tone}`}>
+        {s.title}
+      </div>
+      <div className="text-[10px] text-muted-foreground/60 max-w-[200px]">{s.hint}</div>
+      {s.showRetry && onRetry && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRetry();
+          }}
+          className="h-6 gap-1 text-[10px] text-muted-foreground hover:text-foreground mt-1"
+        >
+          <RefreshCw className="h-3 w-3" /> Retry
+        </Button>
       )}
     </div>
   );

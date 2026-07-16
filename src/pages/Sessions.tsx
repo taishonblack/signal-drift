@@ -134,6 +134,8 @@ const Sessions = () => {
     navigate(`/session/${id}`);
   }, [pendingSwitch, grouped.yourActive, currentUser, navigate]);
 
+  const [expiredIsOwner, setExpiredIsOwner] = useState(false);
+
   const handleCompletedClick = useCallback((s: SessionRecord) => {
     const legacy = mockSessions.find((m) => m.id === s.id) ?? {
       id: s.id,
@@ -144,12 +146,9 @@ const Sessions = () => {
       pin: s.pin,
       inputs: [],
     };
+    setExpiredIsOwner((s.ownerUserId ?? s.hostUserId) === currentUser.id);
     setExpiredSession(legacy as Session);
-  }, []);
-
-  const handleDraftClick = useCallback((s: SessionRecord) => {
-    navigate(`/session/${s.id}/configure`);
-  }, [navigate]);
+  }, [currentUser.id]);
 
   // ─── Guest view ──────────────────────────────────────────────
   if (!isMember) {
@@ -263,8 +262,8 @@ const Sessions = () => {
                 icon={<Users className="h-5 w-5" />}
               />
               <GatedEmptyState
-                title="Drafts &amp; Archive"
-                body="Save configurations, revisit archived sessions, sync layouts."
+                title="Archive"
+                body="Revisit ended sessions, download reports, and sync layouts."
                 icon={<Archive className="h-5 w-5" />}
               />
             </div>
@@ -333,23 +332,6 @@ const Sessions = () => {
           </section>
         )}
 
-        {/* Drafts */}
-        {grouped.drafts.length > 0 && (
-          <section>
-            <SectionHeader title="Drafts" count={grouped.drafts.length} />
-            <div className="grid gap-3">
-              {grouped.drafts.map((s) => (
-                <SessionCard
-                  key={s.id}
-                  session={s}
-                  variant="grid"
-                  currentUserId={currentUser.id}
-                  onClick={() => handleDraftClick(s)}
-                />
-              ))}
-            </div>
-          </section>
-        )}
 
         {/* Completed */}
         {grouped.completed.length > 0 && (
@@ -411,6 +393,7 @@ const Sessions = () => {
         />
         <ExpiredSessionDialog
           session={expiredSession}
+          isOwner={expiredIsOwner}
           onClose={() => setExpiredSession(null)}
         />
       </div>

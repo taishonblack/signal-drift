@@ -1,129 +1,55 @@
-# Guest-First Identity Redesign
 
-Shift MAKO from "log in to use" to "monitor first, identify later." Sign-in becomes about **persistence**, not access.
+# Simplify MAKO Signal Drift Session Workflow
 
-## Philosophy
+This is a large, cross-cutting change. Below is the plan grouped by concern. I'll ship it in one pass but wanted to confirm scope first.
 
-Every screen reinforces: *Monitoring comes first. Identity comes second.* Guests get the full live experience — create, join, share, transfer, note-take. Sign-in earns history, drafts, address book, teams, templates, saved layouts.
+## 1. Remove Draft everywhere
+- `src/lib/session-store.ts`: drop `"draft"` from `SessionStatus`, remove `saveDraft` / draft grouping, keep only `active` / `completed` (renamed conceptually to "ended" in UI copy).
+- `src/pages/CreateSession.tsx`: remove Save Draft button and draft resume via `?draft=` query. Bottom bar becomes **Start Monitoring** + **Cancel** (with confirm dialog when the form is dirty).
+- `src/components/RecentSessionsPanel.tsx`, `src/pages/Sessions.tsx`: remove Draft groups, badges, counts, filter chips.
+- `src/components/session/SessionStatusBadge.tsx`: drop `draft` (and `scheduled`, `paused`, `archived` if unused) or keep unused entries dormant — will just remove `draft`.
+- `SaveSessionPrompt.tsx` and any "recover draft" UI: delete.
 
-## Identity States
+## 2. Create Session UX
+- New "Cancel Session Setup?" confirm dialog (Keep Editing / Discard) when dirty.
+- Primary CTA: **Start Monitoring** — validates sources, creates active session, routes to Session Room, kicks off Quinn.
+- Reuse mode: when navigated with `?reuse=<sessionId>`, prefill from the ended session (name, tz, sources, notes, passphrases). Heading becomes "Reconfigure Session", primary CTA "Start New Monitoring Session". Creates a NEW session; original ended session untouched.
+- Active edit mode: when navigated with `?configure=<sessionId>` for an active session owned by user, heading "Configure Session", primary CTA "Save Changes", logs a `source_config_changed` event into that session's Quinn timeline and keeps Quinn running.
 
-| State | Trigger | Header (upper-right) |
-|---|---|---|
-| **Anonymous Visitor** | Landed, no session | `Sign In` · `Create Account` |
-| **Temporary Operator** | Created/joined a session without auth | `Operator (Temporary)` chip with menu |
-| **Authenticated User** | Signed in | Name + Settings / Team / Sign Out |
+## 3. Test Connection
+- New component `src/components/session/TestConnectionPanel.tsx` used inside CreateSession.
+- For each configured line: shows name, address:port, state (`Not Configured | Connecting | Video Available | No Video Streaming | Connection Failed`), plus codec/res/fps/bitrate when available (mocked for now using existing `use-live-metrics` style).
+- Never blocks Start — button label switches to **Start Monitoring Anyway** when any source is failing/no-video.
 
-Temporary identity auto-generated on first session action (e.g. `Operator-4H2K`), persisted to `localStorage` so it survives reloads. The chip menu offers Sign In · Create Account · "What changes when I sign in?". On sign-in the temporary operator's participation in the current session rebinds to the real user.
+## 4. Monitoring Pane States
+- Extend `src/components/SignalTile.tsx` (and `DraggableSignalTile.tsx`) with an explicit state enum: `not_configured | connecting | live | no_video | connection_failed | reconnecting`.
+- Replace silent black panes with labeled overlays + Retry button on failed/reconnecting.
+- Wire state from `use-live-metrics` (add `hasVideo` / `lastError` fields with mocked plausible behavior).
 
-## Guest capabilities
+## 5. Ending a session
+- Guest end: hard-delete the session record from local store; wipe its Quinn history.
+- Signed-in end: mark `completed`, keep Quinn incidents (`quinn-store` keyed by sessionId — already is).
 
-**Can:** create session · configure SRT sources · monitor · share · invite · join · view diagnostics · chat · notes · transfer ownership
-**Cannot:** save history · save drafts across devices · address book · teams · archives · saved layouts · templates
+## 6. Recent Sessions (signed-in)
+- Card fields: name, owner, **Owned**/**Shared** badge, start, end, duration, source count, Quinn incident count, last accessed.
+- New `EndedSessionDialog` (replacing `ExpiredSessionDialog`) with actions:
+  - Owned: View Report, Download Report, **Reconfigure and Start** (→ `/create?reuse=<id>`), Cancel.
+  - Shared: View Report, Download Report (if allowed), Cancel.
 
-## Navigation
+## 7. Quinn history rules
+- `quinn-store`: partition history by `sessionId`. On guest session switch/end/tab close, purge guest sessionIds. For signed-in users, persist to Supabase-backed store (out of scope for this pass — will keep local per-session and note follow-up if you want cloud persistence).
+- On source config change during active signed-in session, insert a `Source N configuration changed` timeline event with previous/new values.
 
-Never blur. Use **educational empty states** in place of gated panels:
+## 8. Cleanup
+- Remove `SaveSessionPrompt`, draft branches in `session-store`, `?draft=` handling, draft-oriented copy in sidebar and Sessions page.
 
-- Recent Sessions → "No saved sessions yet. Sign in to keep your monitoring history."
-- Address Book → "Available after signing in."
-- Teams → "Join or create a team after creating an account."
+## Technical notes
+- Files touched (approx): `session-store.ts`, `CreateSession.tsx`, `SessionRoom.tsx`, `Sessions.tsx`, `RecentSessionsPanel.tsx`, `SessionStatusBadge.tsx`, `SignalTile.tsx`, `DraggableSignalTile.tsx`, `use-live-metrics.ts`, `quinn-store.ts`, `SaveSessionPrompt.tsx` (delete), `ExpiredSessionDialog.tsx` → `EndedSessionDialog.tsx`, new `TestConnectionPanel.tsx`, new `CancelSetupDialog.tsx`.
+- No DB migration required for this pass — sessions in Supabase still use `active`/`ended` states; `draft` rows (if any) will be treated as ended on read.
+- Quinn cloud persistence for signed-in users: **not** included unless you want it now; current `quinn-store` is localStorage keyed by sessionId, which satisfies "history remains available" within the same browser.
 
-Sidebar for guests: Sessions · Create · Join · Ops (Account item hidden; identity lives in header chip).
-Sidebar for members: same + name/Settings/Sign Out in the identity chip.
+## Questions before I build
 
-## Home / Landing
-
-Rename primary CTA to **Start Monitoring**. No auth wall.
-
-## Sessions / Create / Join
-
-- `/create` and `/join` fully guest-accessible.
-- `/sessions` for guests shows the current session + empty-state cards for Recent / Drafts / Archive.
-- Join flow: enter Session ID + PIN, land in room as Temporary Operator.
-
-## Session Ownership & Lifecycle for Guests
-
-Guest who creates a session = Session Owner. Existing ownership/request/transfer flow already works.
-
-**Close-tab warning** (`beforeunload`) for owner with viewers:
-> "Leaving this page will end your monitoring session. If another viewer accepts ownership, monitoring will continue. Otherwise this session will end."
-> `Cancel` · `Leave Session`
-
-**Owner-left dialog** for every remaining viewer:
-> "The session owner has disconnected. Would you like to become the new owner?"
-> `Become Owner` · `Leave Session`
-First accept wins.
-
-**No-owner countdown** (30s): "No owner assigned. This monitoring session will end in 30… 29…" → terminate at zero.
-
-## Save-on-End prompt
-
-When a guest ends their session:
-> "Save this monitoring session? Create a free account to keep session history, incident timeline, notes, stream diagnostics, layout."
-> `Create Account` · `Continue as Guest` · `Discard Session`
-
-Choosing Create Account stashes the session payload in `localStorage` under a claim key; after sign-up the stored session is claimed onto the new user.
-
----
-
-## Technical plan
-
-**New: `src/lib/identity.ts`**
-- `useIdentity()` → `{ kind: 'anon' | 'guest' | 'member', id, name }`
-- Guest id/name generated + stored in `localStorage['mako_guest_identity']` on first session touch
-- On auth: migrate ownership refs in `session-store` from guest id → user id
-- Replaces `getCurrentUserRef()` in `session-store.ts`
-
-**New: `src/components/IdentityChip.tsx`**
-- Renders in `AppLayout` header (desktop) and `MobileNav` top-right
-- Three variants matching identity states; popover menu per spec
-- Members get link to `/account`
-
-**Edited: `AppLayout.tsx` / `MobileNav.tsx`**
-- Mount IdentityChip in header, drop Account item from sidebar/tab bar for guests (still routable directly for members)
-
-**Edited: `RecentSessionsPanel.tsx`**
-- Guest: hide session groups, show educational empty state block
-
-**Edited: `Landing.tsx`**
-- Primary CTA → "Start Monitoring"
-
-**New: `src/components/session/OwnerLeftDialog.tsx`**
-- Subscribes to session store; opens when `ownerUserId` transitions to `null` while viewers > 0
-- Countdown driven by a `noOwnerSince` timestamp on the session record
-
-**Edited: `session-store.ts`**
-- Add `noOwnerSince: number | null` on `SessionRecord`
-- On owner leave: set timestamp; on claim: clear
-- New helpers: `claimOwnership(sessionId, actor)`, `orphanSweep()` invoked from the existing poller
-
-**Edited: `SessionRoom.tsx`**
-- Mount `OwnerLeftDialog`
-- `beforeunload` handler for owner with active viewers
-- Custom Leave button opens confirm dialog with the specified copy
-
-**New: `src/components/session/SaveSessionPrompt.tsx`**
-- Shown when a guest owner ends a session
-- "Create Account" stashes snapshot in `localStorage['mako_pending_save']` and routes to `/account?claim=1`
-
-**Edited: `AccountPage.tsx`**
-- On sign-in/up, if `mako_pending_save` exists, claim it and toast "Session saved"
-- Rebind guest identity → member for any live sessions
-
-**New: `src/components/GatedEmptyState.tsx`** — reusable for Recent / Address Book / Teams
-
-## Explicitly out of scope
-- Server-side persistence of guest sessions (all guest state stays in `localStorage` / in-memory `session-store`)
-- Address Book / Teams / Templates gating logic beyond the empty-state copy (features not yet built)
-- 40-min soft prompt banner
-- Any auth provider changes (email/password only)
-
-## Acceptance
-1. Fresh browser → `/` → Start Monitoring → configure → land in `/session/:id` as `Operator (Temporary)`, no auth prompts.
-2. Share PIN → second browser joins via `/join` → Temporary Operator, sees stream immediately.
-3. Owner closes tab → viewers see Owner-Left dialog → Become Owner → owns session.
-4. No one claims → 30s countdown → session terminates.
-5. Guest ends session → Save prompt → Create Account → after sign-in, session appears in Recent.
-6. Signed-in user sees name in chip; Recent populated.
-7. Guest on `/sessions` sees educational empty states, never a blurred panel.
+1. **Quinn persistence for signed-in users** — keep local (browser-only) for this pass, or add a `quinn_events` Supabase table now?
+2. **Test Connection realism** — mock results (fast, deterministic-random) or attempt a real probe via an edge function? Real SRT probing isn't feasible from the browser; a mock is what I'd ship.
+3. **Existing "draft" sessions in the DB** — treat as ended (hide/show under Recent) or delete them?

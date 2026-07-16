@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -5,22 +6,31 @@ import {
   AlertDialogTitle,
   AlertDialogDescription,
   AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { FileText, BarChart3, StickyNote } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { FileText, BarChart3, StickyNote, RefreshCw, X } from "lucide-react";
 import type { Session } from "@/lib/mock-data";
 import { generateSessionReportPDF } from "@/lib/session-report-pdf";
 
 interface Props {
   session: Session | null;
+  /** If true, show "Reconfigure and Start" — reserved for the session owner. */
+  isOwner?: boolean;
   onClose: () => void;
 }
 
-const ExpiredSessionDialog = ({ session, onClose }: Props) => {
+const ExpiredSessionDialog = ({ session, isOwner, onClose }: Props) => {
+  const navigate = useNavigate();
+
   const handleDownload = () => {
     if (session) generateSessionReportPDF(session);
     onClose();
+  };
+
+  const handleReconfigure = () => {
+    if (!session) return;
+    onClose();
+    navigate(`/create?reuse=${session.id}`);
   };
 
   return (
@@ -30,12 +40,13 @@ const ExpiredSessionDialog = ({ session, onClose }: Props) => {
           <AlertDialogTitle className="text-foreground">Ended session</AlertDialogTitle>
           <AlertDialogDescription className="text-muted-foreground leading-relaxed">
             This session is no longer live and MAKO does not record streams.
-            You can download a technical report with incidents, metrics, notes, and markers.
+            You can download a technical report with incidents, metrics, notes, and markers
+            {isOwner ? ", or reconfigure the same sources into a fresh monitoring session." : "."}
           </AlertDialogDescription>
         </AlertDialogHeader>
 
         <div className="space-y-2 py-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Includes</p>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Report includes</p>
           <ul className="space-y-1.5 text-sm text-foreground/80">
             <li className="flex items-center gap-2">
               <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
@@ -53,17 +64,23 @@ const ExpiredSessionDialog = ({ session, onClose }: Props) => {
         </div>
 
         {session && (
-          <p className="text-xs text-muted-foreground truncate">
-            {session.name}
-          </p>
+          <p className="text-xs text-muted-foreground truncate">{session.name}</p>
         )}
 
-        <AlertDialogFooter>
-          <AlertDialogCancel className="border-border/40">Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={handleDownload} className="gap-1.5">
+        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+          <Button variant="ghost" onClick={onClose} className="gap-1.5">
+            <X className="h-3.5 w-3.5" /> Cancel
+          </Button>
+          <Button variant="outline" onClick={handleDownload} className="gap-1.5 border-border/40">
             <FileText className="h-3.5 w-3.5" />
-            Download Report (PDF)
-          </AlertDialogAction>
+            Download Report
+          </Button>
+          {isOwner && (
+            <Button onClick={handleReconfigure} className="gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5" />
+              Reconfigure and Start
+            </Button>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

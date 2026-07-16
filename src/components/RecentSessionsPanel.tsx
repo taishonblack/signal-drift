@@ -119,7 +119,7 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
     ...teamActive,
   ];
   const total =
-    activeList.length + grouped.drafts.length + grouped.completed.slice(0, 5).length;
+    activeList.length + grouped.completed.slice(0, 5).length;
 
   const Group = ({ title, items, onItemClick }: { title: string; items: SessionRecord[]; onItemClick: (s: SessionRecord) => void }) => (
     items.length > 0 ? (
@@ -161,8 +161,7 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
             <Group title="Active" items={activeList} onItemClick={handleActiveClick} />
             {identity.kind === "member" ? (
               <>
-                <Group title="Draft" items={grouped.drafts} onItemClick={(s) => navigate(`/create?draft=${s.id}`)} />
-                <Group title="Completed" items={grouped.completed.slice(0, 5)} onItemClick={handleCompletedClick} />
+                <Group title="Recent" items={grouped.completed.slice(0, 5)} onItemClick={handleCompletedClick} />
               </>
             ) : (
               <div className="mt-2 mx-1 rounded-md border border-dashed border-border/30 p-3 text-center">
