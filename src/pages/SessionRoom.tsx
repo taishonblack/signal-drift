@@ -18,7 +18,7 @@ import {
   endSession as endSessionRecord,
   joinSession,
   leaveSession,
-  transferOwnership as _unusedTransferOwnership,
+  
   claimOwnership,
   orphanSweep,
   updateViewerFocus,
