@@ -1,4 +1,4 @@
-import { Radio, Users, Layers, ShieldCheck, User } from "lucide-react";
+import { Radio, Users, Layers, ShieldCheck, User, ArrowLeft } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -85,7 +85,9 @@ const JoinConfirmDialog = ({ summary, granted, onCancel, onConfirm }: Props) => 
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">
-          <Button variant="ghost" onClick={onCancel}>Cancel</Button>
+          <Button variant="ghost" onClick={onCancel} className="gap-1.5">
+            <ArrowLeft className="h-3.5 w-3.5" /> Return to verification
+          </Button>
           <Button onClick={onConfirm} className="gap-1.5">
             <Radio className="h-3.5 w-3.5" /> Enter Session
           </Button>
