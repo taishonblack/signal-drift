@@ -51,7 +51,9 @@ const SectionHeader = ({ title, count, collapsible, collapsed, onToggle, right }
 
 const Sessions = () => {
   const navigate = useNavigate();
+  const identity = useIdentity();
   const currentUser = getCurrentUserRef();
+  const isMember = identity.kind === "member";
 
   const [sessions, setSessions] = useState<SessionRecord[]>(() => getSessions());
   const refresh = useCallback(() => setSessions(getSessions()), []);
