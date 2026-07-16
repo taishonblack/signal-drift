@@ -509,45 +509,20 @@ export function heartbeat(sessionId: string, userId: string) {
 }
 
 /**
- * Presence & idle sweep. For each active session:
- *  - Compute fresh-viewer count (heartbeat within staleMs).
- *  - If zero and not yet idle: mark idleStartedAt / idleDeadline.
- *  - If idle and past idleDeadline: end with reason=idle_timeout.
+ * Presence sweep. Clears any legacy idle markers on active sessions.
+ * Idle detection & auto-end are now driven by the route-aware
+ * `IdleSessionWarning` component, not by this sweep, so we no longer
+ * auto-complete sessions from here.
  */
 export function sweepPresence(
-  staleMs = 90_000,
-  idleGraceMs = 30 * 60_000,
+  _staleMs = 90_000,
+  _idleGraceMs = 15 * 60_000,
 ) {
-  const now = Date.now();
   const sessions = getSessions();
   let dirty = false;
   const next = sessions.map((s) => {
     if (s.status !== "active") return s;
-    const viewers = s.viewers ?? [];
-    const fresh = viewers.filter(
-      (v) => v.lastHeartbeatAt && now - v.lastHeartbeatAt < staleMs,
-    );
-    // Idle expiry
-    if (s.idleDeadline && now >= s.idleDeadline) {
-      dirty = true;
-      return {
-        ...s,
-        status: "completed" as const,
-        endedAt: new Date(now).toISOString(),
-        endReason: "idle_timeout" as EndReason,
-        idleStartedAt: null,
-        idleDeadline: null,
-      };
-    }
-    if (fresh.length === 0 && !s.idleStartedAt) {
-      dirty = true;
-      return {
-        ...s,
-        idleStartedAt: now,
-        idleDeadline: now + idleGraceMs,
-      };
-    }
-    if (fresh.length > 0 && s.idleStartedAt) {
+    if (s.idleStartedAt || s.idleDeadline) {
       dirty = true;
       return { ...s, idleStartedAt: null, idleDeadline: null };
     }
