@@ -1,14 +1,13 @@
-import { useLocation, useNavigate, Link } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
-import { LayoutDashboard, Plus, LogIn, Settings, ArrowLeft, User } from "lucide-react";
+import { LayoutDashboard, Plus, LogIn, ArrowLeft } from "lucide-react";
 import MakoFinMark from "@/components/MakoFinMark";
-import { useAuth } from "@/hooks/useAuth";
+import IdentityChip from "@/components/IdentityChip";
 
 const items = [
   { title: "Sessions", url: "/sessions", icon: LayoutDashboard },
   { title: "Create", url: "/create", icon: Plus },
   { title: "Join", url: "/join", icon: LogIn },
-  { title: "Account", url: "/account", icon: Settings },
 ];
 
 /** Derive a short page title from the current path */
@@ -20,21 +19,19 @@ const pageTitles: Record<string, string> = {
 };
 
 const MobileNav = () => {
-  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const isHome = location.pathname === "/" || location.pathname === "/sessions";
   const pageTitle = pageTitles[location.pathname] || "";
   const isDeepPage = !isHome && !pageTitle;
-  const initials = user?.email?.slice(0, 2).toUpperCase() ?? "";
 
   return (
     <>
       {/* Mobile top header */}
-      <header className="flex md:hidden items-center justify-between h-12 px-4 border-b border-border/20">
+      <header className="flex md:hidden items-center justify-between h-12 px-4 border-b border-border/20 gap-2">
         <button
           onClick={() => navigate("/")}
-          className="flex items-center gap-1.5 transition-colors"
+          className="flex items-center gap-1.5 transition-colors shrink-0"
           aria-label="Go to Home"
         >
           {isHome || !isDeepPage ? (
@@ -46,12 +43,12 @@ const MobileNav = () => {
             <ArrowLeft className="h-4 w-4 text-muted-foreground" />
           )}
         </button>
-        <span className="text-xs font-medium text-foreground tracking-wide uppercase">
+        <span className="text-xs font-medium text-foreground tracking-wide uppercase truncate">
           {isDeepPage ? "" : pageTitle || "Sessions"}
         </span>
-        <Link to="/account" className="flex items-center justify-center h-6 w-6 rounded-full bg-primary/20 text-primary text-[10px] font-semibold">
-          {user ? initials : <User className="h-3.5 w-3.5 text-muted-foreground" />}
-        </Link>
+        <div className="shrink-0">
+          <IdentityChip compact />
+        </div>
       </header>
 
       {/* Bottom tab bar */}
