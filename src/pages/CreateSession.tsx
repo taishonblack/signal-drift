@@ -53,6 +53,8 @@ const statusDot: Record<LineStatus, string> = {
 const CreateSession = () => {
   const navigate = useNavigate();
   const { id: routeId } = useParams<{ id: string }>();
+  // Promote anon → Temporary Operator on first session touch.
+  ensureIdentity();
   const currentUser = getCurrentUserRef();
 
   // Configure mode: session id in URL.
