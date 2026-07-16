@@ -63,8 +63,6 @@ const AccountPage = () => {
       ) : (
         <AuthForm onSignIn={signIn} onSignUp={signUp} initialMode={claim ? "signup" : initialMode} />
       )}
-        <AuthForm onSignIn={signIn} onSignUp={signUp} initialMode={claim ? "signup" : initialMode} />
-      )}
 
 
       {/* Settings section */}
