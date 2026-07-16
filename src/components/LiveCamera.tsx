@@ -115,6 +115,7 @@ const LiveCamera = ({
         className="absolute inset-0 h-full w-full object-contain"
       />
 
+
       <div className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-[10px] uppercase tracking-wider text-white">
         WebRTC · {status}
       </div>
