@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Plus, LogIn, ChevronDown, ChevronRight, Radio, BookOpen, Users, Archive,
-  Settings2, X,
+  Settings2, X, Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
