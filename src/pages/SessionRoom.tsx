@@ -11,6 +11,7 @@ import QCNotesPanel from "@/components/session/QCNotesPanel";
 import EditInputModal from "@/components/session/EditInputModal";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
 import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
+import ShareSessionDialog from "@/components/session/ShareSessionDialog";
 import SessionEndIndicator from "@/components/session/SessionEndIndicator";
 import { mockSessions, mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
 import {
@@ -91,6 +92,7 @@ const SessionRoom = () => {
   const scheduledEndAt = record?.scheduledEndAt || null;
   const [ownerLeftOpen, setOwnerLeftOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
 
   // Join on mount. Presence heartbeat continues via AppLayout's
@@ -468,7 +470,6 @@ const SessionRoom = () => {
           sessionName={session.name}
           sessionStatus={session.status}
           sessionId={session.id}
-          sessionPin={session.pin}
           layout={layout}
           onLayoutChange={setLayout}
           timePrefs={timePrefs}
@@ -479,7 +480,19 @@ const SessionRoom = () => {
           onToggleInspector={() => setShowInspector(!showInspector)}
           showSafeArea={showSafeArea}
           onToggleSafeArea={() => setShowSafeArea(!showSafeArea)}
+          onShare={() => setShareOpen(true)}
         />
+
+        <ShareSessionDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          sessionId={session.id}
+          sessionName={record?.name ?? session.name}
+          pin={isOwner ? (record?.pin ?? session.pin) : null}
+          isOwner={isOwner}
+          onRegeneratePin={isOwner ? handleRegeneratePin : undefined}
+        />
+
 
         {record?.guestOwned && (
           <div className="-mt-2 rounded-md border border-primary/25 bg-primary/[0.05] px-3 py-2 flex flex-wrap items-center gap-2 text-[11px] text-foreground/85">
