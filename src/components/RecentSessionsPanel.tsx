@@ -193,6 +193,7 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
         />
         <ExpiredSessionDialog
           session={expiredSession}
+          isOwner={expiredIsOwner}
           onClose={() => setExpiredSession(null)}
         />
       </div>
