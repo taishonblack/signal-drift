@@ -726,21 +726,71 @@ const SessionRoom = () => {
                 );
               }
 
+              // Layout 3 on desktop: resizable big-left + stacked-right.
+              if (effectiveStr === "3" && !isMobile) {
+                return (
+                  <SortableContext items={slots}>
+                    <div
+                      ref={layout3RowRef}
+                      className="flex-1 flex min-h-0 min-w-0 items-stretch"
+                    >
+                      <div
+                        className="min-h-0 min-w-0"
+                        style={{ flexBasis: `${workspacePrefs.mainSplitPct}%`, flexGrow: 0, flexShrink: 0 }}
+                      >
+                        {renderDraggableTile("A")}
+                      </div>
+                      <ResizeDivider
+                        orientation="vertical"
+                        value={workspacePrefs.mainSplitPct}
+                        min={WORKSPACE_LIMITS.mainSplitMin}
+                        max={WORKSPACE_LIMITS.mainSplitMax}
+                        step={2}
+                        containerRef={layout3RowRef}
+                        toValue={(clientX, rect) => ((clientX - rect.left) / rect.width) * 100}
+                        onChange={(next) => updateWorkspacePrefs({ mainSplitPct: next })}
+                        onDoubleClick={() => updateWorkspacePrefs({ mainSplitPct: DEFAULT_WORKSPACE_PREFS.mainSplitPct })}
+                        ariaLabel="Resize left and right panes"
+                      />
+                      <div
+                        ref={rightStackRef}
+                        className="flex-1 min-h-0 min-w-0 flex flex-col"
+                      >
+                        <div
+                          className="min-h-0 min-w-0"
+                          style={{ flexBasis: `${workspacePrefs.rightStackPct}%`, flexGrow: 0, flexShrink: 0 }}
+                        >
+                          {renderDraggableTile("B")}
+                        </div>
+                        <ResizeDivider
+                          orientation="horizontal"
+                          value={workspacePrefs.rightStackPct}
+                          min={WORKSPACE_LIMITS.rightStackMin}
+                          max={WORKSPACE_LIMITS.rightStackMax}
+                          step={2}
+                          containerRef={rightStackRef}
+                          toValue={(clientY, rect) => ((clientY - rect.top) / rect.height) * 100}
+                          onChange={(next) => updateWorkspacePrefs({ rightStackPct: next })}
+                          onDoubleClick={() => updateWorkspacePrefs({ rightStackPct: DEFAULT_WORKSPACE_PREFS.rightStackPct })}
+                          ariaLabel="Resize upper and lower right panes"
+                        />
+                        <div className="flex-1 min-h-0 min-w-0">
+                          {renderDraggableTile("C")}
+                        </div>
+                      </div>
+                    </div>
+                  </SortableContext>
+                );
+              }
+
               return (
                 <SortableContext items={slots}>
                   <div className={`flex-1 grid ${grid.cls} gap-3 min-h-0`} style={grid.style}>
-                    {effectiveStr === "3" && !isMobile ? (
-                      <>
-                        <div className="row-span-2 min-h-0">{renderDraggableTile("A")}</div>
-                        {renderDraggableTile("B")}
-                        {renderDraggableTile("C")}
-                      </>
-                    ) : (
-                      slots.map((slot) => renderDraggableTile(slot))
-                    )}
+                    {slots.map((slot) => renderDraggableTile(slot))}
                   </div>
                 </SortableContext>
               );
+
             })()}
 
             <DragOverlay>
