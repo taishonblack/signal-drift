@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Circle, Crown, ShieldCheck, Hand, Check, X, Clock } from "lucide-react";
+import { Users, Circle, Crown, ShieldCheck, Hand, Check, X, Clock, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { SessionViewer, SessionOwnershipRequest, OwnershipRequestKind } from "@/lib/session-store";
@@ -9,8 +9,11 @@ import {
   requestOwnership,
   resolveOwnershipRequest,
   cancelOwnershipRequest,
+  leaveSession,
   getCurrentUserRef,
 } from "@/lib/session-store";
+import { revokeViewerAccess } from "@/lib/sessions-remote";
+import { useIdentity } from "@/lib/identity";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -40,6 +43,8 @@ const ViewersPanel = ({
   onChange,
 }: Props) => {
   const [choosingKind, setChoosingKind] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const identity = useIdentity();
   const count = viewers.length;
 
   // Live-read requests/owner from store so approvals refresh immediately.
