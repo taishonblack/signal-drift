@@ -227,9 +227,6 @@ const Sessions = () => {
                   <Button asChild size="sm" className="gap-1.5">
                     <Link to="/create"><Plus className="h-3.5 w-3.5" /> Start Monitoring</Link>
                   </Button>
-                  <Button asChild size="sm" variant="outline" className="gap-1.5 border-border/40">
-                    <Link to="/join"><LogIn className="h-3.5 w-3.5" /> Join with ID and PIN</Link>
-                  </Button>
                   <Button asChild size="sm" variant="ghost" className="gap-1.5 text-muted-foreground">
                     <Link to="/account?mode=login">Sign In</Link>
                   </Button>
