@@ -44,15 +44,20 @@ const AccountPage = () => {
       <div>
         <h1 className="text-xl font-semibold text-foreground">Account</h1>
         <p className="text-sm text-muted-foreground">
-          {user ? user.email : "Sign in to save sessions and sync across devices"}
+          {user
+            ? user.email
+            : claim
+              ? "Create an account to save your monitoring session, notes, and diagnostics."
+              : "Optional. MAKO works fully without an account — sign in to save history, drafts, and layouts."}
         </p>
       </div>
 
       {user ? (
         <SignedInView email={user.email ?? ""} onSignOut={signOut} />
       ) : (
-        <AuthForm onSignIn={signIn} onSignUp={signUp} />
+        <AuthForm onSignIn={signIn} onSignUp={signUp} initialMode={claim ? "signup" : initialMode} />
       )}
+
 
       {/* Settings section */}
       <div>
