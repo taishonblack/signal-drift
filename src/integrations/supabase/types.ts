@@ -47,6 +47,30 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string
+          id: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          id: string
+          role?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          id?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       session_focus: {
         Row: {
           focused_by: string
@@ -68,12 +92,101 @@ export type Database = {
         }
         Relationships: []
       }
+      sessions: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          payload: Json
+          pin_hash: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          name: string
+          owner_id: string
+          payload?: Json
+          pin_hash?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          payload?: Json
+          pin_hash?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      shared_session_access: {
+        Row: {
+          created_at: string
+          granted_at: string
+          id: string
+          last_accessed_at: string | null
+          revoked_at: string | null
+          role: string
+          session_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          granted_at?: string
+          id?: string
+          last_accessed_at?: string | null
+          revoked_at?: string | null
+          role?: string
+          session_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          granted_at?: string
+          id?: string
+          last_accessed_at?: string | null
+          revoked_at?: string | null
+          role?: string
+          session_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_session_access_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_session_access: {
+        Args: { _session_id: string; _user_id: string }
+        Returns: boolean
+      }
+      hash_session_pin: { Args: { _pin: string }; Returns: string }
+      is_session_owner: {
+        Args: { _session_id: string; _user_id: string }
+        Returns: boolean
+      }
+      verify_session_pin: {
+        Args: { _pin: string; _session_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
