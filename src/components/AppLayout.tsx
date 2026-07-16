@@ -51,6 +51,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6 overflow-x-hidden overflow-y-auto">
             {children}
           </main>
+          <IdleSessionWarning />
         </div>
       </div>
     </SidebarProvider>
