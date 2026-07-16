@@ -70,7 +70,10 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        <CurrentSessionIndicator collapsed={collapsed} />
+
         <RecentSessionsPanel sidebarCollapsed={collapsed} />
+
 
         <div className="mt-auto px-2 pb-4">
           <FeedbackModal collapsed={collapsed} />
