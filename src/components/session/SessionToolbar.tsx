@@ -1,7 +1,6 @@
 import { Grid2X2, Square, LayoutDashboard, PanelRightClose, PanelRightOpen, Share2, FileText, Keyboard, Rows2, ScanLine, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { toast } from "@/hooks/use-toast";
 import TimeDisplayPopover from "@/components/session/TimeDisplayPopover";
 import type { TimeDisplayPrefs } from "@/lib/time-utils";
 import { useIsMobile } from "@/hooks/use-mobile";
