@@ -201,8 +201,8 @@ const Sessions = () => {
           </section>
         )}
 
-        {/* Drafts */}
-        {grouped.drafts.length > 0 && (
+        {/* Drafts — member only */}
+        {isMember && grouped.drafts.length > 0 && (
           <section>
             <SectionHeader title="Drafts" count={grouped.drafts.length} />
             <div className="grid gap-3">
@@ -219,8 +219,8 @@ const Sessions = () => {
           </section>
         )}
 
-        {/* Completed */}
-        {grouped.completed.length > 0 && (
+        {/* Completed — member only */}
+        {isMember && grouped.completed.length > 0 && (
           <section>
             <SectionHeader title="Recent Sessions" count={grouped.completed.length} />
             <div className="grid gap-3">
@@ -237,8 +237,8 @@ const Sessions = () => {
           </section>
         )}
 
-        {/* Archived */}
-        {grouped.archived.length > 0 && (
+        {/* Archived — member only */}
+        {isMember && grouped.archived.length > 0 && (
           <section>
             <SectionHeader
               title="Archived"
@@ -262,6 +262,31 @@ const Sessions = () => {
             )}
           </section>
         )}
+
+        {/* Guest — educational empty states in place of Drafts/Recent/Archived */}
+        {!isMember && (
+          <section className="space-y-4 pt-2">
+            <SectionHeader title="Available After Signing In" count={0} />
+            <div className="grid gap-3 md:grid-cols-3">
+              <GatedEmptyState
+                title="Recent Sessions"
+                body="Sign in to keep your monitoring history across devices."
+                icon={<BookOpen className="h-5 w-5" />}
+              />
+              <GatedEmptyState
+                title="Address Book"
+                body="Save SRT endpoints for one-click reuse."
+                icon={<Users className="h-5 w-5" />}
+              />
+              <GatedEmptyState
+                title="Drafts &amp; Archive"
+                body="Save configurations, revisit archived sessions, sync layouts."
+                icon={<Archive className="h-5 w-5" />}
+              />
+            </div>
+          </section>
+        )}
+
 
         <SessionActionsDialog
           session={actionSession}
