@@ -59,17 +59,24 @@ const statusDot: Record<LineStatus, string> = {
 const CreateSession = () => {
   const navigate = useNavigate();
   const { id: routeId } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const reuseId = searchParams.get("reuse") || undefined;
   // Promote anon → Temporary Operator on first session touch.
   ensureIdentity();
   const identity = useIdentity();
   const currentUser = getCurrentUserRef();
   const isGuest = identity.kind !== "member";
 
-  // Configure mode: session id in URL.
+  // Configure mode: session id in URL. Reuse mode: ?reuse=<id> prefills from an ended session.
   const existing = useMemo(
     () => (routeId ? getSessionById(routeId) : undefined),
     [routeId]
   );
+  const reuseSource = useMemo(
+    () => (reuseId ? getSessionById(reuseId) : undefined),
+    [reuseId]
+  );
+  const isReuse = !routeId && !!reuseSource;
   const mode: "create" | "configure" = routeId ? "configure" : "create";
   const isActiveConfigure = mode === "configure" && existing?.status === "active";
   const isReadOnly =
@@ -78,6 +85,8 @@ const CreateSession = () => {
     (existing.status === "completed" || existing.status === "archived");
   const allowed =
     mode === "create" || (existing ? canConfigureSession(existing, currentUser.id) : false);
+
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // Redirect viewers who can't configure.
   useEffect(() => {
@@ -88,8 +97,9 @@ const CreateSession = () => {
   }, [mode, existing, allowed, navigate]);
 
   const seedLines = (): SrtLine[] => {
-    if (existing) {
-      const base = [...existing.lines];
+    const src = existing ?? reuseSource;
+    if (src) {
+      const base = [...src.lines];
       while (base.length < 4) base.push(createDefaultLine(base.length + 1));
       return base.slice(0, 4);
     }
@@ -101,13 +111,13 @@ const CreateSession = () => {
     ];
   };
 
-  const [name, setName] = useState(existing?.name ?? "");
-  const [purpose, setPurpose] = useState<string>((existing?.purpose as string) ?? "QC");
+  const [name, setName] = useState(existing?.name ?? reuseSource?.name ?? "");
+  const [purpose, setPurpose] = useState<string>((existing?.purpose as string) ?? (reuseSource?.purpose as string) ?? "QC");
   const [scheduledEndAt, setScheduledEndAt] = useState<string>(
     existing?.scheduledEndAt ?? new Date(Date.now() + 60 * 60_000).toISOString(),
   );
   const [defaultOriginTimeZone, setDefaultOriginTimeZone] = useState(
-    existing?.defaultOriginTimeZone ?? "UTC"
+    existing?.defaultOriginTimeZone ?? reuseSource?.defaultOriginTimeZone ?? "UTC"
   );
   const [lines, setLines] = useState<SrtLine[]>(() => seedLines());
   const [activeTab, setActiveTab] = useState(1);
