@@ -113,9 +113,10 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
 
   if (sidebarCollapsed) return null;
 
+  const teamActive = DEMO_DATA_ENABLED ? grouped.teamActive : [];
   const activeList = [
     ...(grouped.yourActive ? [grouped.yourActive] : []),
-    ...grouped.teamActive,
+    ...teamActive,
   ];
   const total =
     activeList.length + grouped.drafts.length + grouped.completed.slice(0, 5).length;
