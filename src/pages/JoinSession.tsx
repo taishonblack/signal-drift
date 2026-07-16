@@ -1,20 +1,55 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { LogIn } from "lucide-react";
+import { LogIn, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ensureIdentity } from "@/lib/identity";
+import {
+  joinSessionRemote,
+  hydrateMemberSessions,
+  upsertLocalStub,
+} from "@/lib/sessions-remote";
+import { getCurrentUserRef, joinSession } from "@/lib/session-store";
+import { toast } from "@/components/ui/sonner";
 
 const JoinSession = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [sessionId, setSessionId] = useState(searchParams.get("session") || "");
   const [pin, setPin] = useState(searchParams.get("pin") || "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleJoin = () => {
-    if (!sessionId) return;
-    ensureIdentity(); // promote anon → Temporary Operator
-    navigate(`/session/${sessionId}`);
+  const handleJoin = async () => {
+    if (!sessionId || !pin) {
+      setError("Enter both a Session ID and a PIN.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      // Promote anon → Temporary Operator so we have a stable user ref.
+      ensureIdentity();
+      const self = getCurrentUserRef();
+
+      const result = await joinSessionRemote(sessionId.trim(), pin.trim());
+
+      // Members: server granted persistent access, hydrate the full record.
+      // Guests: keep the returned summary as a local stub.
+      if (result.granted) {
+        await hydrateMemberSessions();
+      } else {
+        upsertLocalStub(result.session, self);
+      }
+      joinSession(result.session.id, self);
+      navigate(`/session/${result.session.id}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not join session.";
+      setError(msg);
+      toast(msg);
+    } finally {
+      setBusy(false);
+    }
   };
 
 
@@ -32,6 +67,7 @@ const JoinSession = () => {
             value={sessionId}
             onChange={(e) => setSessionId(e.target.value)}
             placeholder="sess-001"
+            disabled={busy}
             className="bg-muted/30 border-border/30 text-foreground placeholder:text-muted-foreground/50"
           />
         </div>
@@ -42,12 +78,21 @@ const JoinSession = () => {
             onChange={(e) => setPin(e.target.value)}
             placeholder="1234"
             maxLength={6}
+            disabled={busy}
             className="bg-muted/30 border-border/30 text-foreground placeholder:text-muted-foreground/50"
           />
         </div>
-        <Button onClick={handleJoin} className="w-full gap-2">
-          <LogIn className="h-4 w-4" /> Join
+        {error && (
+          <p className="text-xs text-destructive" role="alert">{error}</p>
+        )}
+        <Button onClick={handleJoin} disabled={busy} className="w-full gap-2">
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+          {busy ? "Joining…" : "Join"}
         </Button>
+        <p className="text-[11px] text-muted-foreground/70 text-center">
+          Not signed in? You'll join as a Temporary Operator. Sign in later
+          to keep the session in your history.
+        </p>
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import MobileNav from "@/components/MobileNav";
 import MakoBackground from "@/components/MakoBackground";
 import IdentityChip from "@/components/IdentityChip";
 import { useIdentityBootstrap } from "@/lib/identity";
+import { useRemoteSessionSync } from "@/hooks/use-remote-session-sync";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -12,6 +13,7 @@ interface AppLayoutProps {
 
 const AppLayout = ({ children }: AppLayoutProps) => {
   useIdentityBootstrap();
+  useRemoteSessionSync();
 
   // "B" keyboard shortcut for sidebar toggle
   useEffect(() => {
