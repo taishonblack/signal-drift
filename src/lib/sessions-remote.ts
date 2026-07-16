@@ -76,6 +76,23 @@ export async function saveSessionRemote(session: SessionRecord): Promise<void> {
   if (data?.error) throw new Error(String(data.error));
 }
 
+/**
+ * Owner-side revoke: mark a viewer's shared_session_access row revoked.
+ * RLS restricts this to the session owner (see policy
+ * "Owner updates shares for own sessions").
+ */
+export async function revokeViewerAccess(
+  sessionId: string,
+  userId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("shared_session_access")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("session_id", sessionId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
 export interface JoinRemoteResult {
   ok: true;
   session: {
