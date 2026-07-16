@@ -60,7 +60,7 @@ const AudioMeter = ({ peakL, peakR }: { peakL: number; peakR: number }) => {
 };
 
 const SignalTile = ({
-  input, liveMetrics, isFocused = false, isAudioSource, isFullscreen,
+  input, liveMetrics, isFocused = false, isAudioSource, muteAll = false, isFullscreen,
   onFocusClick, onFullscreen, onEdit, onSelectAudio,
   timePrefs, tileOriginTZ = "UTC", focusedOriginTZ = "UTC", sessionStartedAt = "",
   showSafeArea = false,
@@ -71,6 +71,40 @@ const SignalTile = ({
   const peakL = liveMetrics?.audioPeakL ?? 0;
   const peakR = liveMetrics?.audioPeakR ?? 0;
   const isActive = input.status !== "idle";
+
+  // Personal audio state — this pane is the audio source for this viewer,
+  // and mute-all is not overriding it.
+  const wantsAudio = !!isAudioSource && !muteAll;
+  const [audioBlocked, setAudioBlocked] = useState(false);
+
+  // Local <video> path (non-WebRTC): mirror the requested mute state and
+  // probe autoplay. Browsers only allow unmuted playback after a user
+  // gesture — the parent should call onSelectAudio in direct response to
+  // a click for this to succeed on the first try.
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = !wantsAudio;
+    if (!wantsAudio) {
+      setAudioBlocked(false);
+      return;
+    }
+    const p = el.play();
+    if (p && typeof p.then === "function") {
+      p.then(() => setAudioBlocked(false)).catch(() => setAudioBlocked(true));
+    }
+  }, [wantsAudio]);
+
+  const enableAudioFromOverlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const el = videoRef.current;
+    if (!el) return;
+    el.muted = false;
+    el.play().then(() => setAudioBlocked(false)).catch(() => setAudioBlocked(true));
+  };
+
+
 
   return (
     <div
