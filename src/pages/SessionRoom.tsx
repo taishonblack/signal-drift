@@ -519,8 +519,9 @@ const SessionRoom = () => {
           isFocused={focusedId === fullscreenInput.id}
           isAudioSource={audioSource === fullscreenInput.id}
           onClose={() => setFullscreenId(null)}
-          onFocusClick={() => setFocus(fullscreenInput.id)}
-          onSelectAudio={() => setAudioSource(fullscreenInput.id)}
+          onFocusClick={() => selectSourceForViewer(fullscreenInput.id)}
+          onSelectAudio={() => selectSourceForViewer(fullscreenInput.id)}
+
           onEdit={() => openEdit(fullscreenInput)}
         />
       )}
