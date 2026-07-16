@@ -90,14 +90,14 @@ const SessionRoom = () => {
   const [saveOpen, setSaveOpen] = useState(false);
 
 
-  // Join on mount, leave on unmount.
+  // Join on mount. Presence heartbeat continues via AppLayout's
+  // usePresenceLifecycle even after the user navigates away, so leaving
+  // this route MUST NOT remove the viewer entry — only explicit "Leave"
+  // actions call leaveSession().
   useEffect(() => {
     if (!id) return;
     joinSession(id, currentUserRef);
     setRecord(getSessionById(id));
-    return () => {
-      leaveSession(id, currentUserRef.id);
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
