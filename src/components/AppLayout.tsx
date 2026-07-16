@@ -17,6 +17,7 @@ interface AppLayoutProps {
 const AppLayout = ({ children }: AppLayoutProps) => {
   useIdentityBootstrap();
   useRemoteSessionSync();
+  usePresenceLifecycle();
 
   // "B" keyboard shortcut for sidebar toggle
   useEffect(() => {
