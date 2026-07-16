@@ -252,6 +252,22 @@ const SessionRoom = () => {
   const focusedInput = activeInputs.find((i) => i.id === focusedId);
   const focusedLabel = focusedInput?.label ?? "Unknown";
 
+  /**
+   * Personal audio-follows-selection: clicking a pane sets both visual
+   * focus AND audio to that source, and clears mute-all. Focus and audio
+   * are kept as separate state so a future preference can decouple them
+   * (spec §9). Do not merge into one variable.
+   */
+  const selectSourceForViewer = useCallback(
+    (inputId: string) => {
+      setFocus(inputId);
+      setAudioSource(inputId);
+      setMuteAll(false);
+    },
+    [setFocus],
+  );
+
+
   // Presence: write focused label into current viewer entry.
   useEffect(() => {
     if (!id || !focusedInput) return;
