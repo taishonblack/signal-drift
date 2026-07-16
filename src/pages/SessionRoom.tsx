@@ -370,10 +370,30 @@ const SessionRoom = () => {
   );
 
   const handleEndSession = useCallback(() => {
+    // Guest owner ending a session → offer to save via account creation.
+    const cur = id ? getSessionById(id) : undefined;
+    const iAmOwner = cur && (cur.ownerUserId ?? cur.hostUserId) === currentUserRef.id;
+    if (identity.kind !== "member" && iAmOwner) {
+      setSaveOpen(true);
+      return;
+    }
     if (id) endSessionRecord(id);
     toast({ title: "Session ended" });
     navigate("/sessions");
-  }, [id, navigate]);
+  }, [id, navigate, identity.kind, currentUserRef.id]);
+
+  const finalizeEnd = useCallback(
+    (mode: "keep" | "discard") => {
+      setSaveOpen(false);
+      if (id) endSessionRecord(id);
+      toast({
+        title: mode === "discard" ? "Session discarded" : "Session ended",
+      });
+      navigate("/sessions");
+    },
+    [id, navigate],
+  );
+
 
   return (
     <>
