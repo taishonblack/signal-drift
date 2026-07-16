@@ -593,8 +593,20 @@ const SessionRoom = () => {
           </div>
         )}
 
-        {/* Quinn toggle + alert badge + Reset layout */}
+        {/* Quinn toggle + alert badge + Reset layout + Mute All */}
         <div className="flex items-center gap-2 -mt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setMuteAll((m) => !m)}
+            className={`h-7 gap-1.5 text-xs ${muteAll ? "text-primary bg-muted/30" : "text-muted-foreground"}`}
+            title="Mute all sources (M)"
+            aria-pressed={muteAll}
+          >
+            {muteAll ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+            {muteAll ? "Muted" : "Mute All"}
+          </Button>
+
           <Button
             variant="ghost"
             size="sm"
