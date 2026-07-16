@@ -201,6 +201,23 @@ const SessionRoom = () => {
   const [activeDragSlot, setActiveDragSlot] = useState<SlotId | null>(null);
   const [cycleFlash, setCycleFlash] = useState(false);
 
+  // Per-viewer workspace layout preferences (pane splits, notes height, panel visibility).
+  const { prefs: workspacePrefs, update: updateWorkspacePrefs, ready: workspacePrefsReady } =
+    useWorkspacePrefs();
+  const hydratedInspectorRef = useRef(false);
+  useEffect(() => {
+    if (!workspacePrefsReady || hydratedInspectorRef.current) return;
+    hydratedInspectorRef.current = true;
+    setShowInspector(workspacePrefs.inspectorOpen);
+    setShowNotes(!workspacePrefs.notesCollapsed ? true : false);
+    // Only hydrate once from prefs. Subsequent toggles are user-driven.
+  }, [workspacePrefsReady, workspacePrefs.inspectorOpen, workspacePrefs.notesCollapsed]);
+
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const layout3RowRef = useRef<HTMLDivElement | null>(null);
+  const rightStackRef = useRef<HTMLDivElement | null>(null);
+
+
   const user = getCurrentUser();
   const isHostUser = isHost("u1");
   const alertCount = getUnackedAlertCountForSession(session.id, user.id);
