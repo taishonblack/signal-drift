@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import {
   getSessions,
@@ -10,12 +10,14 @@ import {
   endSession,
   type SessionRecord,
 } from "@/lib/session-store";
+import { useIdentity } from "@/lib/identity";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import SessionCard from "@/components/session/SessionCard";
 import JoinActiveSessionDialog from "@/components/session/JoinActiveSessionDialog";
 import SwitchMonitoringSessionDialog from "@/components/session/SwitchMonitoringSessionDialog";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
 import { mockSessions, type Session } from "@/lib/mock-data";
+
 
 const LS_KEY = "mako_recent_sessions_collapsed";
 
