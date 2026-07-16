@@ -19,15 +19,21 @@ import {
   joinSession,
   leaveSession,
   transferOwnership,
+  claimOwnership,
+  orphanSweep,
   updateViewerFocus,
   getCurrentUserRef,
   canConfigureSession,
   type SessionRecord,
   type SessionChangeEntry,
 } from "@/lib/session-store";
+import { useIdentity, ensureIdentity } from "@/lib/identity";
 import ViewersPanel from "@/components/session/ViewersPanel";
 import OwnershipTransferDialog from "@/components/session/OwnershipTransferDialog";
+import OwnerLeftDialog from "@/components/session/OwnerLeftDialog";
+import SaveSessionPrompt from "@/components/session/SaveSessionPrompt";
 import SessionChangeLogPanel from "@/components/session/SessionChangeLogPanel";
+
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { History, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
