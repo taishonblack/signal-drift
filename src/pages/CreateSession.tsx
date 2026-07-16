@@ -56,7 +56,9 @@ const CreateSession = () => {
   const { id: routeId } = useParams<{ id: string }>();
   // Promote anon → Temporary Operator on first session touch.
   ensureIdentity();
+  const identity = useIdentity();
   const currentUser = getCurrentUserRef();
+  const isGuest = identity.kind !== "member";
 
   // Configure mode: session id in URL.
   const existing = useMemo(
