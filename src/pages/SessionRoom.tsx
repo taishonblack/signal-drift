@@ -459,6 +459,25 @@ const SessionRoom = () => {
           onToggleSafeArea={() => setShowSafeArea(!showSafeArea)}
         />
 
+        {record?.guestOwned && (
+          <div className="-mt-2 rounded-md border border-primary/25 bg-primary/[0.05] px-3 py-2 flex flex-wrap items-center gap-2 text-[11px] text-foreground/85">
+            <span className="uppercase tracking-wider text-[9px] text-primary/80 font-semibold">
+              Temporary session
+            </span>
+            <span className="text-muted-foreground">
+              This session will not be saved after you close this browser tab unless you sign in or transfer ownership.
+            </span>
+            <Button
+              asChild
+              size="sm"
+              variant="link"
+              className="h-auto p-0 ml-auto text-xs text-primary"
+            >
+              <a href="/account?mode=login">Sign In to Save</a>
+            </Button>
+          </div>
+        )}
+
         {/* Quinn toggle + alert badge + Reset layout */}
         <div className="flex items-center gap-2 -mt-2">
           <Button
