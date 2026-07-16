@@ -231,18 +231,31 @@ const SessionRoom = () => {
 
   const handleBecomeOwner = useCallback(() => {
     if (!id) return;
-    transferOwnership(id, currentUserRef.id);
+    const won = claimOwnership(id, currentUserRef);
     setRecord(getSessionById(id));
-    setOwnershipDialogOpen(false);
-    toast({ title: "You are now the session owner" });
-  }, [id, currentUserRef.id]);
+    setOwnerLeftOpen(false);
+    if (won) {
+      toast({ title: "You are now the session owner" });
+    } else {
+      toast({ title: "Another viewer claimed ownership first" });
+    }
+  }, [id, currentUserRef]);
 
   const handleLeaveAsViewer = useCallback(() => {
     if (!id) return;
     leaveSession(id, currentUserRef.id);
-    setOwnershipDialogOpen(false);
+    setOwnerLeftOpen(false);
     navigate("/sessions");
   }, [id, currentUserRef.id, navigate]);
+
+  const handleOrphanExpired = useCallback(() => {
+    if (!id) return;
+    endSessionRecord(id);
+    setOwnerLeftOpen(false);
+    toast({ title: "Session ended", description: "No owner claimed the session." });
+    navigate("/sessions");
+  }, [id, navigate]);
+
 
 
   const getOriginTZ = useCallback((_inputId: string) => {
