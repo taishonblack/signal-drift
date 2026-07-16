@@ -79,8 +79,9 @@ const JoinSession = () => {
             value={sessionId}
             onChange={(e) => setSessionId(e.target.value)}
             placeholder="sess-001"
-            disabled={busy}
-            className="bg-muted/30 border-border/30 text-foreground placeholder:text-muted-foreground/50"
+            disabled={busy || idLocked}
+            readOnly={idLocked}
+            className={`bg-muted/30 border-border/30 text-foreground placeholder:text-muted-foreground/50 ${idLocked ? "opacity-70 cursor-not-allowed font-mono" : ""}`}
           />
         </div>
         <div className="space-y-2">
