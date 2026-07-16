@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      address_book: {
+        Row: {
+          address: string
+          created_at: string
+          description: string | null
+          id: string
+          last_used: string
+          port: string | null
+          purpose: string | null
+          session_name: string | null
+          tag: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          last_used?: string
+          port?: string | null
+          purpose?: string | null
+          session_name?: string | null
+          tag: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          last_used?: string
+          port?: string | null
+          purpose?: string | null
+          session_name?: string | null
+          tag?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       feedback: {
         Row: {
           created_at: string
