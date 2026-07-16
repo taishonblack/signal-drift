@@ -200,6 +200,23 @@ const SessionRoom = () => {
   const [showSafeArea, setShowSafeArea] = useState(false);
   const [activeDragSlot, setActiveDragSlot] = useState<SlotId | null>(null);
   const [cycleFlash, setCycleFlash] = useState(false);
+  const [muteAll, setMuteAll] = useState(false);
+
+  /**
+   * Personal audio-follows-selection: when the viewer clicks a pane we set
+   * both focus AND audio to that source. State is kept in two variables so
+   * a future preference can decouple visual focus from audio monitoring
+   * (spec §9). Do not merge them.
+   */
+  const selectSourceForViewer = useCallback(
+    (inputId: string) => {
+      setFocus(inputId);
+      setAudioSource(inputId);
+      setMuteAll(false);
+    },
+    [setFocus],
+  );
+
 
   // Per-viewer workspace layout preferences (pane splits, notes height, panel visibility).
   const { prefs: workspacePrefs, update: updateWorkspacePrefs, ready: workspacePrefsReady } =
