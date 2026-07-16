@@ -825,6 +825,8 @@ const SessionRoom = () => {
                     liveMetrics={getMetrics(draggedInput.id)}
                     isFocused={focusedId === draggedInput.id}
                     isAudioSource={audioSource === draggedInput.id}
+                    muteAll={true}
+
                     showSafeArea={false}
                   />
                 </div>
