@@ -21,6 +21,7 @@ import SessionCard from "@/components/session/SessionCard";
 import SessionActionsDialog from "@/components/session/SessionActionsDialog";
 import SwitchMonitoringSessionDialog from "@/components/session/SwitchMonitoringSessionDialog";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
+import ShareSessionDialog from "@/components/session/ShareSessionDialog";
 import GatedEmptyState from "@/components/GatedEmptyState";
 import { mockSessions, type Session } from "@/lib/mock-data";
 
