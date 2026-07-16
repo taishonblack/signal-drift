@@ -1,5 +1,6 @@
+import { useEffect, useRef, useState } from "react";
 import LiveCamera from "@/components/LiveCamera";
-import { Maximize2, Edit3, Volume2, VideoOff, WifiOff, Loader2, PlugZap, RefreshCw } from "lucide-react";
+import { Maximize2, Edit3, Volume2, VolumeX, VideoOff, WifiOff, Loader2, PlugZap, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { StreamInput } from "@/lib/mock-data";
@@ -13,6 +14,8 @@ interface SignalTileProps {
   liveMetrics?: LiveMetrics;
   isFocused?: boolean;
   isAudioSource?: boolean;
+  /** Global mute-all — overrides isAudioSource and mutes every pane. */
+  muteAll?: boolean;
   isFullscreen?: boolean;
   onFocusClick?: () => void;
   onFullscreen?: () => void;
@@ -24,6 +27,7 @@ interface SignalTileProps {
   sessionStartedAt?: string;
   showSafeArea?: boolean;
 }
+
 
 const statusBadge: Record<string, { label: string; cls: string }> = {
   live: { label: "LIVE", cls: "bg-primary/20 text-primary" },
