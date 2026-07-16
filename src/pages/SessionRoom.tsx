@@ -112,10 +112,18 @@ const SessionRoom = () => {
   useEffect(() => {
     if (!id) return;
     const t = window.setInterval(() => {
+      orphanSweep();
       const next = getSessionById(id);
       setRecord(next);
-      if (next && !next.ownerUserId && (next.viewers ?? []).some((v) => v.userId === currentUserRef.id)) {
-        setOwnershipDialogOpen(true);
+      const iAmParticipant = (next?.viewers ?? []).some((v) => v.userId === currentUserRef.id);
+      if (next && !next.ownerUserId && iAmParticipant && next.status === "active") {
+        setOwnerLeftOpen(true);
+      } else if (next?.ownerUserId) {
+        setOwnerLeftOpen(false);
+      }
+      // If the session terminated (orphan-swept), navigate out.
+      if (next && next.status !== "active" && iAmParticipant === false) {
+        // leave-of-session cleanup happens in unmount
       }
       // Change log deltas → toast for changes by other users.
       const log = next?.changeLog ?? [];
@@ -141,9 +149,26 @@ const SessionRoom = () => {
           setLastSeenChangeId(log[log.length - 1].id);
         }
       }
-    }, 2000);
+    }, 1000);
     return () => window.clearInterval(t);
   }, [id, currentUserRef.id, lastSeenChangeId]);
+
+  // beforeunload warning for owner with other viewers
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      const cur = id ? getSessionById(id) : undefined;
+      if (!cur || cur.status !== "active") return;
+      const iAmOwner = (cur.ownerUserId ?? cur.hostUserId) === currentUserRef.id;
+      const otherViewers = (cur.viewers ?? []).filter((v) => v.userId !== currentUserRef.id);
+      if (iAmOwner && otherViewers.length > 0) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [id, currentUserRef.id]);
+
 
   const viewers = record?.viewers ?? [];
   const isOwner = (record?.ownerUserId ?? record?.hostUserId) === currentUserRef.id;
