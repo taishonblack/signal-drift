@@ -7,7 +7,6 @@ import {
   getCurrentUserRef,
   heartbeat,
   sweepPresence,
-  readCurrentSession,
 } from "@/lib/session-store";
 import { readCurrentSession } from "@/hooks/use-current-session";
 
