@@ -110,7 +110,12 @@ export interface SessionRecord {
   viewers?: SessionViewer[];
   changeLog?: SessionChangeEntry[];
   ownershipRequests?: SessionOwnershipRequest[];
+  /** When ownership became vacant. Used for the 30s orphan-termination sweep. */
+  noOwnerSince?: number | null;
+  /** True when the creator was a temporary Operator (unauthenticated). */
+  guestOwned?: boolean;
 }
+
 
 
 export interface AddressBookEntry {
