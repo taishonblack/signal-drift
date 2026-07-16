@@ -29,6 +29,7 @@ import {
 } from "@/lib/session-store";
 import { useIdentity, ensureIdentity } from "@/lib/identity";
 import ViewersPanel from "@/components/session/ViewersPanel";
+import SharedSessionBadge from "@/components/session/SharedSessionBadge";
 
 import OwnerLeftDialog from "@/components/session/OwnerLeftDialog";
 import SaveSessionPrompt from "@/components/session/SaveSessionPrompt";
@@ -552,6 +553,7 @@ const SessionRoom = () => {
           <span className="text-muted-foreground/50">· Focused by: {focusedBy}</span>
           <div className="ml-auto flex items-center gap-2">
             {isOwner && <span className="text-[10px] uppercase tracking-wider text-primary/80 font-semibold">Owner</span>}
+            {viewers.length > 1 && <SharedSessionBadge asViewer={!isOwner} />}
             <ViewersPanel
               viewers={viewers}
               sessionId={id}
