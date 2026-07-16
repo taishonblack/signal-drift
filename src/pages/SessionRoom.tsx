@@ -415,6 +415,33 @@ const SessionRoom = () => {
     [id, navigate],
   );
 
+  const handleRegeneratePin = useCallback(async () => {
+    if (!id) return;
+    const { generatePin } = await import("@/lib/session-store");
+    const newPin = generatePin();
+    updateSession(id, { pin: newPin });
+    const next = getSessionById(id);
+    setRecord(next);
+    if (identity.kind === "member" && next) {
+      try {
+        const { saveSessionRemote } = await import("@/lib/sessions-remote");
+        await saveSessionRemote(next);
+      } catch {
+        // Non-fatal: local update stands; remote sync will retry later.
+      }
+    }
+    appendChangeLog(id, {
+      id: `cl-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+      at: new Date().toISOString(),
+      userId: currentUserRef.id,
+      userName: currentUserRef.name,
+      kind: "duration_changed",
+      summary: "Session PIN regenerated. Previous PIN no longer accepts new joins.",
+    });
+  }, [id, identity.kind, currentUserRef.id, currentUserRef.name]);
+
+
+
 
   return (
     <>
