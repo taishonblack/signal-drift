@@ -161,14 +161,23 @@ function write<T>(key: string, value: T) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
-// ─── Current user (mock) ───
+// ─── Current user ───
+// Delegates to the identity layer so guest (Temporary Operator) sessions
+// carry a stable id/name without requiring authentication.
+
+import { getIdentity } from "@/lib/identity";
 
 export const CURRENT_USER_ID = "u1";
 export const CURRENT_USER_NAME = "You";
 
 export function getCurrentUserRef(): { id: string; name: string } {
-  return { id: CURRENT_USER_ID, name: CURRENT_USER_NAME };
+  const identity = getIdentity();
+  if (identity.kind === "anon") {
+    return { id: CURRENT_USER_ID, name: CURRENT_USER_NAME };
+  }
+  return { id: identity.id, name: identity.name };
 }
+
 
 // ─── Sessions ───
 
