@@ -423,13 +423,16 @@ export function leaveSession(sessionId: string, userId: string) {
   const s = getSessionById(sessionId);
   if (!s) return;
   const viewers = (s.viewers ?? []).filter((v) => v.userId !== userId);
-  // If owner left and others remain → clear owner to prompt transfer.
   const wasOwner = (s.ownerUserId ?? s.hostUserId) === userId;
   const patch: Partial<SessionRecord> = { viewers };
   if (wasOwner && viewers.length > 0) {
     patch.ownerUserId = undefined;
+    patch.noOwnerSince = Date.now();
+  } else if (wasOwner) {
+    // No one left → just end the session immediately.
+    patch.status = "completed";
+    patch.endedAt = new Date().toISOString();
   }
-  // If nobody left, keep session but empty.
   updateSession(sessionId, patch);
 }
 
@@ -446,8 +449,71 @@ export function transferOwnership(sessionId: string, newOwnerId: string) {
     ownerUserId: newOwnerId,
     hostUserId: newOwnerId,
     host: newOwner?.name ?? s.host,
+    noOwnerSince: null,
   });
 }
+
+/**
+ * Guest lifecycle: first viewer to claim an orphaned session wins.
+ * Returns true if this call succeeded in claiming ownership.
+ */
+export function claimOwnership(
+  sessionId: string,
+  claimer: { id: string; name: string }
+): boolean {
+  const s = getSessionById(sessionId);
+  if (!s) return false;
+  if (s.ownerUserId) return false; // someone else already claimed
+  const viewers = (s.viewers ?? []).map((v) => ({
+    ...v,
+    isOwner: v.userId === claimer.id,
+  }));
+  updateSession(sessionId, {
+    viewers,
+    ownerUserId: claimer.id,
+    hostUserId: claimer.id,
+    host: claimer.name,
+    noOwnerSince: null,
+  });
+  appendChangeLog(sessionId, {
+    id: `cl-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+    at: new Date().toISOString(),
+    userId: claimer.id,
+    userName: claimer.name,
+    kind: "ownership_granted",
+    summary: `${claimer.name} claimed ownership of the session`,
+  });
+  return true;
+}
+
+/**
+ * Terminate any active session that has been ownerless for longer than
+ * `staleMs` (default 30s). Called from the SessionRoom poller.
+ */
+export function orphanSweep(staleMs = 30_000) {
+  const now = Date.now();
+  const sessions = getSessions();
+  let dirty = false;
+  const next = sessions.map((s) => {
+    if (
+      s.status === "active" &&
+      !s.ownerUserId &&
+      s.noOwnerSince &&
+      now - s.noOwnerSince >= staleMs
+    ) {
+      dirty = true;
+      return {
+        ...s,
+        status: "completed" as const,
+        endedAt: new Date(now).toISOString(),
+        viewers: [],
+      };
+    }
+    return s;
+  });
+  if (dirty) write(SESSIONS_KEY, next);
+}
+
 
 export function updateViewerFocus(
   sessionId: string,
