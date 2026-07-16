@@ -1,5 +1,4 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { Radio } from "lucide-react";
 import { useCurrentSession } from "@/hooks/use-current-session";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -8,14 +7,13 @@ interface Props {
 }
 
 /**
- * Compact "● {session name}" shortcut in the sidebar/mobile nav.
- * Hidden when there is no current session or when already inside
- * the Session Room.
+ * Compact live/idle indicator for the sidebar. Reads from the same
+ * Current Session store as the return bar so both stay in sync.
  */
 const CurrentSessionIndicator = ({ collapsed }: Props) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { session } = useCurrentSession();
+  const { session, isIdle, msUntilIdleEnd } = useCurrentSession(1000);
 
   const inRoom =
     location.pathname.startsWith("/session/") &&
@@ -24,12 +22,26 @@ const CurrentSessionIndicator = ({ collapsed }: Props) => {
 
   const go = () => navigate(`/session/${session.id}`);
 
+  const dotColor = isIdle ? "bg-[hsl(var(--warning))]" : "bg-primary";
+  const dotPingColor = isIdle
+    ? "bg-[hsl(var(--warning))]/60"
+    : "bg-primary/60";
+
   const dot = (
     <span className="relative flex h-2 w-2 shrink-0">
-      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/60 opacity-75" />
-      <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+      {!isIdle && (
+        <span
+          className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotPingColor} opacity-75`}
+        />
+      )}
+      <span className={`relative inline-flex h-2 w-2 rounded-full ${dotColor}`} />
     </span>
   );
+
+  const endsInMs = msUntilIdleEnd ?? 0;
+  const endsInMins = Math.floor(endsInMs / 60_000);
+  const endsInSecs = Math.floor((endsInMs % 60_000) / 1000);
+  const countdown = `${endsInMins}:${String(endsInSecs).padStart(2, "0")}`;
 
   if (collapsed) {
     return (
@@ -43,7 +55,11 @@ const CurrentSessionIndicator = ({ collapsed }: Props) => {
             {dot}
           </button>
         </TooltipTrigger>
-        <TooltipContent side="right">Return to {session.name}</TooltipContent>
+        <TooltipContent side="right">
+          {isIdle
+            ? `Idle — ends in ${countdown} · ${session.name}`
+            : `Return to ${session.name}`}
+        </TooltipContent>
       </Tooltip>
     );
   }
@@ -58,8 +74,15 @@ const CurrentSessionIndicator = ({ collapsed }: Props) => {
         className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted/30 transition-colors text-left"
       >
         {dot}
-        <span className="text-xs text-foreground truncate flex-1 min-w-0">
-          {session.name}
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs text-foreground truncate">
+            {session.name}
+          </span>
+          {isIdle && (
+            <span className="block text-[10px] text-[hsl(var(--warning))] font-mono">
+              Idle · ends in {countdown}
+            </span>
+          )}
         </span>
       </button>
     </div>

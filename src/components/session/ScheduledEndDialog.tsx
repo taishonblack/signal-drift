@@ -12,7 +12,7 @@ interface Props {
   onEnd: () => void;
 }
 
-const AUTO_END_MS = 15 * 60 * 1000; // 15 minutes of no response
+const AUTO_END_MS = 10 * 60 * 1000; // 10 minutes of no response
 
 /**
  * Shows a "still monitoring?" prompt when the scheduled end time is reached

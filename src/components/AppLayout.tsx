@@ -7,6 +7,8 @@ import IdentityChip from "@/components/IdentityChip";
 import { useIdentityBootstrap } from "@/lib/identity";
 import { useRemoteSessionSync } from "@/hooks/use-remote-session-sync";
 import ActiveSessionReturnBar from "@/components/ActiveSessionReturnBar";
+import IdleSessionWarning from "@/components/IdleSessionWarning";
+import { usePresenceLifecycle } from "@/hooks/use-presence-lifecycle";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -15,6 +17,7 @@ interface AppLayoutProps {
 const AppLayout = ({ children }: AppLayoutProps) => {
   useIdentityBootstrap();
   useRemoteSessionSync();
+  usePresenceLifecycle();
 
   // "B" keyboard shortcut for sidebar toggle
   useEffect(() => {
@@ -48,6 +51,7 @@ const AppLayout = ({ children }: AppLayoutProps) => {
           <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6 overflow-x-hidden overflow-y-auto">
             {children}
           </main>
+          <IdleSessionWarning />
         </div>
       </div>
     </SidebarProvider>

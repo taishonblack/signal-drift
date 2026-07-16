@@ -2,21 +2,20 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Radio, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrentSession } from "@/hooks/use-current-session";
+import { formatDuration } from "@/lib/session-store";
 
 /**
  * Persistent "Active Session Return Bar".
- * Reads from the central Current Session store and disappears
- * automatically when the session ends.
- *
- * Hidden on:
- *  - The active Session Room itself (/session/:id, not /configure)
- *  - Fullscreen mode (?fullscreen=1)
- *  - The public landing page
+ * Reads from the central Current Session store. Remains visible for the
+ * entire lifetime of the session (active or idle) except in the Session
+ * Room itself, fullscreen mode, and the public landing page. Disappears
+ * only when the session ends, access is lost, or the session is destroyed.
  */
 const ActiveSessionReturnBar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { session, isTemporary, currentUserId } = useCurrentSession();
+  const { session, isTemporary, currentUserId, isIdle, msUntilIdleEnd, uptimeMs } =
+    useCurrentSession();
 
   // Path exclusions
   const path = location.pathname;
@@ -32,7 +31,12 @@ const ActiveSessionReturnBar = () => {
     (session.ownerUserId ?? session.hostUserId) === currentUserId;
   const activeSources = session.lines.filter((l) => l.enabled).length;
   const totalSources = session.lines.length;
-  const viewers = session.viewers?.length ?? 0;
+  const now = Date.now();
+  const freshViewers = (session.viewers ?? []).filter(
+    (v) => v.lastHeartbeatAt && now - v.lastHeartbeatAt < 90_000,
+  ).length;
+  const totalViewers = session.viewers?.length ?? 0;
+  const viewersShown = isIdle ? freshViewers : (freshViewers || totalViewers);
 
   const roleLabel = isTemporary
     ? "Temporary Session"
@@ -40,24 +44,46 @@ const ActiveSessionReturnBar = () => {
       ? "Owner: You"
       : "Viewing";
 
+  const uptime = formatDuration(session.createdAt);
+  const endsInMs = msUntilIdleEnd ?? 0;
+  const endsInMins = Math.floor(endsInMs / 60_000);
+  const endsInSecs = Math.floor((endsInMs % 60_000) / 1000);
+  const endsInLabel = `${endsInMins}:${String(endsInSecs).padStart(2, "0")}`;
+
+  const dotColor = isIdle ? "bg-[hsl(var(--warning))]" : "bg-primary";
+  const dotPingColor = isIdle
+    ? "bg-[hsl(var(--warning))]/60"
+    : "bg-primary/60";
+  const bgTone = isIdle
+    ? "bg-[hsl(var(--warning))]/[0.06]"
+    : "bg-primary/[0.04]";
+  const statusLabel = isIdle ? "IDLE" : "LIVE";
+
   return (
     <div
       role="region"
       aria-label="Active session return bar"
-      className="border-b border-border/20 bg-primary/[0.04] backdrop-blur-sm"
+      className={`border-b border-border/20 ${bgTone} backdrop-blur-sm`}
     >
       <div className="flex items-center gap-3 px-4 py-2 md:py-2.5 max-w-full">
-        {/* Live indicator */}
+        {/* Status indicator */}
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/60 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+            {!isIdle && (
+              <span
+                className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotPingColor} opacity-75`}
+              />
+            )}
+            <span
+              className={`relative inline-flex h-2 w-2 rounded-full ${dotColor}`}
+            />
           </span>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary hidden sm:inline">
-            Live Session
-          </span>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary sm:hidden">
-            Live
+          <span
+            className={`text-[10px] font-semibold uppercase tracking-wider ${
+              isIdle ? "text-[hsl(var(--warning))]" : "text-primary"
+            }`}
+          >
+            {statusLabel}
           </span>
         </div>
 
@@ -69,9 +95,31 @@ const ActiveSessionReturnBar = () => {
             {session.name}
           </p>
           <p className="text-[10px] text-muted-foreground truncate hidden sm:block">
-            {activeSources} of {totalSources} Sources Active
-            {viewers > 0 && ` · ${viewers} viewer${viewers === 1 ? "" : "s"}`}
-            {` · ${roleLabel}`}
+            {isIdle ? (
+              <>
+                No viewers · Ends in{" "}
+                <span className="font-mono text-foreground">{endsInLabel}</span>
+              </>
+            ) : (
+              <>
+                {activeSources} of {totalSources} Sources ·{" "}
+                {viewersShown} viewer{viewersShown === 1 ? "" : "s"} ·{" "}
+                <span className="font-mono">{uptime}</span> · {roleLabel}
+              </>
+            )}
+          </p>
+          <p className="text-[10px] text-muted-foreground truncate sm:hidden">
+            {isIdle ? (
+              <>
+                Ends in{" "}
+                <span className="font-mono text-foreground">{endsInLabel}</span>
+              </>
+            ) : (
+              <>
+                {viewersShown} viewer{viewersShown === 1 ? "" : "s"} ·{" "}
+                <span className="font-mono">{uptime}</span>
+              </>
+            )}
           </p>
         </div>
 
