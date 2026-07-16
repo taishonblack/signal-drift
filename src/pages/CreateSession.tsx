@@ -248,6 +248,14 @@ const CreateSession = () => {
     const diffs = diffSessionConfig(existing, nextConfig, currentUser);
     updateSession(existing.id, nextConfig);
     diffs.forEach((d) => appendChangeLog(existing.id, d));
+    if (!isGuest) {
+      const updated = getSessionById(existing.id);
+      if (updated) {
+        saveSessionRemote(updated).catch((e) => {
+          toast(`Saved locally — cloud sync failed: ${e?.message ?? "unknown error"}`);
+        });
+      }
+    }
     if (diffs.length === 0) {
       toast("No changes to save.");
     } else {
