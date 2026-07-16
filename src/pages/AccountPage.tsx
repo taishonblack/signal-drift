@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/components/ui/sonner";
-import { LogOut, Mail } from "lucide-react";
+import { LogOut, Mail, KeyRound, ShieldCheck, Shield, Loader2 } from "lucide-react";
 import { clearGuestIdentity } from "@/lib/identity";
+import { supabase } from "@/integrations/supabase/client";
+import type { User as SupaUser } from "@supabase/supabase-js";
 
 const AccountPage = () => {
   const { user, loading, signUp, signIn, signOut } = useAuth();
