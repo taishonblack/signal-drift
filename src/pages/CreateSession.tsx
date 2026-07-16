@@ -350,13 +350,17 @@ const CreateSession = () => {
 
   const pageTitle =
     mode === "create"
-      ? "New Session"
+      ? isReuse
+        ? "Reconfigure Session"
+        : "New Session"
       : isReadOnly
         ? "Session Configuration"
         : "Configure Session";
   const pageHint =
     mode === "create"
-      ? "A session is the workspace where you and your team monitor these feeds together."
+      ? isReuse
+        ? "Prefilled from your ended session. Adjust anything, then start a new monitoring session — your original session and its history stay intact."
+        : "A session is the workspace where you and your team monitor these feeds together."
       : isActiveConfigure
         ? "This session is live — changes are broadcast to everyone watching."
         : isReadOnly
@@ -364,7 +368,9 @@ const CreateSession = () => {
           : "Update the monitoring setup for this session, then start monitoring.";
   const primaryLabel =
     mode === "create"
-      ? "Start Monitoring"
+      ? isReuse
+        ? "Start New Monitoring Session"
+        : "Start Monitoring"
       : isActiveConfigure
         ? "Save Changes"
         : "Start Monitoring";
