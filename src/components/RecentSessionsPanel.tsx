@@ -163,7 +163,7 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
             <Group title="Active" items={activeList} onItemClick={handleActiveClick} />
             {identity.kind === "member" ? (
               <>
-                <Group title="Recent" items={grouped.completed.slice(0, 5)} onItemClick={handleCompletedClick} />
+                <Group title="Recent" items={grouped.completed.slice(0, 10)} onItemClick={handleCompletedClick} />
               </>
             ) : (
               <div className="mt-2 mx-1 rounded-md border border-dashed border-border/30 p-3 text-center">
