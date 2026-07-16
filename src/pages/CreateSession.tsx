@@ -116,6 +116,10 @@ const CreateSession = () => {
   const [scheduledEndAt, setScheduledEndAt] = useState<string>(
     existing?.scheduledEndAt ?? new Date(Date.now() + 60 * 60_000).toISOString(),
   );
+  // Preset duration (minutes) if selected via preset chip. When present,
+  // scheduled_end_at is rebased to session_started_at + presetMinutes at
+  // Start Monitoring so a slow-configuring user doesn't lose duration.
+  const [presetMinutes, setPresetMinutes] = useState<number | null>(60);
   const [defaultOriginTimeZone, setDefaultOriginTimeZone] = useState(
     existing?.defaultOriginTimeZone ?? reuseSource?.defaultOriginTimeZone ?? "UTC"
   );
@@ -212,13 +216,20 @@ const CreateSession = () => {
     const normalized = lines.map((l) =>
       l.enabled ? { ...l, mode: "caller" as const } : l
     );
+    const createdAtIso = new Date().toISOString();
+    // Authoritative scheduled_end_at: for preset durations, rebase to
+    // (session_started_at + duration) so slow configuration doesn't eat
+    // into monitoring time. For custom absolute end, use as-is.
+    const resolvedEndAt = presetMinutes
+      ? new Date(Date.now() + presetMinutes * 60_000).toISOString()
+      : scheduledEndAt || undefined;
     const session: SessionRecord = {
       id: generateSessionId(),
       name: sessionName,
       status: "active",
       purpose,
-      scheduledEndAt: scheduledEndAt || undefined,
-      createdAt: new Date().toISOString(),
+      scheduledEndAt: resolvedEndAt,
+      createdAt: createdAtIso,
       host: currentUser.name,
       hostUserId: currentUser.id,
       ownerUserId: currentUser.id,
@@ -472,7 +483,14 @@ const CreateSession = () => {
               <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
                 Session Duration
               </label>
-              <DurationPicker value={scheduledEndAt} onChange={setScheduledEndAt} />
+              <DurationPicker
+                value={scheduledEndAt}
+                onChange={(iso, mins) => {
+                  setScheduledEndAt(iso);
+                  setPresetMinutes(mins);
+                }}
+              />
+
             </div>
           </div>
         </div>

@@ -13,7 +13,12 @@ const PRESETS: { label: string; minutes: number }[] = [
 interface Props {
   /** ISO string or empty */
   value: string;
-  onChange: (iso: string) => void;
+  /**
+   * Called whenever the picker changes. `presetMinutes` is the selected
+   * preset duration when using a preset (so the caller can rebase the
+   * absolute end timestamp at Start Monitoring), or null for custom.
+   */
+  onChange: (iso: string, presetMinutes: number | null) => void;
 }
 
 function toLocalInput(iso: string): string {
@@ -36,18 +41,18 @@ const DurationPicker = ({ value, onChange }: Props) => {
     setMode("preset");
     setSelectedMinutes(minutes);
     const end = new Date(Date.now() + minutes * 60_000);
-    onChange(end.toISOString());
+    onChange(end.toISOString(), minutes);
   };
 
   const setCustom = (localValue: string) => {
     setMode("custom");
     setSelectedMinutes(null);
     if (!localValue) {
-      onChange("");
+      onChange("", null);
       return;
     }
     const d = new Date(localValue);
-    if (!isNaN(d.getTime())) onChange(d.toISOString());
+    if (!isNaN(d.getTime())) onChange(d.toISOString(), null);
   };
 
   return (

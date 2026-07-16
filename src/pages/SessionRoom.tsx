@@ -11,19 +11,22 @@ import QCNotesPanel from "@/components/session/QCNotesPanel";
 import EditInputModal from "@/components/session/EditInputModal";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
 import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
+import SessionEndIndicator from "@/components/session/SessionEndIndicator";
 import { mockSessions, mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
 import {
   getSessionById,
   updateSession,
   endSession as endSessionRecord,
+  extendScheduledEnd,
   joinSession,
   leaveSession,
-  
+
   claimOwnership,
   orphanSweep,
   updateViewerFocus,
   getCurrentUserRef,
   canConfigureSession,
+  appendChangeLog,
   type SessionRecord,
   type SessionChangeEntry,
 } from "@/lib/session-store";
@@ -83,9 +86,9 @@ const SessionRoom = () => {
   const [record, setRecord] = useState<SessionRecord | undefined>(() =>
     id ? getSessionById(id) : undefined,
   );
-  const [scheduledEndAt, setScheduledEndAt] = useState<string | null>(
-    record?.scheduledEndAt || null,
-  );
+  // Derive scheduledEndAt directly from the record — single source of
+  // truth. Do NOT keep a separate local copy that could drift on remount.
+  const scheduledEndAt = record?.scheduledEndAt || null;
   const [ownerLeftOpen, setOwnerLeftOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
 
@@ -359,13 +362,30 @@ const SessionRoom = () => {
 
   const handleExtendSession = useCallback(
     (minutes: number) => {
-      const base = scheduledEndAt ? new Date(scheduledEndAt).getTime() : Date.now();
-      const nextIso = new Date(Math.max(base, Date.now()) + minutes * 60_000).toISOString();
-      setScheduledEndAt(nextIso);
-      if (id) updateSession(id, { scheduledEndAt: nextIso });
-      toast({ title: `Session extended ${minutes} minutes` });
+      if (!id) return;
+      const nextIso = extendScheduledEnd(id, minutes);
+      if (!nextIso) return;
+      setRecord(getSessionById(id));
+      const label =
+        minutes === 60 ? "1 hour" : minutes === 30 ? "30 minutes" : `${minutes} minutes`;
+      const endLabel = new Date(nextIso).toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+        timeZoneName: "short",
+        timeZone: record?.defaultOriginTimeZone,
+      });
+      appendChangeLog(id, {
+        id: `cl-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        at: new Date().toISOString(),
+        userId: currentUserRef.id,
+        userName: currentUserRef.name,
+        kind: "duration_changed",
+        summary: `Session extended by ${label}. New scheduled end: ${endLabel}`,
+        after: nextIso,
+      });
+      toast({ title: `Session extended by ${label}`, description: `New end: ${endLabel}` });
     },
-    [scheduledEndAt, id],
+    [id, record?.defaultOriginTimeZone, currentUserRef.id, currentUserRef.name],
   );
 
   const handleEndSession = useCallback(() => {
@@ -398,6 +418,7 @@ const SessionRoom = () => {
     <>
       <ScheduledEndDialog
         scheduledEndAt={scheduledEndAt}
+        timeZone={record?.defaultOriginTimeZone}
         onExtend={handleExtendSession}
         onEnd={handleEndSession}
       />
@@ -552,6 +573,10 @@ const SessionRoom = () => {
           <span className="text-primary font-medium">{focusedLabel}</span>
           <span className="text-muted-foreground/50">· Focused by: {focusedBy}</span>
           <div className="ml-auto flex items-center gap-2">
+            <SessionEndIndicator
+              scheduledEndAt={scheduledEndAt}
+              timeZone={record?.defaultOriginTimeZone}
+            />
             {isOwner && <span className="text-[10px] uppercase tracking-wider text-primary/80 font-semibold">Owner</span>}
             {viewers.length > 1 && <SharedSessionBadge asViewer={!isOwner} />}
             <ViewersPanel

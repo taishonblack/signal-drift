@@ -1,8 +1,16 @@
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Radio, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCurrentSession } from "@/hooks/use-current-session";
 import { formatDuration } from "@/lib/session-store";
+import {
+  formatEndsAt,
+  formatRemaining,
+  formatRemainingShort,
+  getTimingState,
+  msRemaining,
+} from "@/lib/session-timing";
 
 /**
  * Persistent "Active Session Return Bar".
@@ -14,8 +22,15 @@ import { formatDuration } from "@/lib/session-store";
 const ActiveSessionReturnBar = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { session, isTemporary, currentUserId, isIdle, msUntilIdleEnd, uptimeMs } =
+  const { session, isTemporary, currentUserId, isIdle, msUntilIdleEnd } =
     useCurrentSession();
+
+  // Tick every second so scheduled-end countdown stays live.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // Path exclusions
   const path = location.pathname;
@@ -45,10 +60,31 @@ const ActiveSessionReturnBar = () => {
       : "Viewing";
 
   const uptime = formatDuration(session.createdAt);
-  const endsInMs = msUntilIdleEnd ?? 0;
-  const endsInMins = Math.floor(endsInMs / 60_000);
-  const endsInSecs = Math.floor((endsInMs % 60_000) / 1000);
-  const endsInLabel = `${endsInMins}:${String(endsInSecs).padStart(2, "0")}`;
+
+  // Scheduled-end (authoritative). Independent from idle countdown.
+  const scheduledEndAt = session.scheduledEndAt ?? null;
+  const endsAtLabel = scheduledEndAt
+    ? formatEndsAt(scheduledEndAt, session.defaultOriginTimeZone)
+    : "";
+  const scheduledRemainingMs = msRemaining(scheduledEndAt);
+  const scheduledRemainingLabel = scheduledEndAt ? formatRemaining(scheduledRemainingMs) : "";
+  const scheduledRemainingShort = scheduledEndAt
+    ? formatRemainingShort(scheduledRemainingMs)
+    : "";
+  const timingState = getTimingState(scheduledEndAt);
+  const scheduledToneClass =
+    timingState === "finalMinutes" || timingState === "reached"
+      ? "text-[hsl(var(--destructive))]"
+      : timingState === "endingSoon"
+        ? "text-[hsl(var(--warning))]"
+        : "text-foreground";
+
+  // Idle timeout (separate clock, only when idle).
+  const idleMs = msUntilIdleEnd ?? 0;
+  const idleMins = Math.floor(idleMs / 60_000);
+  const idleSecs = Math.floor((idleMs % 60_000) / 1000);
+  const idleLabel = `${idleMins}:${String(idleSecs).padStart(2, "0")}`;
+
 
   const dotColor = isIdle ? "bg-[hsl(var(--warning))]" : "bg-primary";
   const dotPingColor = isIdle
@@ -97,23 +133,38 @@ const ActiveSessionReturnBar = () => {
           <p className="text-[10px] text-muted-foreground truncate hidden sm:block">
             {isIdle ? (
               <>
-                No viewers · Ends in{" "}
-                <span className="font-mono text-foreground">{endsInLabel}</span>
+                No viewers · Idle timeout{" "}
+                <span className="font-mono text-foreground">{idleLabel}</span>
+                {scheduledEndAt && (
+                  <>
+                    {" "}· Scheduled end{" "}
+                    <span className={`font-mono ${scheduledToneClass}`}>{endsAtLabel}</span>
+                  </>
+                )}
               </>
             ) : (
               <>
                 {activeSources} of {totalSources} Sources ·{" "}
                 {viewersShown} viewer{viewersShown === 1 ? "" : "s"} ·{" "}
                 <span className="font-mono">{uptime}</span> · {roleLabel}
+                {scheduledEndAt && (
+                  <>
+                    {" "}· Ends at{" "}
+                    <span className={`font-mono ${scheduledToneClass}`}>{endsAtLabel}</span>{" "}
+                    (<span className="font-mono">{scheduledRemainingLabel}</span> remaining)
+                  </>
+                )}
               </>
             )}
           </p>
           <p className="text-[10px] text-muted-foreground truncate sm:hidden">
             {isIdle ? (
               <>
-                Ends in{" "}
-                <span className="font-mono text-foreground">{endsInLabel}</span>
+                Idle{" "}
+                <span className="font-mono text-foreground">{idleLabel}</span>
               </>
+            ) : scheduledEndAt ? (
+              <span className={`font-mono ${scheduledToneClass}`}>{scheduledRemainingShort}</span>
             ) : (
               <>
                 {viewersShown} viewer{viewersShown === 1 ? "" : "s"} ·{" "}
