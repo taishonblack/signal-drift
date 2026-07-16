@@ -860,6 +860,23 @@ const CreateSession = () => {
         }}
         onConfirm={confirmSwitch}
       />
+
+      <AlertDialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+        <AlertDialogContent className="mako-glass-solid border-border/30 max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">Cancel Session Setup?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Your unsaved source configuration will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border/40">Keep Editing</AlertDialogCancel>
+            <AlertDialogAction onClick={discardAndLeave} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
