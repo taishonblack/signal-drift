@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, LogIn, ChevronDown, ChevronRight, Radio } from "lucide-react";
+import { Plus, LogIn, ChevronDown, ChevronRight, Radio, BookOpen, Users, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -12,11 +12,14 @@ import {
   endSession,
   type SessionRecord,
 } from "@/lib/session-store";
+import { useIdentity } from "@/lib/identity";
 import SessionCard from "@/components/session/SessionCard";
 import SessionActionsDialog from "@/components/session/SessionActionsDialog";
 import SwitchMonitoringSessionDialog from "@/components/session/SwitchMonitoringSessionDialog";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
+import GatedEmptyState from "@/components/GatedEmptyState";
 import { mockSessions, type Session } from "@/lib/mock-data";
+
 
 interface SectionHeaderProps {
   title: string;
