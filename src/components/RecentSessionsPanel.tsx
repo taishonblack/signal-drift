@@ -109,6 +109,7 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
       createdAt: s.createdAt, inputCount: s.lines.filter((l) => l.enabled).length,
       pin: s.pin, inputs: [],
     };
+    setExpiredIsOwner((s.ownerUserId ?? s.hostUserId) === currentUser.id);
     setExpiredSession(legacy as Session);
   };
 
