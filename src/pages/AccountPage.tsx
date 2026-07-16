@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,9 +7,29 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/components/ui/sonner";
 import { LogOut, Mail } from "lucide-react";
+import { clearGuestIdentity } from "@/lib/identity";
 
 const AccountPage = () => {
   const { user, loading, signUp, signIn, signOut } = useAuth();
+  const [params] = useSearchParams();
+  const initialMode = params.get("mode") === "signup" ? "signup" : "login";
+  const claim = params.get("claim") === "1";
+
+  // When a signed-in user lands with pending save data, claim it.
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const pending = localStorage.getItem("mako_pending_save");
+      if (pending) {
+        localStorage.removeItem("mako_pending_save");
+        clearGuestIdentity();
+        toast("Session saved to your account");
+      }
+    } catch {
+      /* noop */
+    }
+  }, [user]);
+
 
   if (loading) {
     return (
