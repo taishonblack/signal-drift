@@ -738,6 +738,27 @@ const CreateSession = () => {
               emptyLabel="No changes recorded yet. Every save is logged here."
             />
           </div>
+        ) : isGuest ? (
+          <div className="mako-glass-solid rounded-lg p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-medium text-foreground">Recent Sessions</h2>
+              <Lock className="h-3.5 w-3.5 text-muted-foreground/60" />
+            </div>
+            <div className="rounded-md border border-dashed border-border/25 bg-muted/5 p-4 text-center space-y-2">
+              <p className="text-xs text-foreground/85">Sign in to view saved sessions</p>
+              <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
+                Your temporary monitoring session will remain available only in this browser tab.
+              </p>
+              <Button
+                asChild
+                size="sm"
+                variant="outline"
+                className="mt-1 h-7 text-xs border-border/40"
+              >
+                <a href="/account?mode=login">Sign In</a>
+              </Button>
+            </div>
+          </div>
         ) : (
           <div className="mako-glass-solid rounded-lg p-5 space-y-4">
             <div className="flex items-center justify-between">
