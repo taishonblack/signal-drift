@@ -19,7 +19,6 @@ interface SessionToolbarProps {
   sessionName: string;
   sessionStatus: string;
   sessionId: string;
-  sessionPin: string;
   layout: Layout;
   onLayoutChange: (l: Layout) => void;
   timePrefs: TimeDisplayPrefs;
@@ -30,6 +29,7 @@ interface SessionToolbarProps {
   onToggleInspector: () => void;
   showSafeArea: boolean;
   onToggleSafeArea: () => void;
+  onShare: () => void;
 }
 
 const SHORTCUTS = [
@@ -41,7 +41,6 @@ const SessionToolbar = ({
   sessionName,
   sessionStatus,
   sessionId,
-  sessionPin,
   layout,
   onLayoutChange,
   timePrefs,
@@ -52,13 +51,9 @@ const SessionToolbar = ({
   onToggleInspector,
   showSafeArea,
   onToggleSafeArea,
+  onShare,
 }: SessionToolbarProps) => {
   const isMobile = useIsMobile();
-
-  const copyInvite = () => {
-    navigator.clipboard.writeText(`${window.location.origin}/join?session=${sessionId}&pin=${sessionPin}`);
-    toast({ title: "Invite link copied" });
-  };
 
   return (
     <div className="w-full min-w-0 overflow-hidden space-y-1">
@@ -70,21 +65,32 @@ const SessionToolbar = ({
             {sessionStatus === "live" ? "LIVE" : "ENDED"}
           </span>
         </div>
-        {/* Desktop: PIN in header row */}
+        {/* Desktop: Share Session in header row */}
         {!isMobile && (
-          <Button variant="ghost" size="sm" onClick={copyInvite} className="gap-1.5 text-xs text-muted-foreground hover:text-foreground shrink-0">
-            <Copy className="h-3 w-3" /> PIN {sessionPin}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onShare}
+            className="gap-1.5 text-xs border-border/40 shrink-0"
+            title={`Session ID: ${sessionId}`}
+          >
+            <Share2 className="h-3.5 w-3.5" /> Share Session
           </Button>
         )}
       </div>
 
-      {/* Mobile subtitle: PIN */}
+      {/* Mobile subtitle: Session ID + Share */}
       {isMobile && (
-        <button onClick={copyInvite} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-          <Copy className="h-2.5 w-2.5" />
-          <span>PIN {sessionPin}</span>
+        <button
+          onClick={onShare}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Share2 className="h-3 w-3" />
+          <span className="font-mono">{sessionId}</span>
+          <span className="text-muted-foreground/60">· Share</span>
         </button>
       )}
+
 
       {/* Icon toolbar */}
       <div className="flex items-center gap-1 min-w-0 overflow-hidden">
