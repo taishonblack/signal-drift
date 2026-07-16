@@ -1,4 +1,4 @@
-import { Radio, Clock, Pencil, PauseCircle, CheckCircle2, Archive } from "lucide-react";
+import { Radio, Clock, PauseCircle, CheckCircle2, Archive } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { SessionStatus } from "@/lib/session-store";
@@ -19,11 +19,6 @@ const config: Record<
   SessionStatus,
   { label: string; icon: React.ComponentType<{ className?: string }>; className: string }
 > = {
-  draft: {
-    label: "Draft",
-    icon: Pencil,
-    className: "bg-muted/30 text-muted-foreground border-border/30",
-  },
   scheduled: {
     label: "Scheduled",
     icon: Clock,
@@ -40,7 +35,7 @@ const config: Record<
     className: "bg-muted/25 text-muted-foreground border-border/25",
   },
   completed: {
-    label: "Completed",
+    label: "Ended",
     icon: CheckCircle2,
     className: "bg-transparent text-muted-foreground border-border/25",
   },
