@@ -426,6 +426,23 @@ export function endSession(
 }
 
 /**
+ * Extend a session's scheduled_end_at by `minutes`. Extension is applied
+ * to the CURRENT scheduled_end_at (or now, whichever is later — so a
+ * session already past its scheduled end still gets a full extension).
+ * Returns the new ISO timestamp.
+ */
+export function extendScheduledEnd(id: string, minutes: number): string | undefined {
+  const s = getSessionById(id);
+  if (!s) return undefined;
+  const now = Date.now();
+  const base = s.scheduledEndAt ? new Date(s.scheduledEndAt).getTime() : now;
+  const nextMs = Math.max(base, now) + minutes * 60_000;
+  const nextIso = new Date(nextMs).toISOString();
+  updateSession(id, { scheduledEndAt: nextIso });
+  return nextIso;
+}
+
+/**
  * Returns any active session the user owns OR is a viewer in.
  * Includes idle-active sessions so the user can recover on return.
  */
