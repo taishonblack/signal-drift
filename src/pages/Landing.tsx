@@ -46,18 +46,22 @@ const Landing = () => (
           <p>Decide with confidence.</p>
         </div>
 
-        <div className="pt-2">
+        <div className="pt-2 space-y-2">
           <Button
             asChild
             size="lg"
             className="gap-2 bg-primary/90 hover:bg-primary text-primary-foreground"
           >
             <Link to="/create">
-              Create a Session
+              Start Monitoring
               <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
+          <p className="text-[11px] text-muted-foreground/70">
+            No account required. Sign in later to save your work.
+          </p>
         </div>
+
 
         {/* Manifesto sections */}
         <div className="space-y-8 pt-12 border-t border-border/10 max-w-sm">
