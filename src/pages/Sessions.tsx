@@ -87,6 +87,7 @@ const Sessions = () => {
   const [pendingSwitch, setPendingSwitch] = useState<SessionRecord | null>(null);
   const [expiredSession, setExpiredSession] = useState<Session | null>(null);
   const [archivedOpen, setArchivedOpen] = useState(false);
+  const [shareSession, setShareSession] = useState<SessionRecord | null>(null);
 
   const handleActiveCardClick = useCallback((s: SessionRecord) => {
     setActionSession(s);
