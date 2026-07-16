@@ -104,11 +104,13 @@ const AccountPage = () => {
 const AuthForm = ({
   onSignIn,
   onSignUp,
+  initialMode = "login",
 }: {
   onSignIn: (e: string, p: string) => Promise<{ error: any }>;
   onSignUp: (e: string, p: string) => Promise<{ error: any }>;
+  initialMode?: "login" | "signup";
 }) => {
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup">(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
