@@ -393,6 +393,7 @@ const Sessions = () => {
         />
         <ExpiredSessionDialog
           session={expiredSession}
+          isOwner={expiredIsOwner}
           onClose={() => setExpiredSession(null)}
         />
       </div>
