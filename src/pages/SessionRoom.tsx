@@ -403,12 +403,21 @@ const SessionRoom = () => {
         onEnd={handleEndSession}
       />
 
-      <OwnershipTransferDialog
-        open={ownershipDialogOpen}
-        previousOwner={previousOwnerName}
-        onBecomeOwner={handleBecomeOwner}
+      <OwnerLeftDialog
+        open={ownerLeftOpen}
+        noOwnerSince={record?.noOwnerSince ?? null}
+        onClaim={handleBecomeOwner}
         onLeave={handleLeaveAsViewer}
+        onCountdownExpired={handleOrphanExpired}
       />
+
+      <SaveSessionPrompt
+        open={saveOpen}
+        session={record}
+        onDismiss={() => finalizeEnd("keep")}
+        onDiscard={() => finalizeEnd("discard")}
+      />
+
 
 
       {fullscreenInput && (
