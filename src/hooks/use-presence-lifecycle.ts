@@ -9,6 +9,7 @@ import {
   sweepPresence,
   readCurrentSession,
 } from "@/lib/session-store";
+import { readCurrentSession } from "@/hooks/use-current-session";
 
 const HEARTBEAT_MS = 25_000;
 const SWEEP_MS = 15_000;
