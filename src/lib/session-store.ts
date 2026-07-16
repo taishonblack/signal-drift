@@ -43,7 +43,16 @@ export interface SessionViewer {
   isCoOwner?: boolean;
   joinedAt: string;
   focus?: string; // friendly label of currently focused input
+  /** Epoch ms of last presence heartbeat. Absent means never beaten. */
+  lastHeartbeatAt?: number;
 }
+
+export type EndReason =
+  | "owner_ended"
+  | "idle_timeout"
+  | "scheduled_end"
+  | "system_failure"
+  | "access_revoked";
 
 export type OwnershipRequestKind = "full" | "co";
 export type OwnershipRequestStatus = "pending" | "approved" | "denied";
