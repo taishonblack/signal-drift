@@ -55,8 +55,14 @@ const AccountPage = () => {
       </div>
 
       {user ? (
-        <SignedInView email={user.email ?? ""} onSignOut={signOut} />
+        <>
+          <SignedInView email={user.email ?? ""} onSignOut={signOut} />
+          <PasswordSection user={user} />
+          <TwoFactorSection />
+        </>
       ) : (
+        <AuthForm onSignIn={signIn} onSignUp={signUp} initialMode={claim ? "signup" : initialMode} />
+      )}
         <AuthForm onSignIn={signIn} onSignUp={signUp} initialMode={claim ? "signup" : initialMode} />
       )}
 
