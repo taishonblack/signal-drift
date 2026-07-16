@@ -52,6 +52,11 @@ import { Button } from "@/components/ui/button";
 import { getUnackedAlertCountForSession, getCurrentUser, isHost } from "@/lib/quinn-store";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { type SlotId, type SlotMap, defaultSlotMap, loadSlotMap, saveSlotMap, swapSlots } from "@/lib/slot-map";
+import ResizeDivider from "@/components/session/ResizeDivider";
+import { useWorkspacePrefs } from "@/hooks/use-workspace-prefs";
+import { WORKSPACE_LIMITS, DEFAULT_WORKSPACE_PREFS } from "@/lib/workspace-prefs";
+import { ChevronUp } from "lucide-react";
+
 
 const SLOT_IDS: SlotId[] = ["A", "B", "C", "D"];
 
