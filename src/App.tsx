@@ -13,6 +13,7 @@ import OpsDashboard from "./pages/OpsDashboard";
 import AppLayout from "./components/AppLayout";
 import SourcePopoutPage from "./pages/SourcePopoutPage";
 import TimelinePopoutPage from "./pages/TimelinePopoutPage";
+import LayoutPopoutPage from "./pages/LayoutPopoutPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
