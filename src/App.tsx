@@ -37,6 +37,10 @@ const App = () => (
           <Route path="/account" element={<AppLayout><AccountPage /></AppLayout>} />
           <Route path="/ops" element={<AppLayout><OpsDashboard /></AppLayout>} />
 
+          {/* Popout windows — no sidebar/AppLayout */}
+          <Route path="/session/:sessionId/popout/source/:sourceId" element={<SourcePopoutPage />} />
+          <Route path="/session/:sessionId/popout/timeline" element={<TimelinePopoutPage />} />
+
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
