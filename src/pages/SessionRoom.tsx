@@ -184,8 +184,16 @@ const SessionRoom = () => {
   const canConfigure = canConfigureSession(record, currentUserRef.id);
 
 
-  const [layout, setLayout] = useState<Layout>("4");
-  const [audioSource, setAudioSource] = useState(session.inputs[0]?.id);
+  // Default layout depends on how many sources are configured. See spec §8.
+  const initialLayout: Layout = (() => {
+    const n = activeInputs.length;
+    if (n >= 4) return "4";
+    if (n === 3) return "3";
+    if (n === 2) return "2";
+    return "1";
+  })();
+  const [layout, setLayout] = useState<Layout>(initialLayout);
+  const [audioSource, setAudioSource] = useState(activeInputs[0]?.id);
   const [showInspector, setShowInspector] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState("");
