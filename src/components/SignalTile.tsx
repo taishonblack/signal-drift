@@ -365,4 +365,49 @@ const PaneStatus = ({
   );
 };
 
+const PoppedOutPlaceholder = ({
+  label,
+  onFocusPopout,
+  onBringBack,
+}: {
+  label: string;
+  onFocusPopout?: () => void;
+  onBringBack?: () => void;
+}) => (
+  <div
+    className="flex flex-col items-center justify-center gap-2 p-4 text-center"
+    onClick={(e) => e.stopPropagation()}
+  >
+    <ExternalLink className="h-6 w-6 text-primary/80" />
+    <div className="text-[11px] uppercase tracking-widest font-semibold text-primary/80">
+      Source Popped Out
+    </div>
+    <div className="text-[10px] text-muted-foreground/70 max-w-[220px]">
+      {label} is open in another window.
+    </div>
+    <div className="flex items-center gap-1.5 mt-1">
+      {onFocusPopout && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={(e) => { e.stopPropagation(); onFocusPopout(); }}
+          className="h-6 gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+        >
+          <Focus className="h-3 w-3" /> Focus Popout
+        </Button>
+      )}
+      {onBringBack && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={(e) => { e.stopPropagation(); onBringBack(); }}
+          className="h-6 gap-1 text-[10px]"
+        >
+          Bring Back
+        </Button>
+      )}
+    </div>
+  </div>
+);
+
 export default SignalTile;
