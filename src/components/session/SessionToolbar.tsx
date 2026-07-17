@@ -152,6 +152,16 @@ const SessionToolbar = ({
         >
           <ScanLine className="h-3.5 w-3.5" />
         </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onPopOutView}
+          className={`h-8 w-8 ${isLayoutPoppedOut ? "text-primary bg-muted/30" : "text-muted-foreground hover:text-foreground"}`}
+          title={isLayoutPoppedOut ? "Focus layout popout window" : "Pop out current layout in a new window"}
+          aria-label="Pop Out View"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+        </Button>
         {/* Desktop: show all icons inline */}
         {!isMobile && (
           <>
