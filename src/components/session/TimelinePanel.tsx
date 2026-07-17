@@ -1,7 +1,7 @@
 // TimelinePanel — the shared operational history for a session (Phase 1A).
 // Replaces the free-text Notes panel with a structured, filterable feed.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -108,7 +108,21 @@ const TimelinePanel = ({
   // Filters (viewer-personal, in-memory).
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [sourceFilterId, setSourceFilterId] = useState<string | "all">("all");
-  const [order, setOrder] = useState<SortOrder>("oldest");
+  // Canonical default: newest first. Persisted per viewer in localStorage so
+  // it stays consistent across docked view, popout, reopened sessions and
+  // ended-session reports.
+  const [order, setOrder] = useState<SortOrder>(() => {
+    if (typeof window === "undefined") return "newest";
+    const v = window.localStorage.getItem("mako:timeline-sort-order");
+    return v === "oldest" ? "oldest" : "newest";
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("mako:timeline-sort-order", order);
+    } catch {
+      /* ignore */
+    }
+  }, [order]);
 
   const resolveSource = (): { id: string | null; name: string | null } => {
     if (sourceSel === "focused") {
