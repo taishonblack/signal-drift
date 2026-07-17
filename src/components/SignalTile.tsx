@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import LiveCamera from "@/components/LiveCamera";
-import { Maximize2, Edit3, Volume2, VolumeX, VideoOff, WifiOff, Loader2, PlugZap, RefreshCw } from "lucide-react";
+import { Maximize2, Edit3, Volume2, VolumeX, VideoOff, WifiOff, Loader2, PlugZap, RefreshCw, ExternalLink, Focus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { StreamInput } from "@/lib/mock-data";
@@ -21,12 +21,21 @@ interface SignalTileProps {
   onFullscreen?: () => void;
   onEdit?: () => void;
   onSelectAudio?: () => void;
+  /** Detach this source into a separate browser window. */
+  onPopOut?: () => void;
+  /** True when this source is currently rendered in a popout window. */
+  isPoppedOut?: boolean;
+  /** Bring the popout window back into the docked pane. */
+  onBringBack?: () => void;
+  /** Focus the popout window. */
+  onFocusPopout?: () => void;
   timePrefs?: TimeDisplayPrefs;
   tileOriginTZ?: string;
   focusedOriginTZ?: string;
   sessionStartedAt?: string;
   showSafeArea?: boolean;
 }
+
 
 
 const statusBadge: Record<string, { label: string; cls: string }> = {
@@ -62,6 +71,7 @@ const AudioMeter = ({ peakL, peakR }: { peakL: number; peakR: number }) => {
 const SignalTile = ({
   input, liveMetrics, isFocused = false, isAudioSource, muteAll = false, isFullscreen,
   onFocusClick, onFullscreen, onEdit, onSelectAudio,
+  onPopOut, isPoppedOut = false, onBringBack, onFocusPopout,
   timePrefs, tileOriginTZ = "UTC", focusedOriginTZ = "UTC", sessionStartedAt = "",
   showSafeArea = false,
 }: SignalTileProps) => {
@@ -130,7 +140,13 @@ const SignalTile = ({
 
       {/* Video placeholder – always 16:9 */}
       <div className={`relative flex items-center justify-center ${isFullscreen ? "flex-1" : "flex-1 min-h-0 w-full"}`} style={{ background: "black" }}>
-        {input.id === "line-1" && isActive ? (
+        {isPoppedOut ? (
+          <PoppedOutPlaceholder
+            label={input.label}
+            onFocusPopout={onFocusPopout}
+            onBringBack={onBringBack}
+          />
+        ) : input.id === "line-1" && isActive ? (
           <LiveCamera
             streamName="cam1"
             muted={!wantsAudio}
@@ -150,6 +166,7 @@ const SignalTile = ({
         ) : (
           <PaneStatus status={input.status} label={input.label} onRetry={onEdit} />
         )}
+
 
         {/* Focus badge */}
         {isFocused && (
@@ -203,15 +220,15 @@ const SignalTile = ({
         {isActive && <AudioMeter peakL={peakL} peakR={peakR} />}
 
         {/* Overlay controls */}
-        {isActive && (
+        {isActive && !isPoppedOut && (
           <div className="absolute inset-0 flex items-end justify-between p-2 opacity-0 hover:opacity-100 transition-opacity pointer-events-none [&>*]:pointer-events-auto hover:pointer-events-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex gap-1">
               {!isFullscreen && (
-                <Button variant="ghost" size="icon" onClick={onFullscreen} className="h-7 w-7 bg-background/60 hover:bg-background/80 text-foreground">
+                <Button variant="ghost" size="icon" onClick={onFullscreen} className="h-7 w-7 bg-background/60 hover:bg-background/80 text-foreground" title="Maximize pane">
                   <Maximize2 className="h-3.5 w-3.5" />
                 </Button>
               )}
-              <Button variant="ghost" size="icon" onClick={onEdit} className="h-7 w-7 bg-background/60 hover:bg-background/80 text-foreground">
+              <Button variant="ghost" size="icon" onClick={onEdit} className="h-7 w-7 bg-background/60 hover:bg-background/80 text-foreground" title="Edit source">
                 <Edit3 className="h-3.5 w-3.5" />
               </Button>
               <Button
@@ -219,9 +236,22 @@ const SignalTile = ({
                 size="icon"
                 onClick={onSelectAudio}
                 className={`h-7 w-7 bg-background/60 hover:bg-background/80 ${isAudioSource ? "text-primary" : "text-foreground"}`}
+                title="Select audio source"
               >
                 <Volume2 className="h-3.5 w-3.5" />
               </Button>
+              {onPopOut && !isFullscreen && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => { e.stopPropagation(); onPopOut(); }}
+                  className="h-7 w-7 bg-background/60 hover:bg-background/80 text-foreground"
+                  aria-label="Pop Out Source"
+                  title="Pop Out Source"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
             <div className="text-[10px] text-foreground/70 bg-background/60 px-1.5 py-0.5 rounded font-mono">
               {bitrate.toFixed(1)} Mbps · {loss.toFixed(2)}% loss
@@ -229,6 +259,7 @@ const SignalTile = ({
           </div>
         )}
       </div>
+
 
       {/* Footer */}
       {!isFullscreen && (
@@ -333,5 +364,50 @@ const PaneStatus = ({
     </div>
   );
 };
+
+const PoppedOutPlaceholder = ({
+  label,
+  onFocusPopout,
+  onBringBack,
+}: {
+  label: string;
+  onFocusPopout?: () => void;
+  onBringBack?: () => void;
+}) => (
+  <div
+    className="flex flex-col items-center justify-center gap-2 p-4 text-center"
+    onClick={(e) => e.stopPropagation()}
+  >
+    <ExternalLink className="h-6 w-6 text-primary/80" />
+    <div className="text-[11px] uppercase tracking-widest font-semibold text-primary/80">
+      Source Popped Out
+    </div>
+    <div className="text-[10px] text-muted-foreground/70 max-w-[220px]">
+      {label} is open in another window.
+    </div>
+    <div className="flex items-center gap-1.5 mt-1">
+      {onFocusPopout && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={(e) => { e.stopPropagation(); onFocusPopout(); }}
+          className="h-6 gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+        >
+          <Focus className="h-3 w-3" /> Focus Popout
+        </Button>
+      )}
+      {onBringBack && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={(e) => { e.stopPropagation(); onBringBack(); }}
+          className="h-6 gap-1 text-[10px]"
+        >
+          Bring Back
+        </Button>
+      )}
+    </div>
+  </div>
+);
 
 export default SignalTile;

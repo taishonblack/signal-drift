@@ -18,12 +18,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronDown, MoreHorizontal, Filter, X, ArrowUpDown } from "lucide-react";
+import { ChevronDown, MoreHorizontal, Filter, X, ArrowUpDown, LayoutPanelLeft, PanelBottom, PanelRight, ExternalLink, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StreamInput } from "@/lib/mock-data";
 import type { AddEntryInput } from "@/hooks/use-session-timeline";
 import type { TimelineEntry, TimelineSeverity } from "@/lib/timeline-types";
 import { SEVERITY_META } from "@/lib/timeline-types";
+
+export type TimelineDockValue = "bottom" | "right" | "popout" | "collapsed";
 
 interface TimelinePanelProps {
   focusedInputId: string | null;
@@ -38,6 +40,10 @@ interface TimelinePanelProps {
   onFocusSource?: (inputId: string) => void;
   onCollapse?: () => void;
   currentUserId: string;
+  /** Current dock position (used to check-mark the active option). */
+  dock?: TimelineDockValue;
+  /** Change dock position (bottom/right/popout/collapsed). */
+  onChangeDock?: (dock: TimelineDockValue) => void;
 }
 
 type SourceKey = string; // "all" | "audio" | "session" | input.id
@@ -91,6 +97,8 @@ const TimelinePanel = ({
   onFocusSource,
   onCollapse,
   currentUserId,
+  dock,
+  onChangeDock,
 }: TimelinePanelProps) => {
   const [draft, setDraft] = useState("");
   const [severity, setSeverity] = useState<TimelineSeverity>("note");
@@ -182,6 +190,27 @@ const TimelinePanel = ({
             >
               <ArrowUpDown className="h-3.5 w-3.5" />
             </Button>
+            {onChangeDock && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                    aria-label="Timeline position"
+                    title="Timeline position"
+                  >
+                    <LayoutPanelLeft className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DockMenuItem icon={PanelBottom} label="Bottom" active={dock === "bottom"} onSelect={() => onChangeDock("bottom")} />
+                  <DockMenuItem icon={PanelRight} label="Right" active={dock === "right"} onSelect={() => onChangeDock("right")} />
+                  <DockMenuItem icon={ExternalLink} label="Pop Out" active={dock === "popout"} onSelect={() => onChangeDock("popout")} />
+                  <DockMenuItem icon={ChevronDown} label="Collapse" active={dock === "collapsed"} onSelect={() => onChangeDock("collapsed")} />
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {onCollapse && (
               <Button
                 variant="ghost"
@@ -196,6 +225,7 @@ const TimelinePanel = ({
             )}
           </div>
         </div>
+
 
         {/* Composer */}
         <div className="px-4 py-3 border-b border-border/10 space-y-2">
@@ -337,6 +367,26 @@ const TimelinePanel = ({
     </TooltipProvider>
   );
 };
+
+const DockMenuItem = ({
+  icon: Icon,
+  label,
+  active,
+  onSelect,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  active: boolean;
+  onSelect: () => void;
+}) => (
+  <DropdownMenuItem onClick={onSelect} className="text-xs gap-2">
+    <Icon className="h-3.5 w-3.5" />
+    <span className="flex-1">{label}</span>
+    {active && <Check className="h-3.5 w-3.5 text-primary" />}
+  </DropdownMenuItem>
+);
+
+
 
 const FilterChip = ({
   active,

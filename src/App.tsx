@@ -11,6 +11,8 @@ import JoinSession from "./pages/JoinSession";
 import AccountPage from "./pages/AccountPage";
 import OpsDashboard from "./pages/OpsDashboard";
 import AppLayout from "./components/AppLayout";
+import SourcePopoutPage from "./pages/SourcePopoutPage";
+import TimelinePopoutPage from "./pages/TimelinePopoutPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +36,10 @@ const App = () => (
           <Route path="/join/:sessionId" element={<AppLayout><JoinSession /></AppLayout>} />
           <Route path="/account" element={<AppLayout><AccountPage /></AppLayout>} />
           <Route path="/ops" element={<AppLayout><OpsDashboard /></AppLayout>} />
+
+          {/* Popout windows — no sidebar/AppLayout */}
+          <Route path="/session/:sessionId/popout/source/:sourceId" element={<SourcePopoutPage />} />
+          <Route path="/session/:sessionId/popout/timeline" element={<TimelinePopoutPage />} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>

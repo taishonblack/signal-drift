@@ -18,6 +18,10 @@ interface DraggableSignalTileProps {
   onFullscreen?: () => void;
   onEdit?: () => void;
   onSelectAudio?: () => void;
+  onPopOut?: () => void;
+  isPoppedOut?: boolean;
+  onBringBack?: () => void;
+  onFocusPopout?: () => void;
   timePrefs?: TimeDisplayPrefs;
   tileOriginTZ?: string;
   focusedOriginTZ?: string;
