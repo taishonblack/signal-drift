@@ -220,15 +220,15 @@ const SignalTile = ({
         {isActive && <AudioMeter peakL={peakL} peakR={peakR} />}
 
         {/* Overlay controls */}
-        {isActive && (
+        {isActive && !isPoppedOut && (
           <div className="absolute inset-0 flex items-end justify-between p-2 opacity-0 hover:opacity-100 transition-opacity pointer-events-none [&>*]:pointer-events-auto hover:pointer-events-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex gap-1">
               {!isFullscreen && (
-                <Button variant="ghost" size="icon" onClick={onFullscreen} className="h-7 w-7 bg-background/60 hover:bg-background/80 text-foreground">
+                <Button variant="ghost" size="icon" onClick={onFullscreen} className="h-7 w-7 bg-background/60 hover:bg-background/80 text-foreground" title="Maximize pane">
                   <Maximize2 className="h-3.5 w-3.5" />
                 </Button>
               )}
-              <Button variant="ghost" size="icon" onClick={onEdit} className="h-7 w-7 bg-background/60 hover:bg-background/80 text-foreground">
+              <Button variant="ghost" size="icon" onClick={onEdit} className="h-7 w-7 bg-background/60 hover:bg-background/80 text-foreground" title="Edit source">
                 <Edit3 className="h-3.5 w-3.5" />
               </Button>
               <Button
@@ -236,9 +236,22 @@ const SignalTile = ({
                 size="icon"
                 onClick={onSelectAudio}
                 className={`h-7 w-7 bg-background/60 hover:bg-background/80 ${isAudioSource ? "text-primary" : "text-foreground"}`}
+                title="Select audio source"
               >
                 <Volume2 className="h-3.5 w-3.5" />
               </Button>
+              {onPopOut && !isFullscreen && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => { e.stopPropagation(); onPopOut(); }}
+                  className="h-7 w-7 bg-background/60 hover:bg-background/80 text-foreground"
+                  aria-label="Pop Out Source"
+                  title="Pop Out Source"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              )}
             </div>
             <div className="text-[10px] text-foreground/70 bg-background/60 px-1.5 py-0.5 rounded font-mono">
               {bitrate.toFixed(1)} Mbps · {loss.toFixed(2)}% loss
@@ -246,6 +259,7 @@ const SignalTile = ({
           </div>
         )}
       </div>
+
 
       {/* Footer */}
       {!isFullscreen && (
