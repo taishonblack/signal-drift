@@ -57,7 +57,8 @@ import { type SlotId, type SlotMap, defaultSlotMap, loadSlotMap, saveSlotMap, sw
 import ResizeDivider from "@/components/session/ResizeDivider";
 import { useWorkspacePrefs } from "@/hooks/use-workspace-prefs";
 import { WORKSPACE_LIMITS, DEFAULT_WORKSPACE_PREFS } from "@/lib/workspace-prefs";
-import { ChevronUp, Volume2, VolumeX } from "lucide-react";
+import { usePopouts } from "@/hooks/use-popouts";
+import { ChevronUp, Volume2, VolumeX, ExternalLink } from "lucide-react";
 
 
 const SLOT_IDS: SlotId[] = ["A", "B", "C", "D"];
