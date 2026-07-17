@@ -52,7 +52,7 @@ import { toast } from "@/hooks/use-toast";
 import { Bot, RotateCcw } from "lucide-react";
 import { useSessionKeyboardShortcuts } from "@/hooks/use-session-keyboard-shortcuts";
 import { Button } from "@/components/ui/button";
-import { getUnackedAlertCountForSession, getCurrentUser, isHost } from "@/lib/quinn-store";
+import { useQuinnIncidents } from "@/hooks/use-quinn-incidents";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { type SlotId, type SlotMap, defaultSlotMap, loadSlotMap, saveSlotMap, swapSlots } from "@/lib/slot-map";
 import ResizeDivider from "@/components/session/ResizeDivider";
@@ -322,9 +322,14 @@ const SessionRoom = () => {
 
 
 
-  const user = getCurrentUser();
-  const isHostUser = isHost("u1");
-  const alertCount = getUnackedAlertCountForSession(session.id, user.id);
+  const isHostUser = true;
+  const quinnIncidents = useQuinnIncidents({
+    sessionId: session.id,
+    sessionName: session.name,
+    entries: timeline.entries,
+    actorName: identity.name || "Operator",
+  });
+  const alertCount = quinnIncidents.openIncidents.length;
 
   // Slot map for tile ordering
   const activeLineIds = activeInputs.map((i) => i.id);
@@ -1115,7 +1120,7 @@ const SessionRoom = () => {
 
           {showQuinn && (
             <div className="w-72 shrink-0 mako-glass rounded-lg overflow-hidden flex flex-col">
-              <QuinnPanel sessionId={session.id} sessionHostUserId="u1" />
+              <QuinnPanel sessionId={session.id} incidents={quinnIncidents.incidents} />
             </div>
           )}
 
