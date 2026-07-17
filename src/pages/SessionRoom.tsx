@@ -201,6 +201,9 @@ const SessionRoom = () => {
   const [activeDragSlot, setActiveDragSlot] = useState<SlotId | null>(null);
   const [cycleFlash, setCycleFlash] = useState(false);
   const [muteAll, setMuteAll] = useState(false);
+  // Phase 1C: double-click a tile to maximize (1-up). Stores the layout to
+  // restore on the next double-click. null = not currently maximized.
+  const [maximizedRestoreLayout, setMaximizedRestoreLayout] = useState<Layout | null>(null);
 
 
 
@@ -267,6 +270,31 @@ const SessionRoom = () => {
     [setFocus],
   );
 
+  const toggleMaximize = useCallback(
+    (inputId: string) => {
+      if (maximizedRestoreLayout) {
+        setLayout(maximizedRestoreLayout);
+        setMaximizedRestoreLayout(null);
+        return;
+      }
+      if (layout === "1") return;
+      setMaximizedRestoreLayout(layout);
+      setFocus(inputId);
+      setLayout("1");
+    },
+    [layout, maximizedRestoreLayout, setFocus],
+  );
+
+  // If the user manually changes the layout while maximized, clear the
+  // restore memory — their explicit choice supersedes the temporary state.
+  const handleLayoutChange = useCallback(
+    (next: Layout) => {
+      setLayout(next);
+      setMaximizedRestoreLayout(null);
+    },
+    [],
+  );
+
 
   // Presence: write focused label into current viewer entry.
   useEffect(() => {
@@ -316,9 +344,16 @@ const SessionRoom = () => {
       return tag === "input" || tag === "textarea" || el.isContentEditable;
     };
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && fullscreenId) {
-        setFullscreenId(null);
-        return;
+      if (e.key === "Escape") {
+        if (fullscreenId) {
+          setFullscreenId(null);
+          return;
+        }
+        if (maximizedRestoreLayout) {
+          setLayout(maximizedRestoreLayout);
+          setMaximizedRestoreLayout(null);
+          return;
+        }
       }
       if ((e.key === "m" || e.key === "M") && !e.altKey && !e.ctrlKey && !e.metaKey) {
         if (isTyping(e.target)) return;
@@ -328,7 +363,7 @@ const SessionRoom = () => {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [fullscreenId]);
+  }, [fullscreenId, maximizedRestoreLayout]);
 
 
   // Global keyboard shortcuts (1-4 jump + arrow cycling) — single-stream mode only
@@ -406,7 +441,7 @@ const SessionRoom = () => {
         isAudioSource={audioSource === input.id}
         muteAll={muteAll}
         onSelectAudio={() => selectSourceForViewer(input.id)}
-
+        onDoubleClick={() => toggleMaximize(input.id)}
         onFullscreen={() => setFullscreenId(input.id)}
         onEdit={() => openEdit(input)}
         timePrefs={timePrefs}
@@ -556,7 +591,7 @@ const SessionRoom = () => {
           sessionStatus={session.status}
           sessionId={session.id}
           layout={layout}
-          onLayoutChange={setLayout}
+          onLayoutChange={handleLayoutChange}
           timePrefs={timePrefs}
           onTimePrefsChange={handleTimePrefsChange}
           showNotes={showNotes}
@@ -691,6 +726,19 @@ const SessionRoom = () => {
           <span>Focused:</span>
           <span className="text-primary font-medium">{focusedLabel}</span>
           <span className="text-muted-foreground/50">· Focused by: {focusedBy}</span>
+          {maximizedRestoreLayout && (
+            <button
+              type="button"
+              onClick={() => {
+                setLayout(maximizedRestoreLayout);
+                setMaximizedRestoreLayout(null);
+              }}
+              className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/15 text-primary/90 hover:bg-primary/25 transition-colors"
+              title="Double-click a tile or press ESC to restore"
+            >
+              Maximized · Restore
+            </button>
+          )}
           <div className="ml-auto flex items-center gap-2">
             <SessionEndIndicator
               scheduledEndAt={scheduledEndAt}
@@ -729,6 +777,13 @@ const SessionRoom = () => {
                 if (!input) return null;
 
                 const handleDoubleTap = () => {
+                  // Restore previous layout if this 1-up was reached via
+                  // double-click maximize (Phase 1C).
+                  if (maximizedRestoreLayout) {
+                    setLayout(maximizedRestoreLayout);
+                    setMaximizedRestoreLayout(null);
+                    return;
+                  }
                   if (!isMobile || activeLineIds.length < 2) return;
                   const idx = activeLineIds.indexOf(focusedId);
                   const nextIdx = (idx + 1) % activeLineIds.length;

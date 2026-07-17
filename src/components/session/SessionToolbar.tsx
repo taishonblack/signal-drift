@@ -34,8 +34,9 @@ interface SessionToolbarProps {
 
 const SHORTCUTS = [
   { keys: "1 – 4", desc: "Set Focus to Line 1–4" },
+  { keys: "Dbl-click", desc: "Maximize / restore tile" },
   { keys: "M", desc: "Toggle Mute All" },
-  { keys: "ESC", desc: "Exit fullscreen" },
+  { keys: "ESC", desc: "Exit fullscreen / maximize" },
 ];
 
 

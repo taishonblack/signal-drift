@@ -24,11 +24,13 @@ interface DraggableSignalTileProps {
   sessionStartedAt?: string;
   showSafeArea?: boolean;
   canDrag: boolean;
+  onDoubleClick?: () => void;
 }
 
 const DraggableSignalTile = ({
   slotId,
   canDrag,
+  onDoubleClick,
   ...tileProps
 }: DraggableSignalTileProps) => {
   const {
@@ -56,6 +58,7 @@ const DraggableSignalTile = ({
     <div
       ref={setNodeRef}
       style={style}
+      onDoubleClick={onDoubleClick}
       className={`h-full min-h-0 ${isOver && !isDragging ? "ring-2 ring-primary ring-offset-2 ring-offset-background rounded-lg" : ""}`}
     >
       {/* Drag grip handle - only shown when draggable */}
