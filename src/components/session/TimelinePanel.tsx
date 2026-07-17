@@ -25,6 +25,8 @@ import type { AddEntryInput } from "@/hooks/use-session-timeline";
 import type { TimelineEntry, TimelineSeverity } from "@/lib/timeline-types";
 import { SEVERITY_META } from "@/lib/timeline-types";
 
+export type TimelineDockValue = "bottom" | "right" | "popout" | "collapsed";
+
 interface TimelinePanelProps {
   focusedInputId: string | null;
   focusedLabel: string;
@@ -38,6 +40,10 @@ interface TimelinePanelProps {
   onFocusSource?: (inputId: string) => void;
   onCollapse?: () => void;
   currentUserId: string;
+  /** Current dock position (used to check-mark the active option). */
+  dock?: TimelineDockValue;
+  /** Change dock position (bottom/right/popout/collapsed). */
+  onChangeDock?: (dock: TimelineDockValue) => void;
 }
 
 type SourceKey = string; // "all" | "audio" | "session" | input.id
