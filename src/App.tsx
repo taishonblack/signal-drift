@@ -11,6 +11,8 @@ import JoinSession from "./pages/JoinSession";
 import AccountPage from "./pages/AccountPage";
 import OpsDashboard from "./pages/OpsDashboard";
 import AppLayout from "./components/AppLayout";
+import SourcePopoutPage from "./pages/SourcePopoutPage";
+import TimelinePopoutPage from "./pages/TimelinePopoutPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
