@@ -140,7 +140,13 @@ const SignalTile = ({
 
       {/* Video placeholder – always 16:9 */}
       <div className={`relative flex items-center justify-center ${isFullscreen ? "flex-1" : "flex-1 min-h-0 w-full"}`} style={{ background: "black" }}>
-        {input.id === "line-1" && isActive ? (
+        {isPoppedOut ? (
+          <PoppedOutPlaceholder
+            label={input.label}
+            onFocusPopout={onFocusPopout}
+            onBringBack={onBringBack}
+          />
+        ) : input.id === "line-1" && isActive ? (
           <LiveCamera
             streamName="cam1"
             muted={!wantsAudio}
@@ -160,6 +166,7 @@ const SignalTile = ({
         ) : (
           <PaneStatus status={input.status} label={input.label} onRetry={onEdit} />
         )}
+
 
         {/* Focus badge */}
         {isFocused && (
