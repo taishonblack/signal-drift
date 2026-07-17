@@ -190,6 +190,27 @@ const TimelinePanel = ({
             >
               <ArrowUpDown className="h-3.5 w-3.5" />
             </Button>
+            {onChangeDock && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                    aria-label="Timeline position"
+                    title="Timeline position"
+                  >
+                    <LayoutPanelLeft className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DockMenuItem icon={PanelBottom} label="Bottom" active={dock === "bottom"} onSelect={() => onChangeDock("bottom")} />
+                  <DockMenuItem icon={PanelRight} label="Right" active={dock === "right"} onSelect={() => onChangeDock("right")} />
+                  <DockMenuItem icon={ExternalLink} label="Pop Out" active={dock === "popout"} onSelect={() => onChangeDock("popout")} />
+                  <DockMenuItem icon={ChevronDown} label="Collapse" active={dock === "collapsed"} onSelect={() => onChangeDock("collapsed")} />
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {onCollapse && (
               <Button
                 variant="ghost"
@@ -204,6 +225,7 @@ const TimelinePanel = ({
             )}
           </div>
         </div>
+
 
         {/* Composer */}
         <div className="px-4 py-3 border-b border-border/10 space-y-2">
