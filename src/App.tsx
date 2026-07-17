@@ -41,6 +41,7 @@ const App = () => (
           {/* Popout windows — no sidebar/AppLayout */}
           <Route path="/session/:sessionId/popout/source/:sourceId" element={<SourcePopoutPage />} />
           <Route path="/session/:sessionId/popout/timeline" element={<TimelinePopoutPage />} />
+          <Route path="/session/:sessionId/popout/view" element={<LayoutPopoutPage />} />
 
           <Route path="*" element={<NotFound />} />
         </Routes>
