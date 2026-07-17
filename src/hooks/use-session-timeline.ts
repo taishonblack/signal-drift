@@ -241,10 +241,104 @@ export function useSessionTimeline(sessionId: string | undefined) {
     [isMember],
   );
 
+  const seenQuinnKeys = useRef<Set<string>>(new Set());
+
+  const addQuinnEntry = useCallback(
+    async (input: AddQuinnEntryInput): Promise<TimelineEntry | null> => {
+      if (!sessionId) return null;
+      const message = input.message.trim();
+      if (!message) return null;
+
+      if (input.dedupeKey) {
+        if (seenQuinnKeys.current.has(input.dedupeKey)) return null;
+        seenQuinnKeys.current.add(input.dedupeKey);
+      }
+
+      const entryType: TimelineEntryType =
+        input.entryType ??
+        (input.severity === "critical"
+          ? "critical"
+          : input.severity === "warning"
+            ? "warning"
+            : "information");
+
+      const status =
+        input.severity === "warning" || input.severity === "critical"
+          ? "open"
+          : "informational";
+
+      const metadata = {
+        ...(input.metadata ?? {}),
+        quinn: true,
+        ...(input.dedupeKey ? { dedupeKey: input.dedupeKey } : {}),
+      };
+
+      if (!isMember) {
+        const local: TimelineEntry = {
+          id: `local-quinn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          sessionId,
+          authorId: null,
+          authorName: "Quinn",
+          authorType: "quinn",
+          sourceId: input.sourceId ?? null,
+          sourceName: input.sourceName ?? null,
+          entryType,
+          message,
+          severity: input.severity,
+          parentId: null,
+          status,
+          resolvedBy: null,
+          resolvedByName: null,
+          resolvedAt: null,
+          quinnConfidence: input.confidence ?? null,
+          metadata,
+          editedAt: null,
+          createdAt: new Date().toISOString(),
+        };
+        setEntries((prev) => [...prev, local]);
+        return local;
+      }
+
+      const { data: userRes } = await supabase.auth.getUser();
+      const user = userRes.user;
+      if (!user) return null;
+
+      const { data, error } = await supabase
+        .from("session_timeline_entries")
+        .insert({
+          session_id: sessionId,
+          author_id: user.id,
+          author_name: "Quinn",
+          author_type: "quinn",
+          source_id: input.sourceId ?? null,
+          source_name: input.sourceName ?? null,
+          entry_type: entryType,
+          message,
+          severity: input.severity,
+          status,
+          quinn_confidence: input.confidence ?? null,
+          metadata,
+        })
+        .select()
+        .single();
+
+      if (error || !data) {
+        console.warn("Quinn timeline insert failed", error);
+        return null;
+      }
+      const entry = rowToEntry(data as DbRow);
+      setEntries((prev) =>
+        prev.some((e) => e.id === entry.id) ? prev : [...prev, entry],
+      );
+      return entry;
+    },
+    [sessionId, isMember],
+  );
+
   const count = entries.length;
 
   return useMemo(
-    () => ({ entries, ready, addEntry, deleteEntry, count, isMember }),
-    [entries, ready, addEntry, deleteEntry, count, isMember],
+    () => ({ entries, ready, addEntry, addQuinnEntry, deleteEntry, count, isMember }),
+    [entries, ready, addEntry, addQuinnEntry, deleteEntry, count, isMember],
   );
 }
