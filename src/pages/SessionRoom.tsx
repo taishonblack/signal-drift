@@ -52,7 +52,7 @@ import { toast } from "@/hooks/use-toast";
 import { Bot, RotateCcw } from "lucide-react";
 import { useSessionKeyboardShortcuts } from "@/hooks/use-session-keyboard-shortcuts";
 import { Button } from "@/components/ui/button";
-import { getUnackedAlertCountForSession, getCurrentUser, isHost } from "@/lib/quinn-store";
+import { useQuinnIncidents } from "@/hooks/use-quinn-incidents";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { type SlotId, type SlotMap, defaultSlotMap, loadSlotMap, saveSlotMap, swapSlots } from "@/lib/slot-map";
 import ResizeDivider from "@/components/session/ResizeDivider";
