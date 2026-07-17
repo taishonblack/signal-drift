@@ -239,6 +239,7 @@ export function useSessionTimeline(sessionId: string | undefined) {
           createdAt: new Date().toISOString(),
         };
         setEntries((prev) => [...prev, local]);
+        guestChannelRef.current?.postMessage({ type: "INSERT", entry: local });
         return local;
       }
 
