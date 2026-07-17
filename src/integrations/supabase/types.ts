@@ -134,6 +134,87 @@ export type Database = {
         }
         Relationships: []
       }
+      session_timeline_entries: {
+        Row: {
+          author_id: string | null
+          author_name: string
+          author_type: string
+          created_at: string
+          edited_at: string | null
+          entry_type: string
+          id: string
+          message: string
+          metadata: Json
+          parent_id: string | null
+          quinn_confidence: number | null
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_by_name: string | null
+          session_id: string
+          severity: string
+          source_id: string | null
+          source_name: string | null
+          status: string
+        }
+        Insert: {
+          author_id?: string | null
+          author_name: string
+          author_type?: string
+          created_at?: string
+          edited_at?: string | null
+          entry_type?: string
+          id?: string
+          message: string
+          metadata?: Json
+          parent_id?: string | null
+          quinn_confidence?: number | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_by_name?: string | null
+          session_id: string
+          severity?: string
+          source_id?: string | null
+          source_name?: string | null
+          status?: string
+        }
+        Update: {
+          author_id?: string | null
+          author_name?: string
+          author_type?: string
+          created_at?: string
+          edited_at?: string | null
+          entry_type?: string
+          id?: string
+          message?: string
+          metadata?: Json
+          parent_id?: string | null
+          quinn_confidence?: number | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_by_name?: string | null
+          session_id?: string
+          severity?: string
+          source_id?: string | null
+          source_name?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_timeline_entries_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "session_timeline_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_timeline_entries_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sessions: {
         Row: {
           created_at: string

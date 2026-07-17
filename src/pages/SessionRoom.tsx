@@ -7,7 +7,8 @@ import DraggableSignalTile from "@/components/session/DraggableSignalTile";
 import InspectorPanel from "@/components/InspectorPanel";
 import SessionToolbar, { type Layout } from "@/components/session/SessionToolbar";
 import FullscreenOverlay from "@/components/session/FullscreenOverlay";
-import QCNotesPanel from "@/components/session/QCNotesPanel";
+import TimelinePanel from "@/components/session/TimelinePanel";
+import { useSessionTimeline } from "@/hooks/use-session-timeline";
 import EditInputModal from "@/components/session/EditInputModal";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
 import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
@@ -212,6 +213,9 @@ const SessionRoom = () => {
   // Phase 1C: double-click a tile to maximize (1-up). Stores the layout to
   // restore on the next double-click. null = not currently maximized.
   const [maximizedRestoreLayout, setMaximizedRestoreLayout] = useState<Layout | null>(null);
+
+  // Session Timeline (Phase 1A) — shared comments + realtime.
+  const timeline = useSessionTimeline(id);
 
 
 
@@ -1008,13 +1012,13 @@ const SessionRoom = () => {
                 updateWorkspacePrefs({ notesCollapsed: false });
               }}
               className="flex-shrink-0 flex items-center justify-between gap-3 mako-glass rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Expand notes"
+              aria-label="Expand timeline"
             >
               <span className="flex items-center gap-2">
                 <ChevronUp className="h-3.5 w-3.5" />
-                <span className="uppercase tracking-wider font-medium">Notes</span>
+                <span className="uppercase tracking-wider font-medium">Timeline</span>
                 <span className="text-muted-foreground/60">·</span>
-                <span>{markers.length} markers</span>
+                <span>{timeline.count} entries</span>
                 <span className="text-muted-foreground/60">·</span>
                 <span>{alertCount} Quinn events</span>
               </span>
@@ -1041,14 +1045,18 @@ const SessionRoom = () => {
                 className="flex-shrink-0 overflow-hidden"
                 style={{ height: `${workspacePrefs.notesHeightPx}px` }}
               >
-                <QCNotesPanel
+                <TimelinePanel
+                  focusedInputId={focusedId}
                   focusedLabel={focusedLabel}
-                  notes={notes}
-                  onNotesChange={setNotes}
-                  markerNote={markerNote}
-                  onMarkerNoteChange={setMarkerNote}
-                  markers={markers}
-                  onAddMarker={addMarker}
+                  inputs={activeInputs}
+                  entries={timeline.entries}
+                  ready={timeline.ready}
+                  isMember={timeline.isMember}
+                  eventTimeZone={focusedOriginTZ}
+                  onAdd={timeline.addEntry}
+                  onDelete={timeline.deleteEntry}
+                  onFocusSource={(sid) => selectSourceForViewer(sid)}
+                  currentUserId={currentUserRef.id}
                   onCollapse={() => updateWorkspacePrefs({ notesCollapsed: true })}
                 />
               </div>
