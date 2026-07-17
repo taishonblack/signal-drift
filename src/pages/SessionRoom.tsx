@@ -757,6 +757,13 @@ const SessionRoom = () => {
                 if (!input) return null;
 
                 const handleDoubleTap = () => {
+                  // Restore previous layout if this 1-up was reached via
+                  // double-click maximize (Phase 1C).
+                  if (maximizedRestoreLayout) {
+                    setLayout(maximizedRestoreLayout);
+                    setMaximizedRestoreLayout(null);
+                    return;
+                  }
                   if (!isMobile || activeLineIds.length < 2) return;
                   const idx = activeLineIds.indexOf(focusedId);
                   const nextIdx = (idx + 1) % activeLineIds.length;
