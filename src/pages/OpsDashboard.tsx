@@ -38,6 +38,11 @@ export default function OpsDashboard() {
       postSystemEntry,
     });
 
+  const filteredIncidents = useMemo(() => {
+    if (!sourceFilter) return incidents;
+    return incidents.filter((i) => i.sourceName === sourceFilter || i.sourceId === sourceFilter);
+  }, [incidents, sourceFilter]);
+
   // Empty state — no session in progress.
   if (!session) {
     return (
@@ -62,11 +67,6 @@ export default function OpsDashboard() {
   }
 
   const enabledSources = session.lines.filter((l) => l.enabled);
-
-  const filteredIncidents = useMemo(() => {
-    if (!sourceFilter) return incidents;
-    return incidents.filter((i) => (i.sourceId ?? i.sourceName) === sourceFilter);
-  }, [incidents, sourceFilter]);
 
   const handleViewTimeline = (incident: QuinnIncident) => {
     navigate(`/session/${session.id}?timelineEntry=${incident.latestEntryId}`);
