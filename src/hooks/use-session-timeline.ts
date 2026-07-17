@@ -84,14 +84,65 @@ export function useSessionTimeline(sessionId: string | undefined) {
   const [ready, setReady] = useState(false);
   const entriesRef = useRef<TimelineEntry[]>([]);
   entriesRef.current = entries;
+  const guestChannelRef = useRef<BroadcastChannel | null>(null);
+
+  // Guest cross-window sync via BroadcastChannel. Any window (docked or
+  // popout) that mounts the hook joins a shared channel keyed by session id,
+  // requests a snapshot from peers, and rebroadcasts local mutations. This
+  // is what keeps the guest Timeline populated after opening a popout.
+  useEffect(() => {
+    if (!sessionId || isMember) return;
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel(`mako-timeline-guest-${sessionId}`);
+    guestChannelRef.current = channel;
+
+    const mergeEntries = (incoming: TimelineEntry[]) => {
+      if (!incoming.length) return;
+      setEntries((prev) => {
+        const map = new Map(prev.map((e) => [e.id, e]));
+        for (const e of incoming) map.set(e.id, e);
+        return Array.from(map.values()).sort((a, b) =>
+          a.createdAt.localeCompare(b.createdAt),
+        );
+      });
+    };
+
+    channel.onmessage = (evt) => {
+      const msg = evt.data as
+        | { type: "REQUEST_SNAPSHOT" }
+        | { type: "SNAPSHOT"; entries: TimelineEntry[] }
+        | { type: "INSERT"; entry: TimelineEntry }
+        | { type: "DELETE"; id: string };
+      if (!msg) return;
+      if (msg.type === "REQUEST_SNAPSHOT") {
+        if (entriesRef.current.length) {
+          channel.postMessage({ type: "SNAPSHOT", entries: entriesRef.current });
+        }
+      } else if (msg.type === "SNAPSHOT") {
+        mergeEntries(msg.entries);
+      } else if (msg.type === "INSERT") {
+        mergeEntries([msg.entry]);
+      } else if (msg.type === "DELETE") {
+        setEntries((prev) => prev.filter((e) => e.id !== msg.id));
+      }
+    };
+
+    // Ask any existing window (opener/other popouts) for its current entries.
+    channel.postMessage({ type: "REQUEST_SNAPSHOT" });
+
+    return () => {
+      channel.close();
+      if (guestChannelRef.current === channel) guestChannelRef.current = null;
+    };
+  }, [sessionId, isMember]);
 
   // Initial load
   useEffect(() => {
     let cancelled = false;
     if (!sessionId) return;
     if (!isMember) {
-      // Guest: no persistence.
-      setEntries([]);
+      // Guest: no server persistence. Entries hydrate via BroadcastChannel
+      // snapshot from any peer window (see effect above).
       setReady(true);
       return;
     }
