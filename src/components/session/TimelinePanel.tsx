@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ChevronDown, MoreHorizontal, Filter, X, ArrowUpDown } from "lucide-react";
+import { ChevronDown, MoreHorizontal, Filter, X, ArrowUpDown, LayoutPanelLeft, PanelBottom, PanelRight, ExternalLink, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StreamInput } from "@/lib/mock-data";
 import type { AddEntryInput } from "@/hooks/use-session-timeline";
