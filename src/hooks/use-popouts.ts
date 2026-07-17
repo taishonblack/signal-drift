@@ -31,7 +31,8 @@ export function usePopouts() {
         return true;
       }
       const features = `popup=yes,width=${w},height=${h},resizable=yes,scrollbars=yes`;
-      const win = window.open(url, `mako-${key}`, features);
+      const absoluteUrl = new URL(url, window.location.origin).toString();
+      const win = window.open(absoluteUrl, `mako-${key}`, features);
       if (!win) {
         setBlockedKey(key);
         return false;
