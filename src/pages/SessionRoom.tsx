@@ -351,6 +351,26 @@ const SessionRoom = () => {
   const focusedInput = activeInputs.find((i) => i.id === focusedId);
   const focusedLabel = focusedInput?.label ?? "Unknown";
 
+  // "Pop Out View" — open the CURRENT multiview layout in its own window.
+  // Ephemeral state (layout, focus, audio, mute) rides on the URL; pane
+  // sizes, slot order, source names, clocks, and time prefs are hydrated
+  // from the same per-session storage the docked view uses, so the popout
+  // opens identical to what the operator was just looking at.
+  const openLayoutPopout = useCallback(() => {
+    if (!id) return;
+    const params = new URLSearchParams({
+      layout,
+      focus: focusedId ?? "",
+      audio: audioSource ?? "",
+      mute: muteAll ? "1" : "0",
+    });
+    popouts.open(
+      "view",
+      `/session/${id}/popout/view?${params.toString()}`,
+      { width: 1280, height: 800 },
+    );
+  }, [id, layout, focusedId, audioSource, muteAll, popouts]);
+
   /**
    * Personal audio-follows-selection: clicking a pane sets both visual
    * focus AND audio to that source, and clears mute-all. Focus and audio
