@@ -63,12 +63,16 @@ function clamp(n: number, lo: number, hi: number) {
 
 export function normalizePrefs(input: Partial<WorkspacePrefs> | null | undefined): WorkspacePrefs {
   const p = { ...DEFAULT_WORKSPACE_PREFS, ...(input ?? {}) };
+  const dockOk: TimelineDock[] = ["bottom", "right", "popout", "collapsed"];
   return {
     mainSplitPct: clamp(p.mainSplitPct, WORKSPACE_LIMITS.mainSplitMin, WORKSPACE_LIMITS.mainSplitMax),
     rightStackPct: clamp(p.rightStackPct, WORKSPACE_LIMITS.rightStackMin, WORKSPACE_LIMITS.rightStackMax),
     notesHeightPx: Math.max(0, Math.round(p.notesHeightPx)),
     notesCollapsed: !!p.notesCollapsed,
     inspectorOpen: !!p.inspectorOpen,
+    timelineDock: dockOk.includes(p.timelineDock) ? p.timelineDock : "bottom",
+    timelineRightPct: clamp(p.timelineRightPct, WORKSPACE_LIMITS.timelineRightMin, WORKSPACE_LIMITS.timelineRightMax),
+    inspectorTimelinePct: clamp(p.inspectorTimelinePct, WORKSPACE_LIMITS.inspectorTimelineMin, WORKSPACE_LIMITS.inspectorTimelineMax),
   };
 }
 
