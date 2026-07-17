@@ -644,6 +644,7 @@ const SessionRoom = () => {
           showSafeArea={showSafeArea}
           onToggleSafeArea={() => setShowSafeArea(!showSafeArea)}
           onShare={() => setShareOpen(true)}
+          configuredCount={activeInputs.length}
         />
 
 
