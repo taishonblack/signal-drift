@@ -1,7 +1,7 @@
 // TimelinePanel — the shared operational history for a session (Phase 1A).
 // Replaces the free-text Notes panel with a structured, filterable feed.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
