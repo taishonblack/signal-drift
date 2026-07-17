@@ -368,6 +368,26 @@ const TimelinePanel = ({
   );
 };
 
+const DockMenuItem = ({
+  icon: Icon,
+  label,
+  active,
+  onSelect,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  active: boolean;
+  onSelect: () => void;
+}) => (
+  <DropdownMenuItem onClick={onSelect} className="text-xs gap-2">
+    <Icon className="h-3.5 w-3.5" />
+    <span className="flex-1">{label}</span>
+    {active && <Check className="h-3.5 w-3.5 text-primary" />}
+  </DropdownMenuItem>
+);
+
+
+
 const FilterChip = ({
   active,
   onClick,
