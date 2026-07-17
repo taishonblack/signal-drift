@@ -15,6 +15,14 @@ const layoutIcons: Record<Layout, typeof Square> = {
   "4": Grid2X2,
 };
 
+/** Minimum configured sources required to enable each layout. */
+const layoutMinSources: Record<Layout, number> = {
+  "1": 1,
+  "2": 2,
+  "3": 3,
+  "4": 4,
+};
+
 interface SessionToolbarProps {
   sessionName: string;
   sessionStatus: string;
