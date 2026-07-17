@@ -201,6 +201,25 @@ const SessionRoom = () => {
   const [activeDragSlot, setActiveDragSlot] = useState<SlotId | null>(null);
   const [cycleFlash, setCycleFlash] = useState(false);
   const [muteAll, setMuteAll] = useState(false);
+  // Phase 1C: double-click a tile to maximize (1-up). Stores the layout to
+  // restore on the next double-click. null = not currently maximized.
+  const [maximizedRestoreLayout, setMaximizedRestoreLayout] = useState<Layout | null>(null);
+
+  const toggleMaximize = useCallback(
+    (inputId: string) => {
+      if (maximizedRestoreLayout) {
+        // Restore prior layout.
+        setLayout(maximizedRestoreLayout);
+        setMaximizedRestoreLayout(null);
+        return;
+      }
+      if (layout === "1") return; // already 1-up, nothing to maximize.
+      setMaximizedRestoreLayout(layout);
+      setFocus(inputId);
+      setLayout("1");
+    },
+    [layout, maximizedRestoreLayout, setFocus],
+  );
 
 
 
