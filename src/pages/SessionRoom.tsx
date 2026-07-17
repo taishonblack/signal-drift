@@ -9,6 +9,7 @@ import SessionToolbar, { type Layout } from "@/components/session/SessionToolbar
 import FullscreenOverlay from "@/components/session/FullscreenOverlay";
 import TimelinePanel from "@/components/session/TimelinePanel";
 import { useSessionTimeline } from "@/hooks/use-session-timeline";
+import { useAuth } from "@/hooks/useAuth";
 import { useQuinnTimelineBridge } from "@/hooks/use-quinn-timeline-bridge";
 import EditInputModal from "@/components/session/EditInputModal";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
@@ -85,6 +86,7 @@ const SessionRoom = () => {
   const activeInputs = session.inputs.filter((i) => i.enabled);
   const isMobile = useIsMobile();
   const identity = useIdentity();
+  const auth = useAuth();
 
   // Ensure a persistent identity (guest, if not member) before joining.
   const currentUserRef = (() => {
@@ -217,7 +219,7 @@ const SessionRoom = () => {
   const [maximizedRestoreLayout, setMaximizedRestoreLayout] = useState<Layout | null>(null);
 
   // Session Timeline (Phase 1A) — shared comments + realtime.
-  const timeline = useSessionTimeline(id);
+  const timeline = useSessionTimeline(id, { user: auth.user, loading: auth.loading });
 
   // Quinn Timeline Bridge (Phase 1B) — Quinn writes structured
   // warning/critical/information entries with confidence + source.
