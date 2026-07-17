@@ -1,34 +1,42 @@
-import { useState, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
-import { Badge } from "@/components/ui/badge";
+import { useState, useMemo, useCallback } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Activity, AlertTriangle, Zap, ExternalLink, Radio, LogIn, Plus } from "lucide-react";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
-import IncidentDetailDrawer from "@/components/quinn/IncidentDetailDrawer";
-import {
-  getIncidents,
-  type Incident,
-  severityBg,
-  statusBg,
-  getCurrentUser,
-} from "@/lib/quinn-store";
+import IncidentCard from "@/components/quinn/IncidentCard";
 import { useCurrentSession } from "@/hooks/use-current-session";
-import { useQuinnSimulator } from "@/hooks/use-quinn-simulator";
+import { useAuth } from "@/hooks/useAuth";
+import { useSessionTimeline } from "@/hooks/use-session-timeline";
+import { useQuinnIncidents, type QuinnIncident } from "@/hooks/use-quinn-incidents";
+import { useIdentity } from "@/lib/identity";
 
 export default function OpsDashboard() {
-  const user = getCurrentUser();
+  const { user, loading: authLoading } = useAuth();
+  const identity = useIdentity();
   const { session, isTemporary } = useCurrentSession();
-  const [incidents, setIncidents] = useState<Incident[]>(() => getIncidents());
-  const [selected, setSelected] = useState<Incident | null>(null);
+  const sessionId = session?.id;
+  const timeline = useSessionTimeline(sessionId, { user, loading: authLoading });
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlightId = searchParams.get("incident");
+  const navigate = useNavigate();
 
-  const refresh = useCallback(() => setIncidents(getIncidents()), []);
-  useQuinnSimulator(refresh);
-
-  const sessionIncidents = useMemo(
-    () => (session ? incidents.filter((i) => i.sessionId === session.id) : []),
-    [incidents, session],
+  const postSystemEntry = useCallback(
+    (message: string) => {
+      void timeline.addEntry({ message, severity: "information", entryType: "session_event" });
+    },
+    [timeline],
   );
+
+  const { incidents, openIncidents, criticalOpenIncidents, openCountsBySource, acknowledge, resolve } =
+    useQuinnIncidents({
+      sessionId,
+      sessionName: session?.name ?? "",
+      entries: timeline.entries,
+      actorName: identity.name || "Operator",
+      postSystemEntry,
+    });
 
   // Empty state — no session in progress.
   if (!session) {
@@ -53,9 +61,18 @@ export default function OpsDashboard() {
     );
   }
 
-  const openIncidents = sessionIncidents.filter((i) => i.status === "open");
-  const criticalNow = sessionIncidents.filter((i) => i.severity === "critical" && i.status === "open");
   const enabledSources = session.lines.filter((l) => l.enabled);
+
+  const filteredIncidents = useMemo(() => {
+    if (!sourceFilter) return incidents;
+    return incidents.filter((i) => (i.sourceId ?? i.sourceName) === sourceFilter);
+  }, [incidents, sourceFilter]);
+
+  const handleViewTimeline = (incident: QuinnIncident) => {
+    navigate(`/session/${session.id}?timelineEntry=${incident.latestEntryId}`);
+  };
+
+  const isLoading = timeline.loading && !timeline.ready;
 
   return (
     <div className="flex gap-4 h-[calc(100vh-3rem-2rem)] md:h-[calc(100vh-3rem-3rem)]">
@@ -83,15 +100,20 @@ export default function OpsDashboard() {
         <div className="grid grid-cols-3 gap-3">
           <KpiCard icon={<Activity className="h-4 w-4 text-primary" />} label="Sources Monitored" value={enabledSources.length} />
           <KpiCard icon={<AlertTriangle className="h-4 w-4 text-[hsl(var(--warning))]" />} label="Open Incidents" value={openIncidents.length} />
-          <KpiCard icon={<Zap className="h-4 w-4 text-destructive" />} label="Critical Now" value={criticalNow.length} />
+          <KpiCard icon={<Zap className="h-4 w-4 text-destructive" />} label="Critical Now" value={criticalOpenIncidents.length} />
         </div>
 
         {/* Sources */}
         <div className="mako-glass rounded-lg overflow-hidden">
-          <div className="px-3 py-2 border-b border-border/10">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+          <div className="px-3 py-2 border-b border-border/10 flex items-center gap-2">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium flex-1">
               Sources in this session
             </p>
+            {sourceFilter && (
+              <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setSourceFilter(null)}>
+                Clear filter
+              </Button>
+            )}
           </div>
           <ScrollArea className="max-h-[240px]">
             <table className="w-full text-xs">
@@ -112,16 +134,26 @@ export default function OpsDashboard() {
                   </tr>
                 )}
                 {enabledSources.map((l) => {
-                  const openForLine = openIncidents.filter(
-                    (i) => i.primaryLineLabel === l.label || i.primaryLineLabel === `Source ${l.id}`,
-                  ).length;
                   const isDefault = /^Line \d+$/.test(l.label);
                   const display = isDefault ? `Source ${l.id}` : l.label;
+                  const openForLine = openCountsBySource[l.id] ?? 0;
+                  const isFiltered = sourceFilter === l.id;
                   return (
-                    <tr key={l.id} className="border-b border-border/5 hover:bg-muted/10 transition-colors">
+                    <tr key={l.id} className={`border-b border-border/5 hover:bg-muted/10 transition-colors ${isFiltered ? "bg-primary/5" : ""}`}>
                       <td className="px-3 py-2 text-foreground font-medium truncate max-w-[200px]">{display}</td>
                       <td className="px-3 py-2 text-muted-foreground font-mono truncate max-w-[240px]">{l.srtAddress || "—"}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{openForLine}</td>
+                      <td className="px-3 py-2">
+                        {openForLine > 0 ? (
+                          <button
+                            onClick={() => setSourceFilter(isFiltered ? null : l.id)}
+                            className="text-foreground font-medium hover:text-primary transition-colors"
+                          >
+                            {openForLine} Open Incident{openForLine === 1 ? "" : "s"}
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-right">
                         <Link to={`/session/${session.id}/configure`}>
                           <Button variant="ghost" size="sm" className="h-6 text-[10px] gap-1 text-muted-foreground hover:text-foreground">
@@ -137,39 +169,38 @@ export default function OpsDashboard() {
           </ScrollArea>
         </div>
 
-        {/* Incident stream — scoped to current session */}
+        {/* Incident stream */}
         <div className="mako-glass rounded-lg flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="px-3 py-2 border-b border-border/10">
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+          <div className="px-3 py-2 border-b border-border/10 flex items-center gap-2">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium flex-1">
               Incident Stream · {session.name}
+              {sourceFilter && <span className="ml-2 text-primary normal-case tracking-normal">Filtered</span>}
             </p>
           </div>
           <ScrollArea className="flex-1 px-3 py-2">
-            <div className="space-y-1.5">
-              {sessionIncidents.length === 0 && (
+            <div className="space-y-2">
+              {isLoading && (
+                <p className="text-xs text-muted-foreground/60 text-center py-6">Loading incidents…</p>
+              )}
+              {!isLoading && timeline.error && (
+                <p className="text-xs text-muted-foreground/60 text-center py-6">Incidents unavailable.</p>
+              )}
+              {!isLoading && !timeline.error && filteredIncidents.length === 0 && (
                 <p className="text-xs text-muted-foreground/60 text-center py-6">
                   No incidents yet for this session.
                 </p>
               )}
-              {sessionIncidents
-                .sort((a, b) => b.startedAtUtc.localeCompare(a.startedAtUtc))
-                .map((inc) => (
-                  <button
-                    key={inc.id}
-                    onClick={() => setSelected(inc)}
-                    className="w-full text-left p-2 rounded bg-muted/10 hover:bg-muted/20 border border-border/10 transition-colors"
-                  >
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <Badge className={`${severityBg[inc.severity]} text-[10px] uppercase border-0`}>{inc.severity}</Badge>
-                      <Badge className={`${statusBg[inc.status]} text-[10px] uppercase border-0`}>{inc.status}</Badge>
-                      <span className="text-[10px] text-muted-foreground ml-auto">
-                        {new Date(inc.startedAtUtc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    </div>
-                    <p className="text-xs text-foreground/90 line-clamp-1">{inc.summary}</p>
-                    <p className="text-[10px] text-muted-foreground">{inc.primaryLineLabel}</p>
-                  </button>
-                ))}
+              {filteredIncidents.map((inc) => (
+                <IncidentCard
+                  key={inc.id}
+                  incident={inc}
+                  onAcknowledge={acknowledge}
+                  onResolve={resolve}
+                  onViewTimeline={handleViewTimeline}
+                  highlighted={highlightId === inc.id || highlightId === inc.latestEntryId}
+                  canManage
+                />
+              ))}
             </div>
           </ScrollArea>
         </div>
@@ -177,16 +208,20 @@ export default function OpsDashboard() {
 
       {/* Quinn Ops panel */}
       <div className="w-72 shrink-0 mako-glass rounded-lg overflow-hidden hidden lg:flex flex-col">
-        <QuinnPanel />
+        <QuinnPanel
+          sessionId={session.id}
+          incidents={incidents}
+          onSelectIncident={(id) => {
+            const el = document.getElementById(`incident-${id}`);
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.set("incident", id);
+              return next;
+            });
+          }}
+        />
       </div>
-
-      <IncidentDetailDrawer
-        incident={selected}
-        open={!!selected}
-        onClose={() => setSelected(null)}
-        canManage={user.role === "ops"}
-        onStatusChange={refresh}
-      />
     </div>
   );
 }
