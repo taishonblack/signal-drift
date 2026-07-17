@@ -1090,49 +1090,26 @@ const SessionRoom = () => {
               <QuinnPanel sessionId={session.id} sessionHostUserId="u1" />
             </div>
           )}
-        </div>
 
-        {/* Notes panel — resizable, with collapse to compact bar. */}
-        {showNotes && (
-          workspacePrefs.notesCollapsed ? (
-            <button
-              type="button"
-              onClick={() => {
-                updateWorkspacePrefs({ notesCollapsed: false });
-              }}
-              className="flex-shrink-0 flex items-center justify-between gap-3 mako-glass rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Expand timeline"
-            >
-              <span className="flex items-center gap-2">
-                <ChevronUp className="h-3.5 w-3.5" />
-                <span className="uppercase tracking-wider font-medium">Timeline</span>
-                <span className="text-muted-foreground/60">·</span>
-                <span>{timeline.count} entries</span>
-                <span className="text-muted-foreground/60">·</span>
-                <span>{alertCount} Quinn events</span>
-              </span>
-              <span className="text-[10px] text-muted-foreground/60">Click to expand</span>
-            </button>
-          ) : (
+          {/* Right-docked Timeline (personal, desktop only). */}
+          {showNotes && workspacePrefs.timelineDock === "right" && !isMobile && (
             <>
               <ResizeDivider
-                orientation="horizontal"
-                value={workspacePrefs.notesHeightPx}
-                min={WORKSPACE_LIMITS.notesMinPx}
-                max={Math.max(
-                  WORKSPACE_LIMITS.notesMinPx,
-                  Math.floor((workspaceRef.current?.clientHeight ?? 800) * WORKSPACE_LIMITS.notesMaxFraction),
-                )}
-                step={16}
-                containerRef={workspaceRef}
-                toValue={(clientY, rect) => rect.bottom - clientY}
-                onChange={(next) => updateWorkspacePrefs({ notesHeightPx: next })}
-                onDoubleClick={() => updateWorkspacePrefs({ notesHeightPx: DEFAULT_WORKSPACE_PREFS.notesHeightPx })}
-                ariaLabel="Resize notes panel"
+                orientation="vertical"
+                value={workspacePrefs.timelineRightPct}
+                min={WORKSPACE_LIMITS.timelineRightMin}
+                max={WORKSPACE_LIMITS.timelineRightMax}
+                step={2}
+                containerRef={mainRowRef}
+                toValue={(clientX, rect) => ((rect.right - clientX) / rect.width) * 100}
+                onChange={(next) => updateWorkspacePrefs({ timelineRightPct: next })}
+                onDoubleClick={() => updateWorkspacePrefs({ timelineRightPct: DEFAULT_WORKSPACE_PREFS.timelineRightPct })}
+                ariaLabel="Resize timeline width"
               />
               <div
-                className="flex-shrink-0 overflow-hidden"
-                style={{ height: `${workspacePrefs.notesHeightPx}px` }}
+                ref={rightColumnRef}
+                className="shrink-0 min-w-[320px] min-h-0 overflow-hidden"
+                style={{ flexBasis: `${workspacePrefs.timelineRightPct}%` }}
               >
                 <TimelinePanel
                   focusedInputId={focusedId}
@@ -1146,12 +1123,96 @@ const SessionRoom = () => {
                   onDelete={timeline.deleteEntry}
                   onFocusSource={(sid) => selectSourceForViewer(sid)}
                   currentUserId={currentUserRef.id}
-                  onCollapse={() => updateWorkspacePrefs({ notesCollapsed: true })}
+                  dock={workspacePrefs.timelineDock}
+                  onChangeDock={changeTimelineDock}
                 />
               </div>
             </>
-          )
+          )}
+        </div>
+
+        {/* Timeline popped-out notice. */}
+        {showNotes && workspacePrefs.timelineDock === "popout" && (
+          <div className="flex-shrink-0 flex items-center justify-between gap-3 mako-glass rounded-lg px-3 py-2 text-xs text-muted-foreground">
+            <span className="flex items-center gap-2">
+              <ExternalLink className="h-3.5 w-3.5 text-primary" />
+              <span className="uppercase tracking-wider font-medium text-foreground/80">Timeline Popped Out</span>
+              <span className="text-muted-foreground/60">·</span>
+              <span>{timeline.count} entries</span>
+            </span>
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={() => popouts.focus("timeline")}>
+                Focus Timeline
+              </Button>
+              <Button size="sm" variant="outline" className="h-6 text-[11px]" onClick={() => changeTimelineDock(lastTimelineDockRef.current)}>
+                Bring Back
+              </Button>
+            </div>
+          </div>
         )}
+
+        {/* Collapsed compact bar. */}
+        {showNotes && workspacePrefs.timelineDock === "collapsed" && (
+          <button
+            type="button"
+            onClick={() => changeTimelineDock("bottom")}
+            className="flex-shrink-0 flex items-center justify-between gap-3 mako-glass rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Expand timeline"
+          >
+            <span className="flex items-center gap-2">
+              <ChevronUp className="h-3.5 w-3.5" />
+              <span className="uppercase tracking-wider font-medium">Timeline</span>
+              <span className="text-muted-foreground/60">·</span>
+              <span>{timeline.count} entries</span>
+              <span className="text-muted-foreground/60">·</span>
+              <span>{alertCount} Quinn events</span>
+            </span>
+            <span className="text-[10px] text-muted-foreground/60">Click to expand</span>
+          </button>
+        )}
+
+        {/* Bottom-docked Timeline (default) — resizable, with collapse to compact bar. */}
+        {showNotes && workspacePrefs.timelineDock === "bottom" && (
+          <>
+            <ResizeDivider
+              orientation="horizontal"
+              value={workspacePrefs.notesHeightPx}
+              min={WORKSPACE_LIMITS.notesMinPx}
+              max={Math.max(
+                WORKSPACE_LIMITS.notesMinPx,
+                Math.floor((workspaceRef.current?.clientHeight ?? 800) * WORKSPACE_LIMITS.notesMaxFraction),
+              )}
+              step={16}
+              containerRef={workspaceRef}
+              toValue={(clientY, rect) => rect.bottom - clientY}
+              onChange={(next) => updateWorkspacePrefs({ notesHeightPx: next })}
+              onDoubleClick={() => updateWorkspacePrefs({ notesHeightPx: DEFAULT_WORKSPACE_PREFS.notesHeightPx })}
+              ariaLabel="Resize notes panel"
+            />
+            <div
+              className="flex-shrink-0 overflow-hidden"
+              style={{ height: `${workspacePrefs.notesHeightPx}px` }}
+            >
+              <TimelinePanel
+                focusedInputId={focusedId}
+                focusedLabel={focusedLabel}
+                inputs={activeInputs}
+                entries={timeline.entries}
+                ready={timeline.ready}
+                isMember={timeline.isMember}
+                eventTimeZone={focusedOriginTZ}
+                onAdd={timeline.addEntry}
+                onDelete={timeline.deleteEntry}
+                onFocusSource={(sid) => selectSourceForViewer(sid)}
+                currentUserId={currentUserRef.id}
+                onCollapse={() => changeTimelineDock("collapsed")}
+                dock={workspacePrefs.timelineDock}
+                onChangeDock={changeTimelineDock}
+              />
+            </div>
+          </>
+        )}
+
 
       </div>
     </>
