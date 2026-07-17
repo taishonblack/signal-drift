@@ -24,6 +24,7 @@ interface DraggableSignalTileProps {
   sessionStartedAt?: string;
   showSafeArea?: boolean;
   canDrag: boolean;
+  onDoubleClick?: () => void;
 }
 
 const DraggableSignalTile = ({
