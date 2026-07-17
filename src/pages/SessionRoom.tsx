@@ -1042,14 +1042,18 @@ const SessionRoom = () => {
                 className="flex-shrink-0 overflow-hidden"
                 style={{ height: `${workspacePrefs.notesHeightPx}px` }}
               >
-                <QCNotesPanel
+                <TimelinePanel
+                  focusedInputId={focusedId}
                   focusedLabel={focusedLabel}
-                  notes={notes}
-                  onNotesChange={setNotes}
-                  markerNote={markerNote}
-                  onMarkerNoteChange={setMarkerNote}
-                  markers={markers}
-                  onAddMarker={addMarker}
+                  inputs={activeInputs}
+                  entries={timeline.entries}
+                  ready={timeline.ready}
+                  isMember={timeline.isMember}
+                  eventTimeZone={focusedOriginTZ}
+                  onAdd={timeline.addEntry}
+                  onDelete={timeline.deleteEntry}
+                  onFocusSource={(sid) => selectSourceForViewer(sid)}
+                  currentUserId={currentUserRef.id}
                   onCollapse={() => updateWorkspacePrefs({ notesCollapsed: true })}
                 />
               </div>
