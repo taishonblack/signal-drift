@@ -220,7 +220,7 @@ const TimelinePanel = ({
                 <DropdownMenuContent align="end" className="w-48">
                   <DockMenuItem icon={PanelBottom} label="Bottom" active={dock === "bottom"} onSelect={() => onChangeDock("bottom")} />
                   <DockMenuItem icon={PanelRight} label="Right" active={dock === "right"} onSelect={() => onChangeDock("right")} />
-                  <DockMenuItem icon={ExternalLink} label="Pop Out" active={dock === "popout"} onSelect={() => onChangeDock("popout")} />
+                  {/* Pop Out temporarily disabled — revisit later */}
                   <DockMenuItem icon={ChevronDown} label="Collapse" active={dock === "collapsed"} onSelect={() => onChangeDock("collapsed")} />
                 </DropdownMenuContent>
               </DropdownMenu>
