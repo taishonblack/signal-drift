@@ -758,6 +758,8 @@ const SessionRoom = () => {
           onToggleSafeArea={() => setShowSafeArea(!showSafeArea)}
           onShare={() => setShareOpen(true)}
           configuredCount={activeInputs.length}
+          onPopOutView={openLayoutPopout}
+          isLayoutPoppedOut={isLayoutPoppedOut}
         />
 
 
