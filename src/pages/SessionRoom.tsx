@@ -9,6 +9,7 @@ import SessionToolbar, { type Layout } from "@/components/session/SessionToolbar
 import FullscreenOverlay from "@/components/session/FullscreenOverlay";
 import TimelinePanel from "@/components/session/TimelinePanel";
 import { useSessionTimeline } from "@/hooks/use-session-timeline";
+import { useQuinnTimelineBridge } from "@/hooks/use-quinn-timeline-bridge";
 import EditInputModal from "@/components/session/EditInputModal";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
 import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
