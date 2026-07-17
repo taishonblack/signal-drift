@@ -584,7 +584,7 @@ const SessionRoom = () => {
           sessionStatus={session.status}
           sessionId={session.id}
           layout={layout}
-          onLayoutChange={setLayout}
+          onLayoutChange={handleLayoutChange}
           timePrefs={timePrefs}
           onTimePrefsChange={handleTimePrefsChange}
           showNotes={showNotes}
