@@ -65,6 +65,7 @@ const SessionToolbar = ({
   showSafeArea,
   onToggleSafeArea,
   onShare,
+  configuredCount,
 }: SessionToolbarProps) => {
   const isMobile = useIsMobile();
 
