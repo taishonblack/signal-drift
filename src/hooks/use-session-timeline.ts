@@ -66,6 +66,17 @@ export interface AddEntryInput {
   parentId?: string | null;
 }
 
+export interface AddQuinnEntryInput {
+  message: string;
+  severity: TimelineSeverity;
+  sourceId?: string | null;
+  sourceName?: string | null;
+  entryType?: TimelineEntryType;
+  confidence?: number | null;
+  metadata?: Record<string, unknown>;
+  dedupeKey?: string;
+}
+
 export function useSessionTimeline(sessionId: string | undefined) {
   const identity = useIdentity();
   const isMember = identity.kind === "member";
