@@ -282,18 +282,15 @@ const SessionRoom = () => {
   const lastTimelineDockRef = useRef<"bottom" | "right" | "collapsed">("bottom");
   useEffect(() => {
     if (workspacePrefs.timelineDock !== "popout") {
-      if (workspacePrefs.timelineDock !== "popout") {
-        lastTimelineDockRef.current =
-          workspacePrefs.timelineDock === "right"
-            ? "right"
-            : workspacePrefs.timelineDock === "collapsed"
-              ? "collapsed"
-              : "bottom";
-      }
+      lastTimelineDockRef.current =
+        workspacePrefs.timelineDock === "right"
+          ? "right"
+          : workspacePrefs.timelineDock === "collapsed"
+            ? "collapsed"
+            : "bottom";
       return;
     }
     if (!popouts.isOpen("timeline")) {
-      // Popout was closed by the user — restore prior dock.
       updateWorkspacePrefs({ timelineDock: lastTimelineDockRef.current });
     }
   }, [workspacePrefs.timelineDock, popouts, updateWorkspacePrefs]);
