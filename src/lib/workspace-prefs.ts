@@ -9,6 +9,8 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
+export type TimelineDock = "bottom" | "right" | "popout" | "collapsed";
+
 export interface WorkspacePrefs {
   /** Main vertical split: width % allocated to the LEFT pane (30..75). */
   mainSplitPct: number;
@@ -20,6 +22,12 @@ export interface WorkspacePrefs {
   notesCollapsed: boolean;
   /** Inspector docked-panel visibility. */
   inspectorOpen: boolean;
+  /** Timeline dock position (personal per-viewer). */
+  timelineDock: TimelineDock;
+  /** Timeline right-column width as % of main content (20..45). */
+  timelineRightPct: number;
+  /** When Inspector + Timeline share the right column, % height for Inspector (25..75). */
+  inspectorTimelinePct: number;
 }
 
 export const DEFAULT_WORKSPACE_PREFS: WorkspacePrefs = {
@@ -28,6 +36,9 @@ export const DEFAULT_WORKSPACE_PREFS: WorkspacePrefs = {
   notesHeightPx: 220,
   notesCollapsed: false,
   inspectorOpen: false,
+  timelineDock: "bottom",
+  timelineRightPct: 28,
+  inspectorTimelinePct: 45,
 };
 
 export const WORKSPACE_LIMITS = {
@@ -38,6 +49,10 @@ export const WORKSPACE_LIMITS = {
   notesMinPx: 120,
   /** Max as a fraction of Session Room available height. */
   notesMaxFraction: 0.6,
+  timelineRightMin: 20,
+  timelineRightMax: 45,
+  inspectorTimelineMin: 25,
+  inspectorTimelineMax: 75,
 } as const;
 
 const GUEST_KEY = "mako.workspace-prefs.v1";
