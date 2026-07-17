@@ -71,6 +71,7 @@ const AudioMeter = ({ peakL, peakR }: { peakL: number; peakR: number }) => {
 const SignalTile = ({
   input, liveMetrics, isFocused = false, isAudioSource, muteAll = false, isFullscreen,
   onFocusClick, onFullscreen, onEdit, onSelectAudio,
+  onPopOut, isPoppedOut = false, onBringBack, onFocusPopout,
   timePrefs, tileOriginTZ = "UTC", focusedOriginTZ = "UTC", sessionStartedAt = "",
   showSafeArea = false,
 }: SignalTileProps) => {
