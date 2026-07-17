@@ -38,6 +38,8 @@ interface SessionToolbarProps {
   showSafeArea: boolean;
   onToggleSafeArea: () => void;
   onShare: () => void;
+  /** Number of configured (enabled) sources — drives layout button availability. */
+  configuredCount: number;
 }
 
 const SHORTCUTS = [
