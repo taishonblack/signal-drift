@@ -310,6 +310,33 @@ const SessionRoom = () => {
     updateViewerFocus(id, currentUserRef.id, focusedInput.label);
   }, [id, focusedInput, currentUserRef.id]);
 
+  // Spec §5, §6: if the number of configured sources shrinks below the
+  // current layout's requirement, fall back to the largest valid layout.
+  // Also re-focus if the focused source was removed.
+  useEffect(() => {
+    const n = activeInputs.length;
+    const required = parseInt(layout);
+    if (n > 0 && required > n) {
+      const next: Layout = (n >= 3 ? "3" : n === 2 ? "2" : "1") as Layout;
+      setLayout(next);
+      setMaximizedRestoreLayout(null);
+      toast({
+        title: "Layout adjusted",
+        description: "Number of configured sources changed.",
+      });
+    }
+    if (n > 0 && !activeInputs.some((i) => i.id === focusedId)) {
+      const first = activeInputs[0].id;
+      setFocus(first);
+      setAudioSource(first);
+    }
+    if (n === 0) {
+      setMuteAll(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeInputs.length]);
+
+
   const handleBecomeOwner = useCallback(() => {
     if (!id) return;
     const won = claimOwnership(id, currentUserRef);
