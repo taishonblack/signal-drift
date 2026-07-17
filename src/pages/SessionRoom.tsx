@@ -726,6 +726,19 @@ const SessionRoom = () => {
           <span>Focused:</span>
           <span className="text-primary font-medium">{focusedLabel}</span>
           <span className="text-muted-foreground/50">· Focused by: {focusedBy}</span>
+          {maximizedRestoreLayout && (
+            <button
+              type="button"
+              onClick={() => {
+                setLayout(maximizedRestoreLayout);
+                setMaximizedRestoreLayout(null);
+              }}
+              className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-primary/15 text-primary/90 hover:bg-primary/25 transition-colors"
+              title="Double-click a tile or press ESC to restore"
+            >
+              Maximized · Restore
+            </button>
+          )}
           <div className="ml-auto flex items-center gap-2">
             <SessionEndIndicator
               scheduledEndAt={scheduledEndAt}
