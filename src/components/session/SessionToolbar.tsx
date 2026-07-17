@@ -40,6 +40,10 @@ interface SessionToolbarProps {
   onShare: () => void;
   /** Number of configured (enabled) sources — drives layout button availability. */
   configuredCount: number;
+  /** Detach the current multiview layout into its own browser window. */
+  onPopOutView: () => void;
+  /** True when the layout popout window is already open. */
+  isLayoutPoppedOut?: boolean;
 }
 
 const SHORTCUTS = [
