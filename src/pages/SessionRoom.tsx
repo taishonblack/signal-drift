@@ -217,6 +217,16 @@ const SessionRoom = () => {
   // Session Timeline (Phase 1A) — shared comments + realtime.
   const timeline = useSessionTimeline(id);
 
+  // Quinn Timeline Bridge (Phase 1B) — Quinn writes structured
+  // warning/critical/information entries with confidence + source.
+  useQuinnTimelineBridge({
+    enabled: timeline.ready && activeInputs.length > 0,
+    sessionId: id,
+    inputs: activeInputs,
+    addQuinnEntry: timeline.addQuinnEntry,
+  });
+
+
 
 
   // Per-viewer workspace layout preferences (pane splits, notes height, panel visibility).
