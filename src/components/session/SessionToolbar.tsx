@@ -110,8 +110,27 @@ const SessionToolbar = ({
       <div className="flex items-center gap-1 min-w-0 overflow-hidden">
         {(Object.keys(layoutIcons) as Layout[]).map((l) => {
           const Icon = layoutIcons[l];
+          const needed = layoutMinSources[l];
+          const disabled = configuredCount < needed;
+          const isActive = layout === l;
+          const tip = disabled
+            ? needed === 2
+              ? "Requires at least 2 configured sources"
+              : needed === 3
+              ? "Requires at least 3 configured sources"
+              : "Requires 4 configured sources"
+            : `${needed}-source layout`;
           return (
-            <Button key={l} variant="ghost" size="icon" onClick={() => onLayoutChange(l)} className={`h-8 w-8 ${layout === l ? "text-primary bg-muted/30" : "text-muted-foreground"}`}>
+            <Button
+              key={l}
+              variant="ghost"
+              size="icon"
+              disabled={disabled}
+              onClick={() => !disabled && onLayoutChange(l)}
+              title={tip}
+              aria-label={tip}
+              className={`h-8 w-8 ${isActive ? "text-primary bg-muted/30" : "text-muted-foreground"} ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
+            >
               <Icon className="h-3.5 w-3.5" />
             </Button>
           );
