@@ -1120,7 +1120,7 @@ const SessionRoom = () => {
 
           {showQuinn && (
             <div className="w-72 shrink-0 mako-glass rounded-lg overflow-hidden flex flex-col">
-              <QuinnPanel sessionId={session.id} sessionHostUserId="u1" />
+              <QuinnPanel sessionId={session.id} incidents={quinnIncidents.incidents} />
             </div>
           )}
 
