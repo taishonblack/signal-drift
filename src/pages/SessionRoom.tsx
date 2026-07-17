@@ -9,6 +9,7 @@ import SessionToolbar, { type Layout } from "@/components/session/SessionToolbar
 import FullscreenOverlay from "@/components/session/FullscreenOverlay";
 import TimelinePanel from "@/components/session/TimelinePanel";
 import { useSessionTimeline } from "@/hooks/use-session-timeline";
+import { useQuinnTimelineBridge } from "@/hooks/use-quinn-timeline-bridge";
 import EditInputModal from "@/components/session/EditInputModal";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
 import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
@@ -216,6 +217,16 @@ const SessionRoom = () => {
 
   // Session Timeline (Phase 1A) — shared comments + realtime.
   const timeline = useSessionTimeline(id);
+
+  // Quinn Timeline Bridge (Phase 1B) — Quinn writes structured
+  // warning/critical/information entries with confidence + source.
+  useQuinnTimelineBridge({
+    enabled: timeline.ready && activeInputs.length > 0,
+    sessionId: id,
+    inputs: activeInputs,
+    addQuinnEntry: timeline.addQuinnEntry,
+  });
+
 
 
 
