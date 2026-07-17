@@ -882,7 +882,7 @@ const SessionRoom = () => {
         </div>
 
 
-        <div className="flex-1 flex gap-4 min-h-0 overflow-hidden">
+        <div ref={mainRowRef} className="flex-1 flex gap-4 min-h-0 overflow-hidden">
           {/* Multiview grid with drag-and-drop */}
           <DndContext
             collisionDetection={closestCenter}
