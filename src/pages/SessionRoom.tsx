@@ -184,8 +184,16 @@ const SessionRoom = () => {
   const canConfigure = canConfigureSession(record, currentUserRef.id);
 
 
-  const [layout, setLayout] = useState<Layout>("4");
-  const [audioSource, setAudioSource] = useState(session.inputs[0]?.id);
+  // Default layout depends on how many sources are configured. See spec §8.
+  const initialLayout: Layout = (() => {
+    const n = activeInputs.length;
+    if (n >= 4) return "4";
+    if (n === 3) return "3";
+    if (n === 2) return "2";
+    return "1";
+  })();
+  const [layout, setLayout] = useState<Layout>(initialLayout);
+  const [audioSource, setAudioSource] = useState(activeInputs[0]?.id);
   const [showInspector, setShowInspector] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState("");
@@ -301,6 +309,33 @@ const SessionRoom = () => {
     if (!id || !focusedInput) return;
     updateViewerFocus(id, currentUserRef.id, focusedInput.label);
   }, [id, focusedInput, currentUserRef.id]);
+
+  // Spec §5, §6: if the number of configured sources shrinks below the
+  // current layout's requirement, fall back to the largest valid layout.
+  // Also re-focus if the focused source was removed.
+  useEffect(() => {
+    const n = activeInputs.length;
+    const required = parseInt(layout);
+    if (n > 0 && required > n) {
+      const next: Layout = (n >= 3 ? "3" : n === 2 ? "2" : "1") as Layout;
+      setLayout(next);
+      setMaximizedRestoreLayout(null);
+      toast({
+        title: "Layout adjusted",
+        description: "Number of configured sources changed.",
+      });
+    }
+    if (n > 0 && !activeInputs.some((i) => i.id === focusedId)) {
+      const first = activeInputs[0].id;
+      setFocus(first);
+      setAudioSource(first);
+    }
+    if (n === 0) {
+      setMuteAll(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeInputs.length]);
+
 
   const handleBecomeOwner = useCallback(() => {
     if (!id) return;
@@ -609,6 +644,7 @@ const SessionRoom = () => {
           showSafeArea={showSafeArea}
           onToggleSafeArea={() => setShowSafeArea(!showSafeArea)}
           onShare={() => setShareOpen(true)}
+          configuredCount={activeInputs.length}
         />
 
 
@@ -765,6 +801,29 @@ const SessionRoom = () => {
             onDragEnd={handleDragEnd}
           >
             {(() => {
+              if (activeInputs.length === 0) {
+                return (
+                  <div className="flex-1 flex items-center justify-center min-h-0">
+                    <div className="text-center max-w-sm px-6 py-10 rounded-lg border border-border/20 mako-glass">
+                      <div className="text-sm font-medium text-foreground/90 mb-1">No sources configured</div>
+                      <div className="text-xs text-muted-foreground mb-4">
+                        Add at least one SRT source to begin monitoring this session.
+                      </div>
+                      {canConfigure && id && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => navigate(`/session/${id}/configure`)}
+                          className="gap-1.5 text-xs"
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                          Configure sources
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
               const effectiveMode = Math.min(parseInt(layout), activeInputs.length);
               const effectiveStr = effectiveMode.toString();
               const gridMap = isMobile ? gridStylesMobile : gridStylesDesktop;
