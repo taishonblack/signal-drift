@@ -136,8 +136,9 @@ export default function OpsDashboard() {
                 {enabledSources.map((l) => {
                   const isDefault = /^Line \d+$/.test(l.label);
                   const display = isDefault ? `Source ${l.id}` : l.label;
-                  const openForLine = openCountsBySource[l.id] ?? 0;
-                  const isFiltered = sourceFilter === l.id;
+                  const openForLine = openCountsBySource[l.label] ?? openCountsBySource[String(l.id)] ?? 0;
+                  const filterKey = l.label;
+                  const isFiltered = sourceFilter === filterKey;
                   return (
                     <tr key={l.id} className={`border-b border-border/5 hover:bg-muted/10 transition-colors ${isFiltered ? "bg-primary/5" : ""}`}>
                       <td className="px-3 py-2 text-foreground font-medium truncate max-w-[200px]">{display}</td>
@@ -145,7 +146,7 @@ export default function OpsDashboard() {
                       <td className="px-3 py-2">
                         {openForLine > 0 ? (
                           <button
-                            onClick={() => setSourceFilter(isFiltered ? null : l.id)}
+                            onClick={() => setSourceFilter(isFiltered ? null : filterKey)}
                             className="text-foreground font-medium hover:text-primary transition-colors"
                           >
                             {openForLine} Open Incident{openForLine === 1 ? "" : "s"}
