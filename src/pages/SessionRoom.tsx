@@ -434,7 +434,7 @@ const SessionRoom = () => {
         isAudioSource={audioSource === input.id}
         muteAll={muteAll}
         onSelectAudio={() => selectSourceForViewer(input.id)}
-
+        onDoubleClick={() => toggleMaximize(input.id)}
         onFullscreen={() => setFullscreenId(input.id)}
         onEdit={() => openEdit(input)}
         timePrefs={timePrefs}
