@@ -287,7 +287,11 @@ export function useSessionTimeline(sessionId: string | undefined) {
   const deleteEntry = useCallback(
     async (id: string) => {
       setEntries((prev) => prev.filter((e) => e.id !== id));
-      if (!isMember || id.startsWith("local-")) return;
+      if (!isMember) {
+        guestChannelRef.current?.postMessage({ type: "DELETE", id });
+        return;
+      }
+      if (id.startsWith("local-")) return;
       await supabase.from("session_timeline_entries").delete().eq("id", id);
     },
     [isMember],
