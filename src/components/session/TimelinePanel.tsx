@@ -97,6 +97,8 @@ const TimelinePanel = ({
   onFocusSource,
   onCollapse,
   currentUserId,
+  dock,
+  onChangeDock,
 }: TimelinePanelProps) => {
   const [draft, setDraft] = useState("");
   const [severity, setSeverity] = useState<TimelineSeverity>("note");
