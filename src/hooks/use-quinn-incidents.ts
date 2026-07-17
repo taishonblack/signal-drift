@@ -184,9 +184,8 @@ export function useQuinnIncidents({
   const openCountsBySource = useMemo(() => {
     const map: Record<string, number> = {};
     for (const inc of openIncidents) {
-      const key = inc.sourceId ?? inc.sourceName;
-      if (!key) continue;
-      map[key] = (map[key] ?? 0) + 1;
+      if (inc.sourceId) map[inc.sourceId] = (map[inc.sourceId] ?? 0) + 1;
+      if (inc.sourceName) map[inc.sourceName] = (map[inc.sourceName] ?? 0) + 1;
     }
     return map;
   }, [openIncidents]);
