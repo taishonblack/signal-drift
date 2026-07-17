@@ -204,7 +204,7 @@ const SignalTile = ({
 
         {/* Overlay controls */}
         {isActive && (
-          <div className="absolute inset-0 flex items-end justify-between p-2 opacity-0 hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+          <div className="absolute inset-0 flex items-end justify-between p-2 opacity-0 hover:opacity-100 transition-opacity pointer-events-none [&>*]:pointer-events-auto hover:pointer-events-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex gap-1">
               {!isFullscreen && (
                 <Button variant="ghost" size="icon" onClick={onFullscreen} className="h-7 w-7 bg-background/60 hover:bg-background/80 text-foreground">
