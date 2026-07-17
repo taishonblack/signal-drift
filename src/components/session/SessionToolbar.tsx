@@ -1,4 +1,4 @@
-import { Grid2X2, Square, LayoutDashboard, PanelRightClose, PanelRightOpen, Share2, FileText, Keyboard, Rows2, ScanLine, MoreHorizontal } from "lucide-react";
+import { Grid2X2, Square, LayoutDashboard, PanelRightClose, PanelRightOpen, Share2, FileText, Keyboard, Rows2, ScanLine, MoreHorizontal, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import TimeDisplayPopover from "@/components/session/TimeDisplayPopover";
