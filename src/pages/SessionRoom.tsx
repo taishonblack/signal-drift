@@ -344,9 +344,16 @@ const SessionRoom = () => {
       return tag === "input" || tag === "textarea" || el.isContentEditable;
     };
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && fullscreenId) {
-        setFullscreenId(null);
-        return;
+      if (e.key === "Escape") {
+        if (fullscreenId) {
+          setFullscreenId(null);
+          return;
+        }
+        if (maximizedRestoreLayout) {
+          setLayout(maximizedRestoreLayout);
+          setMaximizedRestoreLayout(null);
+          return;
+        }
       }
       if ((e.key === "m" || e.key === "M") && !e.altKey && !e.ctrlKey && !e.metaKey) {
         if (isTyping(e.target)) return;
@@ -356,7 +363,7 @@ const SessionRoom = () => {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [fullscreenId]);
+  }, [fullscreenId, maximizedRestoreLayout]);
 
 
   // Global keyboard shortcuts (1-4 jump + arrow cycling) — single-stream mode only
