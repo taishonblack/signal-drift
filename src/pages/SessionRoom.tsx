@@ -277,6 +277,10 @@ const SessionRoom = () => {
 
   const isSourcePoppedOut = (inputId: string) => popouts.isOpen(`source:${inputId}`);
 
+  // "Pop Out View" handler is defined further below, after focusedId
+  // and audioSource are in scope (see openLayoutPopout).
+  const isLayoutPoppedOut = popouts.isOpen("view");
+
   // Keep prefs in sync when the Timeline popout window closes so the
   // docked Timeline reappears at its previous position.
   const lastTimelineDockRef = useRef<"bottom" | "right" | "collapsed">("bottom");
@@ -346,6 +350,26 @@ const SessionRoom = () => {
 
   const focusedInput = activeInputs.find((i) => i.id === focusedId);
   const focusedLabel = focusedInput?.label ?? "Unknown";
+
+  // "Pop Out View" — open the CURRENT multiview layout in its own window.
+  // Ephemeral state (layout, focus, audio, mute) rides on the URL; pane
+  // sizes, slot order, source names, clocks, and time prefs are hydrated
+  // from the same per-session storage the docked view uses, so the popout
+  // opens identical to what the operator was just looking at.
+  const openLayoutPopout = useCallback(() => {
+    if (!id) return;
+    const params = new URLSearchParams({
+      layout,
+      focus: focusedId ?? "",
+      audio: audioSource ?? "",
+      mute: muteAll ? "1" : "0",
+    });
+    popouts.open(
+      "view",
+      `/session/${id}/popout/view?${params.toString()}`,
+      { width: 1280, height: 800 },
+    );
+  }, [id, layout, focusedId, audioSource, muteAll, popouts]);
 
   /**
    * Personal audio-follows-selection: clicking a pane sets both visual
@@ -734,6 +758,8 @@ const SessionRoom = () => {
           onToggleSafeArea={() => setShowSafeArea(!showSafeArea)}
           onShare={() => setShareOpen(true)}
           configuredCount={activeInputs.length}
+          onPopOutView={openLayoutPopout}
+          isLayoutPoppedOut={isLayoutPoppedOut}
         />
 
 

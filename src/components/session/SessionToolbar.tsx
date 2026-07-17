@@ -1,4 +1,4 @@
-import { Grid2X2, Square, LayoutDashboard, PanelRightClose, PanelRightOpen, Share2, FileText, Keyboard, Rows2, ScanLine, MoreHorizontal } from "lucide-react";
+import { Grid2X2, Square, LayoutDashboard, PanelRightClose, PanelRightOpen, Share2, FileText, Keyboard, Rows2, ScanLine, MoreHorizontal, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import TimeDisplayPopover from "@/components/session/TimeDisplayPopover";
@@ -40,6 +40,10 @@ interface SessionToolbarProps {
   onShare: () => void;
   /** Number of configured (enabled) sources — drives layout button availability. */
   configuredCount: number;
+  /** Detach the current multiview layout into its own browser window. */
+  onPopOutView: () => void;
+  /** True when the layout popout window is already open. */
+  isLayoutPoppedOut?: boolean;
 }
 
 const SHORTCUTS = [
@@ -66,6 +70,8 @@ const SessionToolbar = ({
   onToggleSafeArea,
   onShare,
   configuredCount,
+  onPopOutView,
+  isLayoutPoppedOut = false,
 }: SessionToolbarProps) => {
   const isMobile = useIsMobile();
 
@@ -145,6 +151,16 @@ const SessionToolbar = ({
           title="Safe area overlay"
         >
           <ScanLine className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onPopOutView}
+          className={`h-8 w-8 ${isLayoutPoppedOut ? "text-primary bg-muted/30" : "text-muted-foreground hover:text-foreground"}`}
+          title={isLayoutPoppedOut ? "Focus layout popout window" : "Pop out current layout in a new window"}
+          aria-label="Pop Out View"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
         </Button>
         {/* Desktop: show all icons inline */}
         {!isMobile && (
