@@ -270,6 +270,31 @@ const SessionRoom = () => {
     [setFocus],
   );
 
+  const toggleMaximize = useCallback(
+    (inputId: string) => {
+      if (maximizedRestoreLayout) {
+        setLayout(maximizedRestoreLayout);
+        setMaximizedRestoreLayout(null);
+        return;
+      }
+      if (layout === "1") return;
+      setMaximizedRestoreLayout(layout);
+      setFocus(inputId);
+      setLayout("1");
+    },
+    [layout, maximizedRestoreLayout, setFocus],
+  );
+
+  // If the user manually changes the layout while maximized, clear the
+  // restore memory — their explicit choice supersedes the temporary state.
+  const handleLayoutChange = useCallback(
+    (next: Layout) => {
+      setLayout(next);
+      setMaximizedRestoreLayout(null);
+    },
+    [],
+  );
+
 
   // Presence: write focused label into current viewer entry.
   useEffect(() => {
