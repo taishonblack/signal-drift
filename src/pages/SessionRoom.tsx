@@ -322,9 +322,14 @@ const SessionRoom = () => {
 
 
 
-  const user = getCurrentUser();
-  const isHostUser = isHost("u1");
-  const alertCount = getUnackedAlertCountForSession(session.id, user.id);
+  const isHostUser = true;
+  const quinnIncidents = useQuinnIncidents({
+    sessionId: session.id,
+    sessionName: session.name,
+    entries: timeline.entries,
+    actorName: identity.name || "Operator",
+  });
+  const alertCount = quinnIncidents.openIncidents.length;
 
   // Slot map for tile ordering
   const activeLineIds = activeInputs.map((i) => i.id);
