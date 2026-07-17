@@ -214,6 +214,9 @@ const SessionRoom = () => {
   // restore on the next double-click. null = not currently maximized.
   const [maximizedRestoreLayout, setMaximizedRestoreLayout] = useState<Layout | null>(null);
 
+  // Session Timeline (Phase 1A) — shared comments + realtime.
+  const timeline = useSessionTimeline(id);
+
 
 
   // Per-viewer workspace layout preferences (pane splits, notes height, panel visibility).
