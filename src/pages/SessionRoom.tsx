@@ -1012,13 +1012,13 @@ const SessionRoom = () => {
                 updateWorkspacePrefs({ notesCollapsed: false });
               }}
               className="flex-shrink-0 flex items-center justify-between gap-3 mako-glass rounded-lg px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Expand notes"
+              aria-label="Expand timeline"
             >
               <span className="flex items-center gap-2">
                 <ChevronUp className="h-3.5 w-3.5" />
-                <span className="uppercase tracking-wider font-medium">Notes</span>
+                <span className="uppercase tracking-wider font-medium">Timeline</span>
                 <span className="text-muted-foreground/60">·</span>
-                <span>{markers.length} markers</span>
+                <span>{timeline.count} entries</span>
                 <span className="text-muted-foreground/60">·</span>
                 <span>{alertCount} Quinn events</span>
               </span>
