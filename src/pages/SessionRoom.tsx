@@ -246,6 +246,77 @@ const SessionRoom = () => {
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const layout3RowRef = useRef<HTMLDivElement | null>(null);
   const rightStackRef = useRef<HTMLDivElement | null>(null);
+  const mainRowRef = useRef<HTMLDivElement | null>(null);
+  const rightColumnRef = useRef<HTMLDivElement | null>(null);
+
+  // Personal popouts (per viewer). Keys: `source:<inputId>` and `timeline`.
+  const popouts = usePopouts();
+  useEffect(() => {
+    if (popouts.blockedKey) {
+      toast({
+        title: "Popout Blocked",
+        description:
+          "Your browser blocked the new MAKO window. Allow popups for this site and try again.",
+        variant: "destructive",
+      });
+      popouts.clearBlocked();
+    }
+  }, [popouts.blockedKey, popouts]);
+
+  const openSourcePopout = useCallback(
+    (input: StreamInput) => {
+      if (!id) return;
+      popouts.open(
+        `source:${input.id}`,
+        `/session/${id}/popout/source/${input.id}`,
+        { width: 960, height: 540 },
+      );
+    },
+    [id, popouts],
+  );
+
+  const isSourcePoppedOut = (inputId: string) => popouts.isOpen(`source:${inputId}`);
+
+  // Keep prefs in sync when the Timeline popout window closes so the
+  // docked Timeline reappears at its previous position.
+  const lastTimelineDockRef = useRef<"bottom" | "right" | "collapsed">("bottom");
+  useEffect(() => {
+    if (workspacePrefs.timelineDock !== "popout") {
+      if (workspacePrefs.timelineDock !== "popout") {
+        lastTimelineDockRef.current =
+          workspacePrefs.timelineDock === "right"
+            ? "right"
+            : workspacePrefs.timelineDock === "collapsed"
+              ? "collapsed"
+              : "bottom";
+      }
+      return;
+    }
+    if (!popouts.isOpen("timeline")) {
+      // Popout was closed by the user — restore prior dock.
+      updateWorkspacePrefs({ timelineDock: lastTimelineDockRef.current });
+    }
+  }, [workspacePrefs.timelineDock, popouts, updateWorkspacePrefs]);
+
+  const changeTimelineDock = useCallback(
+    (next: "bottom" | "right" | "popout" | "collapsed") => {
+      if (next === "popout") {
+        if (!id) return;
+        const ok = popouts.open(`timeline`, `/session/${id}/popout/timeline`, {
+          width: 480,
+          height: 720,
+        });
+        if (ok) updateWorkspacePrefs({ timelineDock: "popout" });
+        return;
+      }
+      // Any other dock → close popout if present.
+      if (popouts.isOpen("timeline")) popouts.close("timeline");
+      updateWorkspacePrefs({ timelineDock: next });
+      if (next !== "collapsed") setShowNotes(true);
+    },
+    [id, popouts, updateWorkspacePrefs],
+  );
+
 
 
   const user = getCurrentUser();
