@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useIdentity } from "@/lib/identity";
+import type { User } from "@supabase/supabase-js";
 import type {
   TimelineAuthorType,
   TimelineEntry,
@@ -77,11 +78,19 @@ export interface AddQuinnEntryInput {
   dedupeKey?: string;
 }
 
-export function useSessionTimeline(sessionId: string | undefined) {
+export interface TimelineAuthState { user: User | null; loading: boolean }
+
+const newestFirst = (list: TimelineEntry[]) =>
+  [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+export function useSessionTimeline(sessionId: string | undefined, authState?: TimelineAuthState) {
   const identity = useIdentity();
-  const isMember = identity.kind === "member";
+  const authLoading = authState?.loading ?? false;
+  const isMember = authState ? Boolean(authState.user) : identity.kind === "member";
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const entriesRef = useRef<TimelineEntry[]>([]);
   entriesRef.current = entries;
   const guestChannelRef = useRef<BroadcastChannel | null>(null);
@@ -91,7 +100,7 @@ export function useSessionTimeline(sessionId: string | undefined) {
   // requests a snapshot from peers, and rebroadcasts local mutations. This
   // is what keeps the guest Timeline populated after opening a popout.
   useEffect(() => {
-    if (!sessionId || isMember) return;
+    if (!sessionId || authLoading || isMember) return;
     if (typeof BroadcastChannel === "undefined") return;
     const channel = new BroadcastChannel(`mako-timeline-guest-${sessionId}`);
     guestChannelRef.current = channel;
@@ -101,10 +110,10 @@ export function useSessionTimeline(sessionId: string | undefined) {
       setEntries((prev) => {
         const map = new Map(prev.map((e) => [e.id, e]));
         for (const e of incoming) map.set(e.id, e);
-        return Array.from(map.values()).sort((a, b) =>
-          a.createdAt.localeCompare(b.createdAt),
-        );
+        return newestFirst(Array.from(map.values()));
       });
+      setLoading(false);
+      setReady(true);
     };
 
     channel.onmessage = (evt) => {
@@ -128,22 +137,55 @@ export function useSessionTimeline(sessionId: string | undefined) {
     };
 
     // Ask any existing window (opener/other popouts) for its current entries.
-    channel.postMessage({ type: "REQUEST_SNAPSHOT" });
+    const requestSnapshot = () => {
+      channel.postMessage({ type: "REQUEST_SNAPSHOT" });
+      window.opener?.postMessage({ type: "TIMELINE_POPOUT_READY", sessionId }, window.location.origin);
+    };
+    requestSnapshot();
+    const retry = window.setInterval(requestSnapshot, 500);
+    const settle = window.setTimeout(() => {
+      window.clearInterval(retry);
+      setLoading(false);
+      setReady(true);
+    }, window.opener ? 2500 : 0);
+
+    const onWindowMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const msg = event.data as { type?: string; sessionId?: string; entries?: TimelineEntry[] };
+      if (msg.sessionId !== sessionId) return;
+      if (msg.type === "TIMELINE_POPOUT_READY" && event.source) {
+        (event.source as WindowProxy).postMessage(
+          { type: "TIMELINE_SNAPSHOT", sessionId, entries: entriesRef.current },
+          { targetOrigin: window.location.origin },
+        );
+      } else if (msg.type === "TIMELINE_SNAPSHOT") {
+        mergeEntries(msg.entries ?? []);
+        window.clearInterval(retry);
+        setLoading(false);
+        setReady(true);
+      }
+    };
+    window.addEventListener("message", onWindowMessage);
 
     return () => {
+      window.clearInterval(retry);
+      window.clearTimeout(settle);
+      window.removeEventListener("message", onWindowMessage);
       channel.close();
       if (guestChannelRef.current === channel) guestChannelRef.current = null;
     };
-  }, [sessionId, isMember]);
+  }, [sessionId, isMember, authLoading]);
 
   // Initial load
   useEffect(() => {
     let cancelled = false;
-    if (!sessionId) return;
+    if (!sessionId || authLoading) return;
+    setReady(false);
+    setLoading(true);
+    setError(null);
     if (!isMember) {
       // Guest: no server persistence. Entries hydrate via BroadcastChannel
       // snapshot from any peer window (see effect above).
-      setReady(true);
       return;
     }
     (async () => {
@@ -151,20 +193,22 @@ export function useSessionTimeline(sessionId: string | undefined) {
         .from("session_timeline_entries")
         .select("*")
         .eq("session_id", sessionId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false });
       if (cancelled) return;
       if (error) {
         console.warn("Timeline load failed", error);
         setEntries([]);
+        setError("Timeline could not be loaded.");
       } else {
-        setEntries((data ?? []).map((r) => rowToEntry(r as DbRow)));
+        setEntries(newestFirst((data ?? []).map((r) => rowToEntry(r as DbRow))));
       }
+      setLoading(false);
       setReady(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [sessionId, isMember]);
+  }, [sessionId, isMember, authLoading]);
 
   // Realtime
   useEffect(() => {
@@ -184,9 +228,7 @@ export function useSessionTimeline(sessionId: string | undefined) {
             if (payload.eventType === "INSERT") {
               const row = rowToEntry(payload.new as DbRow);
               if (prev.some((e) => e.id === row.id)) return prev;
-              return [...prev, row].sort((a, b) =>
-                a.createdAt.localeCompare(b.createdAt),
-              );
+              return newestFirst([...prev, row]);
             }
             if (payload.eventType === "UPDATE") {
               const row = rowToEntry(payload.new as DbRow);
@@ -238,7 +280,7 @@ export function useSessionTimeline(sessionId: string | undefined) {
           editedAt: null,
           createdAt: new Date().toISOString(),
         };
-        setEntries((prev) => [...prev, local]);
+        setEntries((prev) => newestFirst([...prev, local]));
         guestChannelRef.current?.postMessage({ type: "INSERT", entry: local });
         return local;
       }
@@ -277,7 +319,7 @@ export function useSessionTimeline(sessionId: string | undefined) {
       const entry = rowToEntry(data as DbRow);
       // Optimistic append; realtime will de-dupe.
       setEntries((prev) =>
-        prev.some((e) => e.id === entry.id) ? prev : [...prev, entry],
+        prev.some((e) => e.id === entry.id) ? prev : newestFirst([...prev, entry]),
       );
       return entry;
     },
@@ -351,7 +393,7 @@ export function useSessionTimeline(sessionId: string | undefined) {
           editedAt: null,
           createdAt: new Date().toISOString(),
         };
-        setEntries((prev) => [...prev, local]);
+        setEntries((prev) => newestFirst([...prev, local]));
         guestChannelRef.current?.postMessage({ type: "INSERT", entry: local });
         return local;
       }
@@ -385,7 +427,7 @@ export function useSessionTimeline(sessionId: string | undefined) {
       }
       const entry = rowToEntry(data as DbRow);
       setEntries((prev) =>
-        prev.some((e) => e.id === entry.id) ? prev : [...prev, entry],
+        prev.some((e) => e.id === entry.id) ? prev : newestFirst([...prev, entry]),
       );
       return entry;
     },
@@ -394,8 +436,19 @@ export function useSessionTimeline(sessionId: string | undefined) {
 
   const count = entries.length;
 
+  const refreshEntries = useCallback(async () => {
+    if (!sessionId || !isMember || authLoading) return;
+    setLoading(true);
+    const { data, error: loadError } = await supabase.from("session_timeline_entries")
+      .select("*").eq("session_id", sessionId).order("created_at", { ascending: false });
+    if (loadError) setError("Timeline could not be loaded.");
+    else setEntries(newestFirst((data ?? []).map((r) => rowToEntry(r as DbRow))));
+    setLoading(false);
+    setReady(true);
+  }, [sessionId, isMember, authLoading]);
+
   return useMemo(
-    () => ({ entries, ready, addEntry, addQuinnEntry, deleteEntry, count, isMember }),
-    [entries, ready, addEntry, addQuinnEntry, deleteEntry, count, isMember],
+    () => ({ entries, ready, loading, error, addEntry, addQuinnEntry, deleteEntry, refreshEntries, count, isMember }),
+    [entries, ready, loading, error, addEntry, addQuinnEntry, deleteEntry, refreshEntries, count, isMember],
   );
 }

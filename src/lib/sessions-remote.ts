@@ -39,7 +39,7 @@ function toRemote(session: SessionRecord) {
  * everything the client stamped, minus the PIN (server keeps the hash
  * only). We inject a placeholder PIN so UI that renders "***" works.
  */
-function fromRemote(row: {
+export function fromRemote(row: {
   id: string;
   name: string;
   status: string;
@@ -63,6 +63,17 @@ function fromRemote(row: {
     status: row.status as SessionRecord["status"],
     pin: (payload.pin as string) ?? "••••",
   };
+}
+
+/** Load one session through its normal RLS-protected row access. */
+export async function loadAuthorizedSession(sessionId: string): Promise<SessionRecord | null> {
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("id, name, status, payload")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? fromRemote(data) : null;
 }
 
 // ─── Edge function wrappers ──────────────────────────────────────────
