@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import LiveCamera from "@/components/LiveCamera";
-import { Maximize2, Edit3, Volume2, VolumeX, VideoOff, WifiOff, Loader2, PlugZap, RefreshCw } from "lucide-react";
+import { Maximize2, Edit3, Volume2, VolumeX, VideoOff, WifiOff, Loader2, PlugZap, RefreshCw, ExternalLink, Focus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { StreamInput } from "@/lib/mock-data";
@@ -21,12 +21,21 @@ interface SignalTileProps {
   onFullscreen?: () => void;
   onEdit?: () => void;
   onSelectAudio?: () => void;
+  /** Detach this source into a separate browser window. */
+  onPopOut?: () => void;
+  /** True when this source is currently rendered in a popout window. */
+  isPoppedOut?: boolean;
+  /** Bring the popout window back into the docked pane. */
+  onBringBack?: () => void;
+  /** Focus the popout window. */
+  onFocusPopout?: () => void;
   timePrefs?: TimeDisplayPrefs;
   tileOriginTZ?: string;
   focusedOriginTZ?: string;
   sessionStartedAt?: string;
   showSafeArea?: boolean;
 }
+
 
 
 const statusBadge: Record<string, { label: string; cls: string }> = {
