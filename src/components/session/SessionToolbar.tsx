@@ -70,6 +70,8 @@ const SessionToolbar = ({
   onToggleSafeArea,
   onShare,
   configuredCount,
+  onPopOutView,
+  isLayoutPoppedOut = false,
 }: SessionToolbarProps) => {
   const isMobile = useIsMobile();
 
