@@ -958,6 +958,10 @@ const SessionRoom = () => {
 
                       onFullscreen={() => setFullscreenId(input.id)}
                       onEdit={() => openEdit(input)}
+                      onPopOut={() => openSourcePopout(input)}
+                      isPoppedOut={isSourcePoppedOut(input.id)}
+                      onFocusPopout={() => popouts.focus(`source:${input.id}`)}
+                      onBringBack={() => popouts.close(`source:${input.id}`)}
                       timePrefs={timePrefs}
                       tileOriginTZ={getOriginTZ(input.id)}
                       focusedOriginTZ={focusedOriginTZ}
