@@ -15,6 +15,11 @@ import SourcePopoutPage from "./pages/SourcePopoutPage";
 import TimelinePopoutPage from "./pages/TimelinePopoutPage";
 import LayoutPopoutPage from "./pages/LayoutPopoutPage";
 import NotFound from "./pages/NotFound";
+import { DemoModeProvider } from "./contexts/DemoModeProvider";
+import ExploreLanding from "./pages/explore/ExploreLanding";
+import ExploreCreate from "./pages/explore/ExploreCreate";
+import ExploreSession from "./pages/explore/ExploreSession";
+import ExploreOps from "./pages/explore/ExploreOps";
 
 const queryClient = new QueryClient();
 
