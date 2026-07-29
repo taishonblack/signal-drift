@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, PlayCircle } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import heroImage from "@/assets/hero-rails.jpg";
 
@@ -58,18 +58,9 @@ const Landing = () => (
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="gap-2">
-              <Link to="/explore">
-                Explore Platform
-                <PlayCircle className="h-4 w-4" />
-              </Link>
-            </Button>
           </div>
           <p className="text-[11px] text-muted-foreground/70">
             No account required. Sign in later to save your work.
-          </p>
-          <p className="text-[11px] text-muted-foreground/60">
-            Explore Platform opens an interactive demo with sample feeds — nothing is saved.
           </p>
         </div>
 
