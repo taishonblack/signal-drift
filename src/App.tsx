@@ -33,7 +33,24 @@ const App = () => (
           {/* Landing — no sidebar */}
           <Route path="/" element={<Landing />} />
 
+          {/* Explore Platform — sealed demo environment */}
+          <Route
+            path="/explore/*"
+            element={
+              <DemoModeProvider>
+                <Routes>
+                  <Route path="/" element={<ExploreLanding />} />
+                  <Route path="create" element={<ExploreCreate />} />
+                  <Route path="session" element={<ExploreSession />} />
+                  <Route path="ops" element={<ExploreOps />} />
+                  <Route path="*" element={<ExploreLanding />} />
+                </Routes>
+              </DemoModeProvider>
+            }
+          />
+
           {/* App routes — with sidebar/nav */}
+
           <Route path="/sessions" element={<AppLayout><Sessions /></AppLayout>} />
           <Route path="/create" element={<AppLayout><CreateSession /></AppLayout>} />
           <Route path="/session/:id/configure" element={<AppLayout><CreateSession /></AppLayout>} />
