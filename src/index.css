@@ -153,3 +153,29 @@ html, body {
   0% { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* Explore demo — synthetic feed motion (ambient only, no bounce/slide) */
+@keyframes demo-feed-sweep {
+  0% { transform: translateX(-40%); opacity: 0.0; }
+  50% { opacity: 0.35; }
+  100% { transform: translateX(140%); opacity: 0.0; }
+}
+
+.demo-feed-sweep {
+  background: linear-gradient(100deg, transparent 0%, hsla(195, 100%, 70%, 0.14) 50%, transparent 100%);
+  animation: demo-feed-sweep 7s linear infinite;
+  will-change: transform;
+}
+
+@keyframes demo-feed-pulse {
+  0%, 100% { opacity: 0.28; }
+  50% { opacity: 0.5; }
+}
+
+.demo-feed-pulse {
+  animation: demo-feed-pulse 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-feed-sweep, .demo-feed-pulse { animation: none; }
+}

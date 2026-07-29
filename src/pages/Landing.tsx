@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import heroImage from "@/assets/hero-rails.jpg";
 
@@ -46,21 +46,33 @@ const Landing = () => (
           <p>Decide with confidence.</p>
         </div>
 
-        <div className="pt-2 space-y-2">
-          <Button
-            asChild
-            size="lg"
-            className="gap-2 bg-primary/90 hover:bg-primary text-primary-foreground"
-          >
-            <Link to="/create">
-              Start Monitoring
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
+        <div className="pt-2 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              asChild
+              size="lg"
+              className="gap-2 bg-primary/90 hover:bg-primary text-primary-foreground"
+            >
+              <Link to="/create">
+                Start Monitoring
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="gap-2">
+              <Link to="/explore">
+                Explore Platform
+                <PlayCircle className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
           <p className="text-[11px] text-muted-foreground/70">
             No account required. Sign in later to save your work.
           </p>
+          <p className="text-[11px] text-muted-foreground/60">
+            Explore Platform opens an interactive demo with sample feeds — nothing is saved.
+          </p>
         </div>
+
 
 
         {/* Manifesto sections */}
