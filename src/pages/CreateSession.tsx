@@ -129,7 +129,7 @@ const CreateSession = () => {
   const [advancedOpen, setAdvancedOpen] = useState<Record<number, boolean>>({});
   const [tested, setTested] = useState<Record<number, boolean>>({});
   const [testResult, setTestResult] = useState<
-    Record<number, { state: "testing" | "available" | "no_publisher" | "failed"; detail?: string }>
+    Record<number, { state: "testing" | "available" | "no_publisher" | "misconfigured" | "failed"; detail?: string }>
 
   >({});
   const [pendingActiveSession, setPendingActiveSession] = useState<SessionRecord | null>(null);
@@ -221,6 +221,7 @@ const CreateSession = () => {
     setTested((prev) => ({ ...prev, [slot]: state === "available" }));
     if (state === "available") toast("Signal available.", { description: probe.detail });
     else if (state === "no_publisher") toast(`No active signal detected on Source ${slot}.`, { description: probe.detail });
+    else if (state === "misconfigured") toast("Playback endpoint misconfigured.", { description: probe.detail });
     else toast("Connection failed.", { description: probe.detail });
 
   };
@@ -757,7 +758,9 @@ const CreateSession = () => {
                             ? "Signal available."
                             : activeTestState === "no_publisher"
                               ? `No active signal detected on Source ${activeTab}.`
-                              : "Connection failed."}
+                              : activeTestState === "misconfigured"
+                                ? "Playback endpoint misconfigured."
+                                : "Connection failed."}
                         </span>
                       </div>
                       <p className="pt-1 text-[10px] text-muted-foreground/70">

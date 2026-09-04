@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { resolveWhepResource, whepUrlForStream } from "@/lib/stream-paths";
+import { negotiateWhep, whepEndpointForStream, MISSING_WHEP_BASE_MESSAGE } from "@/lib/stream-paths";
 
 export type LiveCameraState =
   | "connecting"
   | "live"
   | "no_video"
   | "reconnecting"
+  | "misconfigured"
   | "failed";
+
 
 interface LiveCameraProps {
   streamName: string;
@@ -39,9 +41,12 @@ const LiveCamera = ({
   const timerRef = useRef<number | null>(null);
   const [state, setState] = useState<LiveCameraState>("connecting");
 
+  const endpoint = whepEndpointForStream(streamName);
   const url = baseUrl
     ? `${baseUrl.replace(/\/+$/, "")}/${streamName}/whep`
-    : whepUrlForStream(streamName);
+    : endpoint.ok
+      ? (endpoint.url as string)
+      : MISSING_WHEP_BASE_MESSAGE;
 
   const report = useCallback(
     (next: LiveCameraState) => {
@@ -53,6 +58,8 @@ const LiveCamera = ({
 
   useEffect(() => {
     let cancelled = false;
+    // Generation guard: a stale attempt must never close a newer connection.
+    let generation = 0;
 
     const teardown = () => {
       if (resourceRef.current) {
@@ -76,69 +83,109 @@ const LiveCamera = ({
 
     const connect = async () => {
       if (cancelled) return;
+      const myGen = ++generation;
       teardown();
       report(attemptRef.current === 0 ? "connecting" : "reconnecting");
 
-      try {
-        const pc = new RTCPeerConnection();
-        pcRef.current = pc;
+      const pc = new RTCPeerConnection();
+      pcRef.current = pc;
 
-        pc.addTransceiver("video", { direction: "recvonly" });
-        pc.addTransceiver("audio", { direction: "recvonly" });
+      pc.ontrack = (event) => {
+        if (cancelled || myGen !== generation) return;
+        const el = videoRef.current;
+        if (!el) return;
+        const stream = event.streams?.[0] ?? new MediaStream([event.track]);
+        el.srcObject = stream;
+        if (import.meta.env.DEV) {
+          console.info("[LiveCamera]", streamName, {
+            step: "ontrack",
+            hadStreams: !!event.streams?.[0],
+            kind: event.track.kind,
+            readyState: event.track.readyState,
+          });
+        }
+        const p = el.play();
+        if (p && typeof p.then === "function") {
+          p.then(() => {
+            if (import.meta.env.DEV) console.info("[LiveCamera]", streamName, { step: "play", ok: true });
+          }).catch((err) => {
+            console.warn("[LiveCamera]", streamName, "play() rejected:", err);
+          });
+        }
+      };
 
-        pc.ontrack = (event) => {
-          if (!videoRef.current || cancelled) return;
-          videoRef.current.srcObject = event.streams[0];
-        };
+      pc.oniceconnectionstatechange = () => {
+        if (import.meta.env.DEV) {
+          console.info("[LiveCamera]", streamName, {
+            step: "ice",
+            iceConnectionState: pc.iceConnectionState,
+            iceGatheringState: pc.iceGatheringState,
+            signalingState: pc.signalingState,
+          });
+        }
+      };
 
-        pc.onconnectionstatechange = () => {
-          if (cancelled) return;
-          if (pc.connectionState === "connected") {
-            attemptRef.current = 0;
-            report("live");
-          }
-          if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-            report("reconnecting");
-            schedule();
-          }
-        };
+      pc.onconnectionstatechange = () => {
+        if (cancelled || myGen !== generation) return;
+        if (import.meta.env.DEV) {
+          console.info("[LiveCamera]", streamName, {
+            step: "pc",
+            connectionState: pc.connectionState,
+          });
+        }
+        if (pc.connectionState === "connected") {
+          attemptRef.current = 0;
+          report("live");
+        }
+        if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+          report("reconnecting");
+          schedule();
+        }
+      };
 
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
+      const n = await negotiateWhep(streamName, pc, "LiveCamera", baseUrl);
+      if (cancelled || myGen !== generation) return;
 
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/sdp" },
-          body: offer.sdp ?? "",
+      if (n.outcome === "not_configured" || n.outcome === "misconfigured") {
+        // Endpoint problem, not a media problem: never retry it as ICE noise.
+        console.error("[LiveCamera]", streamName, n.detail, {
+          url: n.url,
+          status: n.status,
+          contentType: n.contentType,
+          bodyHead: n.body?.slice(0, 100),
         });
+        report("misconfigured");
+        teardown();
+        return;
+      }
 
-        if (cancelled) return;
+      if (n.outcome === "no_publisher") {
+        report("no_video");
+        teardown();
+        schedule();
+        return;
+      }
 
-        if (response.status === 404) {
-          // MediaMTX reachable, but nothing is publishing on this path.
-          report("no_video");
-          teardown();
-          schedule();
-          return;
+      if (n.outcome !== "answer") {
+        console.warn("[LiveCamera]", streamName, n.detail, { url: n.url, status: n.status });
+        report(attemptRef.current > 3 ? "failed" : "reconnecting");
+        teardown();
+        schedule();
+        return;
+      }
+
+      // Persistent session: keep the peer connection and the WHEP resource
+      // alive; they are only released on unmount or an explicit reconnect.
+      resourceRef.current = n.resourceUrl ?? null;
+
+      try {
+        await pc.setRemoteDescription({ type: "answer", sdp: n.answerSdp as string });
+        if (import.meta.env.DEV) {
+          console.info("[LiveCamera]", streamName, { step: "remoteSdpSet", ok: true });
         }
-
-        if (!response.ok) {
-          report(attemptRef.current > 3 ? "failed" : "reconnecting");
-          teardown();
-          schedule();
-          return;
-        }
-
-        const location = response.headers.get("Location");
-        if (location) resourceRef.current = resolveWhepResource(location, url);
-
-
-        const answer = await response.text();
-        if (cancelled) return;
-        await pc.setRemoteDescription({ type: "answer", sdp: answer });
       } catch (err) {
-        if (cancelled) return;
-        console.error("[LiveCamera]", streamName, err);
+        if (cancelled || myGen !== generation) return;
+        console.error("[LiveCamera]", streamName, "setRemoteDescription failed:", err);
         report(attemptRef.current > 3 ? "failed" : "reconnecting");
         teardown();
         schedule();
@@ -154,7 +201,8 @@ const LiveCamera = ({
       timerRef.current = null;
       teardown();
     };
-  }, [url, streamName, report]);
+  }, [url, streamName, baseUrl, report]);
+
 
   // Apply the requested muted state and probe autoplay. Browsers only allow
   // unmuted playback after a user gesture — the parent should call this
@@ -178,6 +226,7 @@ const LiveCamera = ({
     live: "Live",
     no_video: "No video streaming",
     reconnecting: "Reconnecting",
+    misconfigured: "Playback endpoint misconfigured",
     failed: "Connection failed",
   };
 

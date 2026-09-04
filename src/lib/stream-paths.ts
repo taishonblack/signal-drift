@@ -34,23 +34,60 @@ export function publishIdForSlot(slot: number): string {
  * (e.g. https://stream.makosrt.com). We never fall back to a raw http:// IP,
  * which browsers block as mixed content on an HTTPS site.
  */
-export function whepBase(): string {
-  const configured = (import.meta.env.VITE_MEDIAMTX_WHEP_BASE as string | undefined)?.trim();
-  if (configured) return configured.replace(/\/+$/, "");
-  return "/mediamtx";
+export interface WhepBaseResult {
+  ok: boolean;
+  /** Present when ok. */
+  base?: string;
+  /** Present when ok: where the base came from. */
+  source?: "env" | "dev-proxy";
+  /** Present when not ok. */
+  reason?: "missing-production-whep-base";
 }
 
-/** Full WHEP endpoint for a stream name. */
-export function whepUrlForStream(streamName: string): string {
-  return `${whepBase()}/${streamName}/whep`;
+export const MISSING_WHEP_BASE_MESSAGE =
+  "Production MediaMTX WHEP endpoint is not configured.";
+
+/** Typed resolution of the WHEP base. Never silently uses the SPA origin. */
+export function resolveWhepBase(): WhepBaseResult {
+  const configured = (import.meta.env.VITE_MEDIAMTX_WHEP_BASE as string | undefined)?.trim();
+  if (configured) return { ok: true, base: configured.replace(/\/+$/, ""), source: "env" };
+  if (import.meta.env.DEV) return { ok: true, base: "/mediamtx", source: "dev-proxy" };
+  return { ok: false, reason: "missing-production-whep-base" };
 }
+
+/** Diagnostics-friendly string form of the resolved base. */
+export function whepBase(): string {
+  const resolved = resolveWhepBase();
+  return resolved.ok ? (resolved.base as string) : `(unset — ${resolved.reason})`;
+}
+
+export interface WhepEndpointResult {
+  ok: boolean;
+  url?: string;
+  reason?: "missing-production-whep-base";
+}
+
+/** Full WHEP endpoint for a stream name, or a typed configuration error. */
+export function whepEndpointForStream(streamName: string): WhepEndpointResult {
+  const resolved = resolveWhepBase();
+  if (!resolved.ok) return { ok: false, reason: resolved.reason };
+  return { ok: true, url: `${resolved.base}/${streamName}/whep` };
+}
+
+/** Full WHEP endpoint for a stream name (diagnostics only — may be unusable). */
+export function whepUrlForStream(streamName: string): string {
+  const endpoint = whepEndpointForStream(streamName);
+  return endpoint.ok ? (endpoint.url as string) : MISSING_WHEP_BASE_MESSAGE;
+}
+
 
 /** Full WHEP endpoint for a 1-based source slot. */
 export function whepUrlForSlot(slot: number): string {
   return whepUrlForStream(streamNameForSlot(slot));
 }
 
-export type ProbeResult = "available" | "no_publisher" | "failed";
+
+export type ProbeResult = "available" | "no_publisher" | "misconfigured" | "failed";
 
 export interface ProbeDiagnostics {
   result: ProbeResult;
@@ -67,31 +104,74 @@ export function resolveWhepResource(location: string, base: string): string {
   return new URL(location, new URL(base, origin)).toString();
 }
 
+export type WhepOutcome =
+  | "answer"
+  | "no_publisher"
+  | "codec_unsupported"
+  | "misconfigured"
+  | "not_configured"
+  | "http_error"
+  | "network_error";
+
+export interface WhepNegotiation {
+  outcome: WhepOutcome;
+  detail: string;
+  /** Requested URL, or the configuration message when unresolved. */
+  url: string;
+  status?: number;
+  contentType?: string;
+  /** First 300 chars of a non-SDP / error body. */
+  body?: string;
+  /** Valid SDP answer — only set when outcome === "answer". */
+  answerSdp?: string;
+  /** Resolved WHEP resource URL from the Location header, when provided. */
+  resourceUrl?: string;
+}
+
+const isHtmlBody = (body: string) => /^\s*<(!doctype html|html)\b/i.test(body);
+
 /**
- * Lightweight availability check for a MediaMTX path.
+ * Shared WHEP negotiation used by both Test Connection and LiveCamera so the
+ * two paths cannot drift. Creates the offer on the supplied peer connection,
+ * POSTs it, and validates that what came back is really an SDP answer.
  *
- * Establishes a temporary WHEP peer connection, confirms whether playable
- * media exists, and then immediately tears everything down: the WHEP
- * resource is DELETEd and the RTCPeerConnection closed, so the test never
- * leaves an idle viewer attached to MediaMTX.
+ * The response body is authoritative: Content-Type is logged as an advisory
+ * signal only. This function never calls setRemoteDescription — the caller
+ * decides what to do with a valid answer.
  */
-export async function probeStream(streamName: string): Promise<ProbeDiagnostics> {
-  const url = whepUrlForStream(streamName);
-  let pc: RTCPeerConnection | null = null;
-  let resourceUrl: string | null = null;
+export async function negotiateWhep(
+  streamName: string,
+  pc: RTCPeerConnection,
+  label = "whep",
+  baseOverride?: string,
+): Promise<WhepNegotiation> {
+  const endpoint = baseOverride
+    ? { ok: true, url: `${baseOverride.replace(/\/+$/, "")}/${streamName}/whep` }
+    : whepEndpointForStream(streamName);
   const log = (d: Record<string, unknown>) => {
-    if (import.meta.env.DEV) console.info("[probeStream]", { streamName, url, ...d });
+    if (import.meta.env.DEV) console.info(`[${label}]`, { streamName, ...d });
   };
 
+  if (!endpoint.ok) {
+    log({ step: "config", reason: endpoint.reason });
+    return {
+      outcome: "not_configured",
+      detail: MISSING_WHEP_BASE_MESSAGE,
+      url: MISSING_WHEP_BASE_MESSAGE,
+    };
+  }
+
+  const url = endpoint.url as string;
+
+
   try {
-    pc = new RTCPeerConnection();
     pc.addTransceiver("video", { direction: "recvonly" });
     pc.addTransceiver("audio", { direction: "recvonly" });
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     const offersH264 = /H264\/90000/i.test(offer.sdp ?? "");
-    log({ step: "offer", offersH264 });
+    log({ step: "offer", url, offersH264, localSdpSet: true });
 
     const res = await fetch(url, {
       method: "POST",
@@ -99,54 +179,138 @@ export async function probeStream(streamName: string): Promise<ProbeDiagnostics>
       body: offer.sdp ?? "",
     });
 
+    const contentType = res.headers.get("Content-Type") ?? undefined;
+    const raw = await res.text().catch(() => "");
+    const body = raw.slice(0, 300);
+    log({ step: "response", url, status: res.status, contentType, bodyHead: raw.slice(0, 100) });
+
     if (res.status === 404) {
-      log({ step: "response", status: 404 });
-      return { result: "no_publisher", detail: `No publisher on ${streamName} (path not found).`, url, status: 404 };
+      return {
+        outcome: "no_publisher",
+        detail: `No publisher on ${streamName} (path not found).`,
+        url,
+        status: 404,
+        contentType,
+        body,
+      };
     }
 
     if (!res.ok) {
-      const body = (await res.text().catch(() => "")).slice(0, 300);
-      log({ step: "response", status: res.status, body });
       // MediaMTX answers 400 "codecs not supported by client" when a
       // publisher exists but this browser cannot decode it.
       if (res.status === 400 && body.includes("codecs not supported")) {
         return {
-          result: "available",
+          outcome: "codec_unsupported",
           detail: `Publisher present on ${streamName}, but codec negotiation failed (this browser advertised no matching decoder${offersH264 ? "" : "; no H.264 in offer"}).`,
           url,
           status: 400,
+          contentType,
+          body,
+        };
+      }
+      if (isHtmlBody(raw)) {
+        return {
+          outcome: "misconfigured",
+          detail: `WHEP endpoint misconfigured — received HTML instead of SDP (${url}).`,
+          url,
+          status: res.status,
+          contentType,
           body,
         };
       }
       return {
-        result: "failed",
+        outcome: "http_error",
         detail: `WHEP rejected: HTTP ${res.status} — ${body || res.statusText}`,
         url,
         status: res.status,
+        contentType,
+        body,
+      };
+    }
+
+    // 2xx: the body decides. HTML means we hit the SPA, not MediaMTX.
+    if (isHtmlBody(raw)) {
+      return {
+        outcome: "misconfigured",
+        detail: `WHEP endpoint misconfigured — received HTML instead of SDP (${url}).`,
+        url,
+        status: res.status,
+        contentType,
+        body,
+      };
+    }
+
+    if (!/^\s*v=/.test(raw)) {
+      return {
+        outcome: "misconfigured",
+        detail: `WHEP endpoint misconfigured — response is not SDP (did not start with "v=").`,
+        url,
+        status: res.status,
+        contentType,
         body,
       };
     }
 
     const location = res.headers.get("Location");
-    if (location) resourceUrl = resolveWhepResource(location, url);
-    log({ step: "response", status: res.status, resourceUrl });
-    return { result: "available", detail: `Signal available on ${streamName}.`, url, status: res.status };
+    const resourceUrl = location ? resolveWhepResource(location, url) : undefined;
+    log({ step: "answer", location, resourceUrl });
+
+    return {
+      outcome: "answer",
+      detail: `Signal available on ${streamName}.`,
+      url,
+      status: res.status,
+      contentType,
+      answerSdp: raw,
+      resourceUrl,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    log({ step: "error", message });
-    return { result: "failed", detail: `MediaMTX unreachable or request error: ${message}`, url };
+    log({ step: "error", url, message });
+    return {
+      outcome: "network_error",
+      detail: `MediaMTX unreachable or request error: ${message}`,
+      url,
+    };
+  }
+}
+
+/**
+ * Lightweight availability check for a MediaMTX path.
+ *
+ * Uses the same negotiation as LiveCamera, confirms a real SDP answer came
+ * back, and then immediately tears everything down: the WHEP resource is
+ * DELETEd and the RTCPeerConnection closed, so the test never leaves an idle
+ * viewer attached to MediaMTX.
+ */
+export async function probeStream(streamName: string): Promise<ProbeDiagnostics> {
+  const pc = new RTCPeerConnection();
+  let resourceUrl: string | null = null;
+
+  try {
+    const n = await negotiateWhep(streamName, pc, "probeStream");
+    resourceUrl = n.resourceUrl ?? null;
+
+    let result: ProbeResult = "failed";
+    if (n.outcome === "answer" || n.outcome === "codec_unsupported") result = "available";
+    else if (n.outcome === "no_publisher") result = "no_publisher";
+    else if (n.outcome === "misconfigured" || n.outcome === "not_configured")
+      result = "misconfigured";
+
+    return { result, detail: n.detail, url: n.url, status: n.status, body: n.body };
   } finally {
     if (resourceUrl) {
       // Best-effort teardown of the WHEP session on MediaMTX.
       void fetch(resourceUrl, { method: "DELETE" }).catch(() => undefined);
     }
     try {
-      pc?.close();
+      pc.close();
     } catch {
       /* noop */
     }
   }
 }
+
 
 
 /** True when a line has both a host and a port. */
