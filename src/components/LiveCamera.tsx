@@ -226,6 +226,7 @@ const LiveCamera = ({
     live: "Live",
     no_video: "No video streaming",
     reconnecting: "Reconnecting",
+    misconfigured: "Playback endpoint misconfigured",
     failed: "Connection failed",
   };
 
