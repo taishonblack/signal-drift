@@ -78,7 +78,14 @@ export async function probeStream(streamName: string): Promise<ProbeResult> {
     });
 
     if (res.status === 404) return "no_publisher";
-    if (!res.ok) return "failed";
+    if (!res.ok) {
+      // MediaMTX answers 400 "codecs not supported by client" when a
+      // publisher exists but this browser cannot decode it. A publisher is
+      // present, so the signal is available.
+      const body = await res.text().catch(() => "");
+      if (res.status === 400 && body.includes("codecs not supported")) return "available";
+      return "failed";
+    }
 
     const location = res.headers.get("Location");
     if (location) {
