@@ -214,13 +214,14 @@ const CreateSession = () => {
     // Availability check only: does the MediaMTX path for this slot have a
     // publisher right now? The probe tears its peer connection down
     // immediately so no idle WHEP viewer is left behind.
-    const result = await probeStream(streamNameForSlot(slot));
-    const state = result === "available" ? "available" : result === "no_publisher" ? "no_publisher" : "failed";
-    setTestResult((prev) => ({ ...prev, [slot]: { state } }));
+    const probe = await probeStream(streamNameForSlot(slot));
+    const state = probe.result;
+    setTestResult((prev) => ({ ...prev, [slot]: { state, detail: probe.detail } }));
     setTested((prev) => ({ ...prev, [slot]: state === "available" }));
-    if (state === "available") toast("Signal available.");
-    else if (state === "no_publisher") toast(`No active signal detected on Source ${slot}.`);
-    else toast("Connection failed.", { description: "MediaMTX could not be reached." });
+    if (state === "available") toast("Signal available.", { description: probe.detail });
+    else if (state === "no_publisher") toast(`No active signal detected on Source ${slot}.`, { description: probe.detail });
+    else toast("Connection failed.", { description: probe.detail });
+
   };
 
   const createAndNavigate = () => {
