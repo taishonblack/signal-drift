@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { DndContext, closestCenter, DragEndEvent, DragOverlay, DragStartEvent } from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
@@ -16,7 +16,8 @@ import QuinnPanel from "@/components/quinn/QuinnPanel";
 import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
 import ShareSessionDialog from "@/components/session/ShareSessionDialog";
 import SessionEndIndicator from "@/components/session/SessionEndIndicator";
-import { mockSessions, mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
+import { mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
+import { inputsFromRecord } from "@/lib/stream-paths";
 import {
   getSessionById,
   updateSession,
@@ -82,8 +83,6 @@ const gridStylesMobile: Record<string, { cls: string; style: React.CSSProperties
 const SessionRoom = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const session = mockSessions.find((s) => s.id === id) || mockSessions[0];
-  const activeInputs = session.inputs.filter((i) => i.enabled);
   const isMobile = useIsMobile();
   const identity = useIdentity();
   const auth = useAuth();
@@ -96,6 +95,24 @@ const SessionRoom = () => {
 
   const [record, setRecord] = useState<SessionRecord | undefined>(() =>
     id ? getSessionById(id) : undefined,
+  );
+
+  // Real panes, derived from the stored session record. Only enabled
+  // sources with a valid address+port are rendered — no mock fallback.
+  const activeInputs = useMemo(
+    () => (record ? inputsFromRecord(record, parseSrtInput) : []),
+    [record],
+  );
+  const session = useMemo(
+    () => ({
+      id: record?.id ?? id ?? "",
+      name: record?.name ?? "Session",
+      status: record?.status ?? "active",
+      createdAt: record?.createdAt ?? new Date().toISOString(),
+      pin: record?.pin ?? "",
+      inputs: activeInputs,
+    }),
+    [record, id, activeInputs],
   );
   // Derive scheduledEndAt directly from the record — single source of
   // truth. Do NOT keep a separate local copy that could drift on remount.
