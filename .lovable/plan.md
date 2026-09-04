@@ -1,39 +1,53 @@
-# Fix LiveCamera playback after successful Test Connection
+# Production WHEP diagnosis — HTML returned instead of SDP
 
-## Diagnosis (from reading the code)
+## Confirmed from the code and config
 
-`probeStream()` and `LiveCamera` build the same SDP offer, use the same URL builder, and both now resolve the `Location` header correctly. The difference is what each one requires to be called a success:
+- `.env` contains only the Supabase variables. **`VITE_MEDIAMTX_WHEP_BASE` is not set anywhere in this project.**
+- `whepBase()` in `src/lib/stream-paths.ts` therefore falls back to the literal string `/mediamtx` in every environment, including the published site.
+- `vite.config.ts` proxies `/mediamtx` -> `http://134.209.119.136:8889` **only in the dev server**. Nothing serves that path on makosrt.com.
 
-- Test Connection only needs the WHEP **HTTP** exchange to work. It POSTs the offer, reads the 201, and tears down. It never waits for ICE, never sets a remote description, never plays media. So "Signal available" proves ingest + path + HTTP reachability — nothing more.
-- LiveCamera needs the **media path** to actually come up: remote SDP applied, ICE connected, track received, `play()` allowed.
+So on https://makosrt.com the browser requests `https://makosrt.com/mediamtx/cam1/whep`, the SPA fallback returns `index.html`, and `setRemoteDescription` is handed `<!doctype html>`. That is exactly the Chrome error reported. Your diagnosis is correct.
 
-The concrete gap in `LiveCamera`: the offer is POSTed immediately after `setLocalDescription`, before ICE gathering finishes, and no ICE candidates are ever sent afterwards (no WHEP `PATCH`/trickle). The server therefore only ever sees a candidate-less offer, ICE never pairs, `connectionState` goes `connecting -> failed`, the retry timer fires, and after 3 attempts the pane reports CONNECTION FAILED. Secondary contributors: `ontrack` assumes `event.streams[0]` exists, `play()` is never called after `srcObject` assignment, and a transient `disconnected` state immediately triggers a teardown + reconnect.
+Test Connection is a **false positive** for the same reason: `probeStream()` classifies any `res.ok` as `"available"` and never inspects the body, so a 200 HTML page reads as "Signal available on cam1."
 
-This diagnosis is based on code reading; step 1 below confirms it with real logs before the fix is judged complete.
+Both the earlier ICE/persistence theory and this one point at the same first fix: the response is not SDP, so nothing downstream can work. The ICE/persistence work is deferred until a real SDP answer arrives.
 
-## What will change
+## Scope of this change (diagnostics + guards only)
 
-1. **Shared WHEP helper** in `src/lib/stream-paths.ts` — one function that creates the peer connection, gathers ICE (vanilla ICE: wait for `icegatheringstate === "complete"`, capped at ~2s), POSTs the offer, classifies the response (`201` / `404 no publisher` / `400 codec` / other), resolves the `Location` header against `window.location.origin`, and applies the answer. Both Test Connection and LiveCamera call it, so they cannot drift.
-2. **Test Connection** keeps its behaviour: connect, classify, `DELETE` the resource, close the peer connection.
-3. **LiveCamera** uses the same helper but *stays alive*: it keeps the peer connection and the resolved WHEP resource URL, and only DELETEs/closes on unmount or an explicit reconnect.
-4. **Track handling**: `pc.ontrack` uses `event.streams?.[0] ?? new MediaStream([event.track])`, assigns `srcObject`, then calls `video.play()` and logs the rejection reason instead of silently failing.
-5. **Autoplay**: the element starts `muted autoPlay playsInline` and plays without any user click; existing focus/audio-follow logic still unmutes later.
-6. **State mapping** is corrected so CONNECTION FAILED is reserved for real failures:
-   - CONNECTING: negotiating, ICE `new`/`checking`
-   - LIVE: `connectionState === "connected"` and a track arrived
-   - RECONNECTING: was live, connection dropped, retry pending (transient `disconnected` waits ~5s before counting as a drop)
-   - NO VIDEO STREAMING: WHEP 404 / no publisher
-   - CONNECTION FAILED: WHEP rejected, ICE permanently failed, or retries exhausted
-7. **Single connection per instance**: a generation/attempt ID guards every async continuation so a stale attempt (including React StrictMode's double-invoke in dev) can never close the newer live connection. The connect effect depends only on `streamName` and `baseUrl`.
-8. **Dev diagnostics** (`import.meta.env.DEV` only, no passphrases): request URL, POST status, non-2xx body, Location header, resolved resource URL, local/remote SDP set, ICE gathering + connection state, peer connection state, signaling state, ontrack fired, whether `streams[0]` existed, track `readyState`, and the `play()` result.
+No SRT, Magewell, MediaMTX, ICE, retry, Quinn, Ops, Timeline, or Session Room UI changes.
 
-## Verification
+1. **Environment-aware WHEP base** (`src/lib/stream-paths.ts`)
+   - Dev: keep `/mediamtx` (Vite proxy).
+   - Production without `VITE_MEDIAMTX_WHEP_BASE`: do not fall back to the SPA origin. Return a configuration error that surfaces as "Production MediaMTX WHEP endpoint is not configured." in the pane and in Test Connection.
+   - No hardcoded `http://` production endpoint.
 
-Read the browser console against the running preview with Source 1 (`cam1`) publishing, and confirm: POST 201, remote SDP applied, `ontrack` fired, `play()` resolved, pane CONNECTING -> LIVE with visible video. Then stop the publisher (expect RECONNECTING / NO VIDEO STREAMING) and restart it (expect the same pane returns to LIVE). Report back the exact failure reason observed, whether `event.streams[0]` existed, the `play()` result, the final peer connection state, and the files changed. Stop after Source 1 works.
+2. **Validate the WHEP answer before using it** (shared by `probeStream` and `LiveCamera`)
+   - Require the expected 2xx status.
+   - If `Content-Type` is supplied, require it to be SDP-compatible.
+   - Require the body to start with `v=`.
+   - If the body starts with `<!doctype html` or `<html`, classify as `misconfigured`: "WHEP endpoint misconfigured — received HTML instead of SDP." Never call `setRemoteDescription`, and never retry it as an ICE failure.
+
+3. **Honest Test Connection** — "Signal available" only when a valid SDP answer came back. HTML gives "Playback endpoint misconfigured."
+
+4. **Diagnostics** — log the exact request URL, HTTP status, `Content-Type`, and the first 100 characters of the body, plus the resolved `whepBase()` value and whether it came from the env var or the dev fallback.
+
+## Answers to your questions
+
+- **Exact production request URL:** `https://makosrt.com/mediamtx/cam1/whep`.
+- **Why HTML is returned:** SPA fallback on Lovable hosting; the `/mediamtx` proxy exists only in the Vite dev server.
+- **Is Test Connection a false positive:** yes, it accepts any 2xx without checking the body.
+- **Resolved production env var:** none — `VITE_MEDIAMTX_WHEP_BASE` is unset, so the code uses the `/mediamtx` dev fallback.
+
+## Still needed outside the app
+
+`stream.makosrt.com` must be pointed at the DigitalOcean MediaMTX WebRTC service over HTTPS. Once that exists, set `VITE_MEDIAMTX_WHEP_BASE=https://stream.makosrt.com` and the pane will receive real SDP.
+
+## Follow-ups (tracked, not in this change)
+
+- LiveCamera ICE/persistent-session work (only meaningful once real SDP arrives).
+- `session_focus` 401s for guest users (RLS), unrelated to video.
 
 ## Files touched
 
-- `src/lib/stream-paths.ts` (shared WHEP negotiation helper; `probeStream` refactored onto it)
-- `src/components/LiveCamera.tsx` (persistent session, track handling, state machine, diagnostics)
-
-No changes to SRT config, MediaMTX, UI design, Quinn, Timeline, Ops, sharing, or session behaviour.
+- `src/lib/stream-paths.ts`
+- `src/components/LiveCamera.tsx` (validation guard + diagnostics only)
