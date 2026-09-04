@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import LiveCamera from "@/components/LiveCamera";
+import LiveCamera, { type LiveCameraState } from "@/components/LiveCamera";
 import { Maximize2, Edit3, Volume2, VolumeX, VideoOff, WifiOff, Loader2, PlugZap, RefreshCw, ExternalLink, Focus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
