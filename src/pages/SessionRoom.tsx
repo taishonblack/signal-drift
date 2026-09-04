@@ -708,6 +708,23 @@ const SessionRoom = () => {
 
 
 
+  if (!record) {
+    return (
+      <div className="flex h-full min-h-[60vh] items-center justify-center p-6">
+        <div className="rounded-lg border border-border/20 bg-card/30 px-6 py-8 text-center backdrop-blur-[18px]">
+          <h1 className="text-sm font-medium text-foreground">
+            {hydrating ? "Loading session…" : "Session not found"}
+          </h1>
+          {!hydrating && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              This session no longer exists, or you do not have access to it.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <ScheduledEndDialog
