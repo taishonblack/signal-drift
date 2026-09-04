@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { resolveWhepResource, whepUrlForStream } from "@/lib/stream-paths";
+import { negotiateWhep, whepEndpointForStream, MISSING_WHEP_BASE_MESSAGE } from "@/lib/stream-paths";
 
 export type LiveCameraState =
   | "connecting"
   | "live"
   | "no_video"
   | "reconnecting"
+  | "misconfigured"
   | "failed";
+
 
 interface LiveCameraProps {
   streamName: string;
