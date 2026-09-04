@@ -17,7 +17,7 @@ import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
 import ShareSessionDialog from "@/components/session/ShareSessionDialog";
 import SessionEndIndicator from "@/components/session/SessionEndIndicator";
 import { mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
-import { inputsFromRecord } from "@/lib/stream-paths";
+import { inputsFromRecord, whepBase, whepUrlForStream } from "@/lib/stream-paths";
 import {
   getSessionById,
   updateSession,
@@ -734,6 +734,17 @@ const SessionRoom = () => {
 
   return (
     <>
+      {import.meta.env.DEV && (
+        <div className="mx-2 mt-2 rounded border border-border/20 bg-muted/10 p-2 font-mono text-[10px] text-muted-foreground">
+          <div>session {session.id} · {activeInputs.length} source(s) · whep base {whepBase()}</div>
+          {activeInputs.map((i) => (
+            <div key={i.id}>
+              slot {i.slot} · {i.label} · {i.streamName} · {whepUrlForStream(i.streamName!)}
+            </div>
+          ))}
+        </div>
+      )}
+
       <ScheduledEndDialog
         scheduledEndAt={scheduledEndAt}
         timeZone={record?.defaultOriginTimeZone}
