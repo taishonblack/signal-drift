@@ -36,6 +36,7 @@ const LayoutPopoutPage = () => {
     () => ({
       id: record?.id ?? sessionId ?? "",
       name: record?.name ?? "Session",
+      createdAt: record?.createdAt ?? new Date().toISOString(),
       inputs: record ? inputsFromRecord(record, parseSrtInput) : [],
     }),
     [record, sessionId],
