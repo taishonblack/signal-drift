@@ -611,6 +611,15 @@ const CreateSession = () => {
 
             {activeLine.enabled && (
               <>
+                {/* Ingest mapping hint — SRT contribution details for the encoder. */}
+                <div className="rounded-md border border-border/15 bg-muted/10 p-2.5 text-[11px] text-muted-foreground">
+                  Publishes to MediaMTX path{" "}
+                  <span className="font-mono text-foreground">{streamNameForSlot(activeTab)}</span>.
+                  Set the encoder Stream ID to{" "}
+                  <span className="font-mono text-foreground">{publishIdForSlot(activeTab)}</span> in
+                  caller mode.
+                </div>
+
                 {/* Friendly Name */}
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
