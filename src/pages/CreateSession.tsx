@@ -218,9 +218,9 @@ const CreateSession = () => {
     const state = result === "available" ? "available" : result === "no_publisher" ? "no_publisher" : "failed";
     setTestResult((prev) => ({ ...prev, [slot]: { state } }));
     setTested((prev) => ({ ...prev, [slot]: state === "available" }));
-    if (state === "available") toast({ title: "Signal available" });
-    else if (state === "no_publisher") toast({ title: `No active signal detected on Source ${slot}` });
-    else toast({ title: "Connection failed", description: "MediaMTX could not be reached." });
+    if (state === "available") toast("Signal available.");
+    else if (state === "no_publisher") toast(`No active signal detected on Source ${slot}.`);
+    else toast("Connection failed.", { description: "MediaMTX could not be reached." });
   };
 
   const createAndNavigate = () => {
