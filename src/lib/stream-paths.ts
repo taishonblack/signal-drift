@@ -52,6 +52,21 @@ export function whepUrlForSlot(slot: number): string {
 
 export type ProbeResult = "available" | "no_publisher" | "failed";
 
+export interface ProbeDiagnostics {
+  result: ProbeResult;
+  /** Human-readable, credential-free explanation. */
+  detail: string;
+  url: string;
+  status?: number;
+  body?: string;
+}
+
+/** Resolve a possibly-relative WHEP Location against a possibly-relative base. */
+export function resolveWhepResource(location: string, base: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+  return new URL(location, new URL(base, origin)).toString();
+}
+
 /**
  * Lightweight availability check for a MediaMTX path.
  *
@@ -60,9 +75,14 @@ export type ProbeResult = "available" | "no_publisher" | "failed";
  * resource is DELETEd and the RTCPeerConnection closed, so the test never
  * leaves an idle viewer attached to MediaMTX.
  */
-export async function probeStream(streamName: string): Promise<ProbeResult> {
+export async function probeStream(streamName: string): Promise<ProbeDiagnostics> {
+  const url = whepUrlForStream(streamName);
   let pc: RTCPeerConnection | null = null;
   let resourceUrl: string | null = null;
+  const log = (d: Record<string, unknown>) => {
+    if (import.meta.env.DEV) console.info("[probeStream]", { streamName, url, ...d });
+  };
+
   try {
     pc = new RTCPeerConnection();
     pc.addTransceiver("video", { direction: "recvonly" });
@@ -70,31 +90,51 @@ export async function probeStream(streamName: string): Promise<ProbeResult> {
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    const offersH264 = /H264\/90000/i.test(offer.sdp ?? "");
+    log({ step: "offer", offersH264 });
 
-    const res = await fetch(whepUrlForStream(streamName), {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/sdp" },
       body: offer.sdp ?? "",
     });
 
-    if (res.status === 404) return "no_publisher";
+    if (res.status === 404) {
+      log({ step: "response", status: 404 });
+      return { result: "no_publisher", detail: `No publisher on ${streamName} (path not found).`, url, status: 404 };
+    }
+
     if (!res.ok) {
+      const body = (await res.text().catch(() => "")).slice(0, 300);
+      log({ step: "response", status: res.status, body });
       // MediaMTX answers 400 "codecs not supported by client" when a
-      // publisher exists but this browser cannot decode it. A publisher is
-      // present, so the signal is available.
-      const body = await res.text().catch(() => "");
-      if (res.status === 400 && body.includes("codecs not supported")) return "available";
-      return "failed";
+      // publisher exists but this browser cannot decode it.
+      if (res.status === 400 && body.includes("codecs not supported")) {
+        return {
+          result: "available",
+          detail: `Publisher present on ${streamName}, but codec negotiation failed (this browser advertised no matching decoder${offersH264 ? "" : "; no H.264 in offer"}).`,
+          url,
+          status: 400,
+          body,
+        };
+      }
+      return {
+        result: "failed",
+        detail: `WHEP rejected: HTTP ${res.status} — ${body || res.statusText}`,
+        url,
+        status: res.status,
+        body,
+      };
     }
 
     const location = res.headers.get("Location");
-    if (location) {
-      resourceUrl = new URL(location, whepUrlForStream(streamName)).toString();
-    }
-    // We only need to know a publisher exists; no need to complete playback.
-    return "available";
-  } catch {
-    return "failed";
+    if (location) resourceUrl = resolveWhepResource(location, url);
+    log({ step: "response", status: res.status, resourceUrl });
+    return { result: "available", detail: `Signal available on ${streamName}.`, url, status: res.status };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log({ step: "error", message });
+    return { result: "failed", detail: `MediaMTX unreachable or request error: ${message}`, url };
   } finally {
     if (resourceUrl) {
       // Best-effort teardown of the WHEP session on MediaMTX.
@@ -107,6 +147,7 @@ export async function probeStream(streamName: string): Promise<ProbeResult> {
     }
   }
 }
+
 
 /** True when a line has both a host and a port. */
 function lineHasEndpoint(line: SrtLine, parse: (v: string) => { host: string; port: string }) {
