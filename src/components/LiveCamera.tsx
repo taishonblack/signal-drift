@@ -130,7 +130,8 @@ const LiveCamera = ({
         }
 
         const location = response.headers.get("Location");
-        if (location) resourceRef.current = new URL(location, url).toString();
+        if (location) resourceRef.current = resolveWhepResource(location, url);
+
 
         const answer = await response.text();
         if (cancelled) return;
