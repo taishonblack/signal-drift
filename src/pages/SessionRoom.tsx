@@ -32,6 +32,7 @@ import {
   getCurrentUserRef,
   canConfigureSession,
   appendChangeLog,
+  parseSrtInput,
   type SessionRecord,
   type SessionChangeEntry,
 } from "@/lib/session-store";
