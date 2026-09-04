@@ -761,9 +761,10 @@ const CreateSession = () => {
                         </span>
                       </div>
                       <p className="pt-1 text-[10px] text-muted-foreground/70">
-                        Checked MediaMTX path {streamNameForSlot(activeTab)}. Codec and
-                        resolution details follow in a later update.
+                        {testResult[activeTab]?.detail ??
+                          `Checked MediaMTX path ${streamNameForSlot(activeTab)}.`}
                       </p>
+
                     </div>
                   )}
                 </div>
