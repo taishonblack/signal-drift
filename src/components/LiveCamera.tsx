@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { whepUrlForStream } from "@/lib/stream-paths";
+import { resolveWhepResource, whepUrlForStream } from "@/lib/stream-paths";
 
 export type LiveCameraState =
   | "connecting"
