@@ -3,7 +3,8 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { Maximize2, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SignalTile from "@/components/SignalTile";
-import { mockSessions } from "@/lib/mock-data";
+import { getSessionById, parseSrtInput } from "@/lib/session-store";
+import { inputsFromRecord } from "@/lib/stream-paths";
 import { useLiveMetrics } from "@/hooks/use-live-metrics";
 import { loadTimePrefs } from "@/lib/time-utils";
 import { loadSlotMap, type SlotId, type SlotMap } from "@/lib/slot-map";
@@ -30,8 +31,17 @@ const LayoutPopoutPage = () => {
   const { sessionId } = useParams();
   const [search] = useSearchParams();
 
-  const session = mockSessions.find((s) => s.id === sessionId) ?? mockSessions[0];
-  const activeInputs = useMemo(() => session.inputs.filter((i) => i.enabled), [session]);
+  const record = sessionId ? getSessionById(sessionId) : undefined;
+  const session = useMemo(
+    () => ({
+      id: record?.id ?? sessionId ?? "",
+      name: record?.name ?? "Session",
+      createdAt: record?.createdAt ?? new Date().toISOString(),
+      inputs: record ? inputsFromRecord(record, parseSrtInput) : [],
+    }),
+    [record, sessionId],
+  );
+  const activeInputs = session.inputs;
   const { getMetrics } = useLiveMetrics(session.inputs);
   const { prefs, ready: prefsReady } = useWorkspacePrefs();
 

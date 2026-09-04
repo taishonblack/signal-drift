@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import LiveCamera from "@/components/LiveCamera";
+import LiveCamera, { type LiveCameraState } from "@/components/LiveCamera";
 import { Maximize2, Edit3, Volume2, VolumeX, VideoOff, WifiOff, Loader2, PlugZap, RefreshCw, ExternalLink, Focus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -75,7 +75,17 @@ const SignalTile = ({
   timePrefs, tileOriginTZ = "UTC", focusedOriginTZ = "UTC", sessionStartedAt = "",
   showSafeArea = false,
 }: SignalTileProps) => {
-  const badge = statusBadge[input.status];
+  // Real WebRTC pane state, reported by LiveCamera for live sources.
+  const [liveState, setLiveState] = useState<LiveCameraState | null>(null);
+  const liveBadge: Record<LiveCameraState, { label: string; cls: string }> = {
+    connecting: { label: "CONNECTING", cls: "bg-muted text-muted-foreground" },
+    live: { label: "LIVE", cls: "bg-primary/20 text-primary" },
+    no_video: { label: "NO VIDEO", cls: "bg-warning/20 text-warning" },
+    reconnecting: { label: "RECONNECTING", cls: "bg-warning/20 text-warning" },
+    failed: { label: "FAILED", cls: "bg-destructive/20 text-destructive" },
+  };
+  const badge =
+    input.streamName && liveState ? liveBadge[liveState] : statusBadge[input.status];
   const bitrate = liveMetrics?.bitrate ?? input.metrics.bitrate;
   const loss = liveMetrics?.packetLoss ?? input.metrics.packetLoss;
   const peakL = liveMetrics?.audioPeakL ?? 0;
@@ -146,22 +156,13 @@ const SignalTile = ({
             onFocusPopout={onFocusPopout}
             onBringBack={onBringBack}
           />
-        ) : input.id === "line-1" && isActive ? (
+        ) : input.streamName ? (
           <LiveCamera
-            streamName="cam1"
+            streamName={input.streamName}
             muted={!wantsAudio}
             onAudioBlocked={() => setAudioBlocked(true)}
             onAudioPlaying={() => setAudioBlocked(false)}
-          />
-        ) : input.videoSrc && input.status === "live" ? (
-          <video
-            ref={videoRef}
-            src={input.videoSrc}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="absolute inset-0 w-full h-full object-contain"
+            onStateChange={setLiveState}
           />
         ) : (
           <PaneStatus status={input.status} label={input.label} onRetry={onEdit} />

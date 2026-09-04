@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { DndContext, closestCenter, DragEndEvent, DragOverlay, DragStartEvent } from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
@@ -16,7 +16,8 @@ import QuinnPanel from "@/components/quinn/QuinnPanel";
 import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
 import ShareSessionDialog from "@/components/session/ShareSessionDialog";
 import SessionEndIndicator from "@/components/session/SessionEndIndicator";
-import { mockSessions, mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
+import { mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
+import { inputsFromRecord, whepBase, whepUrlForStream } from "@/lib/stream-paths";
 import {
   getSessionById,
   updateSession,
@@ -31,6 +32,7 @@ import {
   getCurrentUserRef,
   canConfigureSession,
   appendChangeLog,
+  parseSrtInput,
   type SessionRecord,
   type SessionChangeEntry,
 } from "@/lib/session-store";
@@ -82,8 +84,6 @@ const gridStylesMobile: Record<string, { cls: string; style: React.CSSProperties
 const SessionRoom = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const session = mockSessions.find((s) => s.id === id) || mockSessions[0];
-  const activeInputs = session.inputs.filter((i) => i.enabled);
   const isMobile = useIsMobile();
   const identity = useIdentity();
   const auth = useAuth();
@@ -96,6 +96,31 @@ const SessionRoom = () => {
 
   const [record, setRecord] = useState<SessionRecord | undefined>(() =>
     id ? getSessionById(id) : undefined,
+  );
+
+  // Grace window while remote hydration runs before declaring "not found".
+  const [hydrating, setHydrating] = useState(true);
+  useEffect(() => {
+    const t = window.setTimeout(() => setHydrating(false), 2000);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  // Real panes, derived from the stored session record. Only enabled
+  // sources with a valid address+port are rendered — no mock fallback.
+  const activeInputs = useMemo(
+    () => (record ? inputsFromRecord(record, parseSrtInput) : []),
+    [record],
+  );
+  const session = useMemo(
+    () => ({
+      id: record?.id ?? id ?? "",
+      name: record?.name ?? "Session",
+      status: record?.status ?? "active",
+      createdAt: record?.createdAt ?? new Date().toISOString(),
+      pin: record?.pin ?? "",
+      inputs: activeInputs,
+    }),
+    [record, id, activeInputs],
   );
   // Derive scheduledEndAt directly from the record — single source of
   // truth. Do NOT keep a separate local copy that could drift on remount.
@@ -690,8 +715,36 @@ const SessionRoom = () => {
 
 
 
+  if (!record) {
+    return (
+      <div className="flex h-full min-h-[60vh] items-center justify-center p-6">
+        <div className="rounded-lg border border-border/20 bg-card/30 px-6 py-8 text-center backdrop-blur-[18px]">
+          <h1 className="text-sm font-medium text-foreground">
+            {hydrating ? "Loading session…" : "Session not found"}
+          </h1>
+          {!hydrating && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              This session no longer exists, or you do not have access to it.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
+      {import.meta.env.DEV && (
+        <div className="mx-2 mt-2 rounded border border-border/20 bg-muted/10 p-2 font-mono text-[10px] text-muted-foreground">
+          <div>session {session.id} · {activeInputs.length} source(s) · whep base {whepBase()}</div>
+          {activeInputs.map((i) => (
+            <div key={i.id}>
+              slot {i.slot} · {i.label} · {i.streamName} · {whepUrlForStream(i.streamName!)}
+            </div>
+          ))}
+        </div>
+      )}
+
       <ScheduledEndDialog
         scheduledEndAt={scheduledEndAt}
         timeZone={record?.defaultOriginTimeZone}

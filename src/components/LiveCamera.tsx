@@ -1,7 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { whepUrlForStream } from "@/lib/stream-paths";
+
+export type LiveCameraState =
+  | "connecting"
+  | "live"
+  | "no_video"
+  | "reconnecting"
+  | "failed";
 
 interface LiveCameraProps {
   streamName: string;
+  /** Override the WHEP base (defaults to the configured MediaMTX base). */
   baseUrl?: string;
   /** When false, the video element is unmuted (subject to browser autoplay). */
   muted?: boolean;
@@ -9,26 +18,68 @@ interface LiveCameraProps {
   onAudioBlocked?: () => void;
   /** Called when unmuted playback resumes successfully. */
   onAudioPlaying?: () => void;
+  /** Surface the connection state to the parent tile. */
+  onStateChange?: (state: LiveCameraState) => void;
 }
+
+const MAX_BACKOFF_MS = 8000;
 
 const LiveCamera = ({
   streamName,
-  baseUrl = "/mediamtx",
+  baseUrl,
   muted = true,
   onAudioBlocked,
   onAudioPlaying,
+  onStateChange,
 }: LiveCameraProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
-  const [status, setStatus] = useState("Connecting");
+  const resourceRef = useRef<string | null>(null);
+  const attemptRef = useRef(0);
+  const timerRef = useRef<number | null>(null);
+  const [state, setState] = useState<LiveCameraState>("connecting");
+
+  const url = baseUrl
+    ? `${baseUrl.replace(/\/+$/, "")}/${streamName}/whep`
+    : whepUrlForStream(streamName);
+
+  const report = useCallback(
+    (next: LiveCameraState) => {
+      setState(next);
+      onStateChange?.(next);
+    },
+    [onStateChange],
+  );
 
   useEffect(() => {
     let cancelled = false;
 
-    const start = async () => {
+    const teardown = () => {
+      if (resourceRef.current) {
+        void fetch(resourceRef.current, { method: "DELETE" }).catch(() => undefined);
+        resourceRef.current = null;
+      }
       try {
-        setStatus("Connecting");
+        pcRef.current?.close();
+      } catch {
+        /* noop */
+      }
+      pcRef.current = null;
+    };
 
+    const schedule = () => {
+      if (cancelled) return;
+      attemptRef.current += 1;
+      const delay = Math.min(1000 * 2 ** (attemptRef.current - 1), MAX_BACKOFF_MS);
+      timerRef.current = window.setTimeout(() => void connect(), delay);
+    };
+
+    const connect = async () => {
+      if (cancelled) return;
+      teardown();
+      report(attemptRef.current === 0 ? "connecting" : "reconnecting");
+
+      try {
         const pc = new RTCPeerConnection();
         pcRef.current = pc;
 
@@ -38,53 +89,71 @@ const LiveCamera = ({
         pc.ontrack = (event) => {
           if (!videoRef.current || cancelled) return;
           videoRef.current.srcObject = event.streams[0];
-          setStatus("Live");
         };
 
         pc.onconnectionstatechange = () => {
-          if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-            setStatus("Disconnected");
-          }
+          if (cancelled) return;
           if (pc.connectionState === "connected") {
-            setStatus("Live");
+            attemptRef.current = 0;
+            report("live");
+          }
+          if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+            report("reconnecting");
+            schedule();
           }
         };
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        const response = await fetch(`${baseUrl}/${streamName}/whep`, {
+        const response = await fetch(url, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/sdp",
-          },
-          body: offer.sdp,
+          headers: { "Content-Type": "application/sdp" },
+          body: offer.sdp ?? "",
         });
 
-        if (!response.ok) {
-          throw new Error(`WHEP failed: ${response.status}`);
+        if (cancelled) return;
+
+        if (response.status === 404) {
+          // MediaMTX reachable, but nothing is publishing on this path.
+          report("no_video");
+          teardown();
+          schedule();
+          return;
         }
 
-        const answer = await response.text();
+        if (!response.ok) {
+          report(attemptRef.current > 3 ? "failed" : "reconnecting");
+          teardown();
+          schedule();
+          return;
+        }
 
-        await pc.setRemoteDescription({
-          type: "answer",
-          sdp: answer,
-        });
+        const location = response.headers.get("Location");
+        if (location) resourceRef.current = new URL(location, url).toString();
+
+        const answer = await response.text();
+        if (cancelled) return;
+        await pc.setRemoteDescription({ type: "answer", sdp: answer });
       } catch (err) {
-        console.error(err);
-        if (!cancelled) setStatus("Connection failed");
+        if (cancelled) return;
+        console.error("[LiveCamera]", streamName, err);
+        report(attemptRef.current > 3 ? "failed" : "reconnecting");
+        teardown();
+        schedule();
       }
     };
 
-    start();
+    attemptRef.current = 0;
+    void connect();
 
     return () => {
       cancelled = true;
-      pcRef.current?.close();
-      pcRef.current = null;
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+      teardown();
     };
-  }, [baseUrl, streamName]);
+  }, [url, streamName, report]);
 
   // Apply the requested muted state and probe autoplay. Browsers only allow
   // unmuted playback after a user gesture — the parent should call this
@@ -103,7 +172,13 @@ const LiveCamera = ({
     }
   }, [muted, onAudioBlocked, onAudioPlaying]);
 
-
+  const label: Record<LiveCameraState, string> = {
+    connecting: "Connecting",
+    live: "Live",
+    no_video: "No video streaming",
+    reconnecting: "Reconnecting",
+    failed: "Connection failed",
+  };
 
   return (
     <div className="absolute inset-0 bg-black">
@@ -115,9 +190,16 @@ const LiveCamera = ({
         className="absolute inset-0 h-full w-full object-contain"
       />
 
+      {state !== "live" && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <span className="rounded bg-background/70 px-2 py-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+            {label[state]}
+          </span>
+        </div>
+      )}
 
-      <div className="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-[10px] uppercase tracking-wider text-white">
-        WebRTC · {status}
+      <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-[10px] uppercase tracking-wider text-white">
+        WebRTC · {streamName} · {label[state]}
       </div>
     </div>
   );

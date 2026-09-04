@@ -9,6 +9,10 @@ export interface StreamInput {
   status: StreamStatus;
   metrics: StreamMetrics;
   videoSrc?: string;
+  /** MediaMTX path this source plays from (cam1..cam4). */
+  streamName?: string;
+  /** 1-based source slot. */
+  slot?: number;
 }
 
 export interface StreamMetrics {
