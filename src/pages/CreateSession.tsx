@@ -757,7 +757,9 @@ const CreateSession = () => {
                             ? "Signal available."
                             : activeTestState === "no_publisher"
                               ? `No active signal detected on Source ${activeTab}.`
-                              : "Connection failed."}
+                              : activeTestState === "misconfigured"
+                                ? "Playback endpoint misconfigured."
+                                : "Connection failed."}
                         </span>
                       </div>
                       <p className="pt-1 text-[10px] text-muted-foreground/70">
