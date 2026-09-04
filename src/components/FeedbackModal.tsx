@@ -57,9 +57,9 @@ export default function FeedbackModal({ collapsed }: FeedbackModalProps) {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       email: email.trim(),
-      message: message.trim(),
+      message: message.trim().slice(0, 4000),
       page_url: location.pathname,
-      user_agent: navigator.userAgent,
+      user_agent: navigator.userAgent.slice(0, 512),
     });
     setSending(false);
     setSent(true);
@@ -111,20 +111,20 @@ export default function FeedbackModal({ collapsed }: FeedbackModalProps) {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="fb-fn">First Name</Label>
-                    <Input id="fb-fn" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Jane" className="bg-mako-layer border-border/40" />
+                    <Input id="fb-fn" maxLength={80} value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Jane" className="bg-mako-layer border-border/40" />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="fb-ln">Last Name</Label>
-                    <Input id="fb-ln" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Doe" className="bg-mako-layer border-border/40" />
+                    <Input id="fb-ln" maxLength={80} value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Doe" className="bg-mako-layer border-border/40" />
                   </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="fb-email">Email</Label>
-                  <Input id="fb-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@example.com" className="bg-mako-layer border-border/40" />
+                  <Input id="fb-email" type="email" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@example.com" className="bg-mako-layer border-border/40" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="fb-msg">Feedback</Label>
-                  <Textarea id="fb-msg" rows={5} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Tell us what you think…" className="bg-mako-layer border-border/40 resize-none" />
+                  <Textarea id="fb-msg" rows={5} maxLength={4000} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Tell us what you think…" className="bg-mako-layer border-border/40 resize-none" />
                 </div>
                 <div className="flex justify-end gap-2 pt-1">
                   <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
