@@ -30,16 +30,19 @@ export function publishIdForSlot(slot: number): string {
  *
  * Development: omit VITE_MEDIAMTX_WHEP_BASE and requests go through the
  * existing Vite `/mediamtx` proxy.
- * Production: VITE_MEDIAMTX_WHEP_BASE must be set to an HTTPS endpoint
- * (e.g. https://stream.makosrt.com). We never fall back to a raw http:// IP,
- * which browsers block as mixed content on an HTTPS site.
+ * Production: falls back to PRODUCTION_WHEP_BASE (the public HTTPS reverse
+ * proxy in front of MediaMTX). VITE_MEDIAMTX_WHEP_BASE overrides it for
+ * builds pointed at a different deployment. We never fall back to a raw
+ * http:// IP, which browsers block as mixed content on an HTTPS site.
  */
+export const PRODUCTION_WHEP_BASE = "https://stream.makosrt.com";
+
 export interface WhepBaseResult {
   ok: boolean;
   /** Present when ok. */
   base?: string;
   /** Present when ok: where the base came from. */
-  source?: "env" | "dev-proxy";
+  source?: "env" | "dev-proxy" | "built-in";
   /** Present when not ok. */
   reason?: "missing-production-whep-base";
 }
@@ -52,6 +55,8 @@ export function resolveWhepBase(): WhepBaseResult {
   const configured = (import.meta.env.VITE_MEDIAMTX_WHEP_BASE as string | undefined)?.trim();
   if (configured) return { ok: true, base: configured.replace(/\/+$/, ""), source: "env" };
   if (import.meta.env.DEV) return { ok: true, base: "/mediamtx", source: "dev-proxy" };
+  const builtIn = PRODUCTION_WHEP_BASE.trim().replace(/\/+$/, "");
+  if (builtIn) return { ok: true, base: builtIn, source: "built-in" };
   return { ok: false, reason: "missing-production-whep-base" };
 }
 
