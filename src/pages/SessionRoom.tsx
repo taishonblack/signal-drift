@@ -98,6 +98,13 @@ const SessionRoom = () => {
     id ? getSessionById(id) : undefined,
   );
 
+  // Grace window while remote hydration runs before declaring "not found".
+  const [hydrating, setHydrating] = useState(true);
+  useEffect(() => {
+    const t = window.setTimeout(() => setHydrating(false), 2000);
+    return () => window.clearTimeout(t);
+  }, []);
+
   // Real panes, derived from the stored session record. Only enabled
   // sources with a valid address+port are rendered — no mock fallback.
   const activeInputs = useMemo(
