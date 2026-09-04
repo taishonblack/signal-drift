@@ -948,11 +948,4 @@ const SectionHeader = ({
   </div>
 );
 
-const Diag = ({ label, value }: { label: string; value: string }) => (
-  <div className="min-w-0">
-    <div className="text-[9px] uppercase tracking-wider text-muted-foreground/70">{label}</div>
-    <div className="font-mono text-foreground truncate">{value}</div>
-  </div>
-);
-
 export default CreateSession;
