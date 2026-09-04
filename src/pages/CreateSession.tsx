@@ -33,6 +33,7 @@ import { ensureIdentity, useIdentity } from "@/lib/identity";
 import { saveSessionRemote } from "@/lib/sessions-remote";
 import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 import { toast } from "@/components/ui/sonner";
+import { probeStream, publishIdForSlot, streamNameForSlot } from "@/lib/stream-paths";
 
 type LineStatus = "empty" | "configured" | "error";
 
@@ -127,6 +128,9 @@ const CreateSession = () => {
   const [activeTab, setActiveTab] = useState(1);
   const [advancedOpen, setAdvancedOpen] = useState<Record<number, boolean>>({});
   const [tested, setTested] = useState<Record<number, boolean>>({});
+  const [testResult, setTestResult] = useState<
+    Record<number, { state: "testing" | "available" | "no_publisher" | "failed" }>
+  >({});
   const [pendingActiveSession, setPendingActiveSession] = useState<SessionRecord | null>(null);
   const [pendingStart, setPendingStart] = useState<null | (() => void)>(null);
   const sessions = getSessions();
@@ -204,8 +208,19 @@ const CreateSession = () => {
     updateLine({ enabled: false });
   };
 
-  const testConnection = () => {
-    setTested((prev) => ({ ...prev, [activeTab]: true }));
+  const testConnection = async () => {
+    const slot = activeTab;
+    setTestResult((prev) => ({ ...prev, [slot]: { state: "testing" } }));
+    // Availability check only: does the MediaMTX path for this slot have a
+    // publisher right now? The probe tears its peer connection down
+    // immediately so no idle WHEP viewer is left behind.
+    const result = await probeStream(streamNameForSlot(slot));
+    const state = result === "available" ? "available" : result === "no_publisher" ? "no_publisher" : "failed";
+    setTestResult((prev) => ({ ...prev, [slot]: { state } }));
+    setTested((prev) => ({ ...prev, [slot]: state === "available" }));
+    if (state === "available") toast({ title: "Signal available" });
+    else if (state === "no_publisher") toast({ title: `No active signal detected on Source ${slot}` });
+    else toast({ title: "Connection failed", description: "MediaMTX could not be reached." });
   };
 
   const createAndNavigate = () => {
@@ -357,6 +372,7 @@ const CreateSession = () => {
   const hasValidLine = lines.some((l) => l.enabled && isConfigured(l));
 
   const activeAdvancedOpen = !!advancedOpen[activeTab] || !!activeLine.passphrase;
+  const activeTestState = testResult[activeTab]?.state;
   const activeIsTested = !!tested[activeTab] && isConfigured(activeLine) && activeLine.enabled;
 
   const pageTitle =
@@ -706,28 +722,36 @@ const CreateSession = () => {
                     className="gap-2 border-border/30 text-foreground w-full sm:w-auto"
                   >
                     <PlugZap className="h-3.5 w-3.5" />
-                    {activeIsTested ? "Re-test Connection" : "Test Connection"}
+                    {activeTestState === "testing"
+                      ? "Testing…"
+                      : activeIsTested
+                        ? "Re-test Connection"
+                        : "Test Connection"}
                   </Button>
 
-                  {activeIsTested && (
-                    <div className="rounded-md border border-primary/20 bg-primary/[0.04] p-3 space-y-2">
-                      <div className="flex items-center gap-2 text-xs text-primary">
+                  {activeTestState && activeTestState !== "testing" && (
+                    <div
+                      className={`rounded-md border p-3 text-xs ${
+                        activeTestState === "available"
+                          ? "border-primary/20 bg-primary/[0.04] text-primary"
+                          : activeTestState === "no_publisher"
+                            ? "border-[hsl(var(--warning))]/25 bg-[hsl(var(--warning))]/[0.06] text-[hsl(var(--warning))]"
+                            : "border-destructive/25 bg-destructive/[0.06] text-destructive"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
                         <Zap className="h-3.5 w-3.5" />
-                        <span className="font-medium">Stream discovered</span>
+                        <span className="font-medium">
+                          {activeTestState === "available"
+                            ? "Signal available."
+                            : activeTestState === "no_publisher"
+                              ? `No active signal detected on Source ${activeTab}.`
+                              : "Connection failed."}
+                        </span>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-[11px]">
-                        <Diag label="Codec" value="H.264 High" />
-                        <Diag label="Resolution" value="1920×1080" />
-                        <Diag label="FPS" value="59.94" />
-                        <Diag label="Bitrate" value="8.3 Mbps" />
-                        <Diag label="Latency" value="74 ms" />
-                        <Diag label="Packet Loss" value="0.00%" />
-                        <Diag label="Audio" value="2ch · 48 kHz" />
-                        <Diag label="Loudness" value="-23 LUFS" />
-                        <Diag label="Clock Sync" value="Locked" />
-                      </div>
-                      <p className="text-[10px] text-muted-foreground/60 pt-1">
-                        Values reported by MediaMTX after handshake.
+                      <p className="pt-1 text-[10px] text-muted-foreground/70">
+                        Checked MediaMTX path {streamNameForSlot(activeTab)}. Codec and
+                        resolution details follow in a later update.
                       </p>
                     </div>
                   )}
