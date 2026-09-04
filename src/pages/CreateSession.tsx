@@ -221,6 +221,7 @@ const CreateSession = () => {
     setTested((prev) => ({ ...prev, [slot]: state === "available" }));
     if (state === "available") toast("Signal available.", { description: probe.detail });
     else if (state === "no_publisher") toast(`No active signal detected on Source ${slot}.`, { description: probe.detail });
+    else if (state === "misconfigured") toast("Playback endpoint misconfigured.", { description: probe.detail });
     else toast("Connection failed.", { description: probe.detail });
 
   };
