@@ -18,14 +18,15 @@ No SRT, Magewell, MediaMTX, ICE, retry, Quinn, Ops, Timeline, or Session Room UI
 
 1. **Environment-aware WHEP base** (`src/lib/stream-paths.ts`)
    - Dev: keep `/mediamtx` (Vite proxy).
-   - Production without `VITE_MEDIAMTX_WHEP_BASE`: do not fall back to the SPA origin. Return a configuration error that surfaces as "Production MediaMTX WHEP endpoint is not configured." in the pane and in Test Connection.
+   - `whepBase()` returns a typed result rather than a bare string — `{ ok: true, base }` or `{ ok: false, reason: "missing-production-whep-base" }`. It never returns an empty string that fails vaguely later.
+   - Production without `VITE_MEDIAMTX_WHEP_BASE`: no SPA-origin fallback. Both Test Connection and LiveCamera surface the same message, "Production MediaMTX WHEP endpoint is not configured."
    - No hardcoded `http://` production endpoint.
 
-2. **Validate the WHEP answer before using it** (shared by `probeStream` and `LiveCamera`)
-   - Require the expected 2xx status.
-   - If `Content-Type` is supplied, require it to be SDP-compatible.
-   - Require the body to start with `v=`.
-   - If the body starts with `<!doctype html` or `<html`, classify as `misconfigured`: "WHEP endpoint misconfigured — received HTML instead of SDP." Never call `setRemoteDescription`, and never retry it as an ICE failure.
+2. **Validate the WHEP answer before using it** (shared by `probeStream` and `LiveCamera`) — the body is authoritative:
+   - non-2xx -> surface the HTTP/WHEP error with status and body excerpt.
+   - 2xx and body begins with `v=` -> valid SDP, proceed.
+   - 2xx and body begins with `<!doctype html` or `<html` -> classify as `misconfigured`: "WHEP endpoint misconfigured — received HTML instead of SDP." Never call `setRemoteDescription`, and never retry it as an ICE failure.
+   - `Content-Type` is logged as an advisory signal only; an absent or unusual header never blocks otherwise valid SDP.
 
 3. **Honest Test Connection** — "Signal available" only when a valid SDP answer came back. HTML gives "Playback endpoint misconfigured."
 
