@@ -129,7 +129,7 @@ const CreateSession = () => {
   const [advancedOpen, setAdvancedOpen] = useState<Record<number, boolean>>({});
   const [tested, setTested] = useState<Record<number, boolean>>({});
   const [testResult, setTestResult] = useState<
-    Record<number, { state: "testing" | "available" | "no_publisher" | "failed"; detail?: string }>
+    Record<number, { state: "testing" | "available" | "no_publisher" | "misconfigured" | "failed"; detail?: string }>
 
   >({});
   const [pendingActiveSession, setPendingActiveSession] = useState<SessionRecord | null>(null);
