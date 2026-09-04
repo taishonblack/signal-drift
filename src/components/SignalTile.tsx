@@ -82,6 +82,7 @@ const SignalTile = ({
     live: { label: "LIVE", cls: "bg-primary/20 text-primary" },
     no_video: { label: "NO VIDEO", cls: "bg-warning/20 text-warning" },
     reconnecting: { label: "RECONNECTING", cls: "bg-warning/20 text-warning" },
+    misconfigured: { label: "ENDPOINT MISCONFIGURED", cls: "bg-destructive/20 text-destructive" },
     failed: { label: "FAILED", cls: "bg-destructive/20 text-destructive" },
   };
   const badge =
