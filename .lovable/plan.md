@@ -1,55 +1,65 @@
+# Core MAKO Live SRT Milestone — Real Source Pipeline
 
-# Simplify MAKO Signal Drift Session Workflow
+Goal: Create a session, configure Source 1–4 with a real SRT input, start monitoring, and see the real incoming feed in the exact configured pane. No mock sessions, no mock video, no demo feeds in this path.
 
-This is a large, cross-cutting change. Below is the plan grouped by concern. I'll ship it in one pass but wanted to confirm scope first.
+## What changes
 
-## 1. Remove Draft everywhere
-- `src/lib/session-store.ts`: drop `"draft"` from `SessionStatus`, remove `saveDraft` / draft grouping, keep only `active` / `completed` (renamed conceptually to "ended" in UI copy).
-- `src/pages/CreateSession.tsx`: remove Save Draft button and draft resume via `?draft=` query. Bottom bar becomes **Start Monitoring** + **Cancel** (with confirm dialog when the form is dirty).
-- `src/components/RecentSessionsPanel.tsx`, `src/pages/Sessions.tsx`: remove Draft groups, badges, counts, filter chips.
-- `src/components/session/SessionStatusBadge.tsx`: drop `draft` (and `scheduled`, `paused`, `archived` if unused) or keep unused entries dormant — will just remove `draft`.
-- `SaveSessionPrompt.tsx` and any "recover draft" UI: delete.
+### 1. Source slot → MediaMTX path
+A single helper (`src/lib/stream-paths.ts`) becomes the one place that maps a source slot to its stream name and WHEP URL:
 
-## 2. Create Session UX
-- New "Cancel Session Setup?" confirm dialog (Keep Editing / Discard) when dirty.
-- Primary CTA: **Start Monitoring** — validates sources, creates active session, routes to Session Room, kicks off Quinn.
-- Reuse mode: when navigated with `?reuse=<sessionId>`, prefill from the ended session (name, tz, sources, notes, passphrases). Heading becomes "Reconfigure Session", primary CTA "Start New Monitoring Session". Creates a NEW session; original ended session untouched.
-- Active edit mode: when navigated with `?configure=<sessionId>` for an active session owned by user, heading "Configure Session", primary CTA "Save Changes", logs a `source_config_changed` event into that session's Quinn timeline and keeps Quinn running.
+- Source 1 → `cam1`, Source 2 → `cam2`, Source 3 → `cam3`, Source 4 → `cam4`
+- WHEP URL: `<base>/cam<N>/whep` where base is `/mediamtx` in development (existing Vite proxy to the MediaMTX WebRTC port) and comes from `VITE_MEDIAMTX_WHEP_BASE` when set, so the published app can point at a public MediaMTX endpoint.
 
-## 3. Test Connection
-- New component `src/components/session/TestConnectionPanel.tsx` used inside CreateSession.
-- For each configured line: shows name, address:port, state (`Not Configured | Connecting | Video Available | No Video Streaming | Connection Failed`), plus codec/res/fps/bitrate when available (mocked for now using existing `use-live-metrics` style).
-- Never blocks Start — button label switches to **Start Monitoring Anyway** when any source is failing/no-video.
+Encoder side stays as documented: publish `publish:cam1` … `publish:cam4` over SRT into MediaMTX; the browser only ever consumes WebRTC/WHEP.
 
-## 4. Monitoring Pane States
-- Extend `src/components/SignalTile.tsx` (and `DraggableSignalTile.tsx`) with an explicit state enum: `not_configured | connecting | live | no_video | connection_failed | reconnecting`.
-- Replace silent black panes with labeled overlays + Retry button on failed/reconnecting.
-- Wire state from `use-live-metrics` (add `hasVideo` / `lastError` fields with mocked plausible behavior).
+### 2. Create page — real source configuration
+Keeps the existing four Source tabs and layout. Behaviour tightened:
 
-## 5. Ending a session
-- Guest end: hard-delete the session record from local store; wipe its Quinn history.
-- Signed-in end: mark `completed`, keep Quinn incidents (`quinn-store` keyed by sessionId — already is).
+- Address field accepts `134.209.119.136`, `srt://134.209.119.136`, or a full SRT URL; a pasted `srt://host:port` auto-fills address and port (the existing parser already does this — it will be applied to the port field too).
+- A source counts as configured only when address + port are both valid.
+- Each source tab shows its assigned stream name (e.g. "Publishes to `cam1`") plus the exact stream ID the encoder should send (`publish:cam1`), so the operator never needs to know MediaMTX path syntax.
+- Test Connection stops being a no-op: it queries the real MediaMTX path for that slot and reports either "Signal available" with whatever real metadata is returned, or "No active signal detected on Source N". It never blocks saving.
 
-## 6. Recent Sessions (signed-in)
-- Card fields: name, owner, **Owned**/**Shared** badge, start, end, duration, source count, Quinn incident count, last accessed.
-- New `EndedSessionDialog` (replacing `ExpiredSessionDialog`) with actions:
-  - Owned: View Report, Download Report, **Reconfigure and Start** (→ `/create?reuse=<id>`), Cancel.
-  - Shared: View Report, Download Report (if allowed), Cancel.
+### 3. Session data model
+On Start Monitoring, the saved session carries the real configured sources only. Each line keeps its slot, enabled flag, friendly name, parsed address, port, and derived `streamName` (`cam<slot>`). Sources that were never configured are saved disabled and are not rendered.
 
-## 7. Quinn history rules
-- `quinn-store`: partition history by `sessionId`. On guest session switch/end/tab close, purge guest sessionIds. For signed-in users, persist to Supabase-backed store (out of scope for this pass — will keep local per-session and note follow-up if you want cloud persistence).
-- On source config change during active signed-in session, insert a `Source N configuration changed` timeline event with previous/new values.
+### 4. Session Room uses the real session
+- Remove the `mockSessions.find(...) ?? mockSessions[0]` fallback in `SessionRoom`.
+- Panes are built from the stored session record: enabled + valid sources only, mapped into the existing tile model with `streamName = cam<slot>` and no `videoSrc`.
+- Configure only Source 2 → exactly one pane labelled "Source 2 — <name>", requesting `cam2`. No empty panes for unconfigured slots.
+- If the session id is unknown, show a clear "Session not found" state instead of silently loading mock data.
 
-## 8. Cleanup
-- Remove `SaveSessionPrompt`, draft branches in `session-store`, `?draft=` handling, draft-oriented copy in sidebar and Sessions page.
+### 5. Real WebRTC playback and pane states
+`LiveCamera` becomes the only video path for configured sources, driven by the tile's stream name (the current hardcoded `cam1` is removed).
+
+Per-pane states derived from the real WHEP/peer-connection lifecycle:
+
+- `CONNECTING` — negotiating
+- `LIVE` — media flowing
+- `NO VIDEO STREAMING` — MediaMTX reachable but no publisher on that path
+- `RECONNECTING` — retrying with backoff after a drop
+- `CONNECTION FAILED` — repeated failures / MediaMTX unreachable
+
+When the publisher returns, the pane retries automatically and goes LIVE without recreating the session.
+
+### 6. Debug visibility (development only)
+A dev-only diagnostics strip (and matching console logging) listing per source: session id, slot, friendly name, stream name, WHEP URL, connection state. No passphrases or credentials are ever printed. Hidden in production builds.
+
+## Out of scope this change set
+Quinn, Timeline behaviour, Ops, Sharing, Join, Explore, Account, Popouts, workspace presets, incident correlation — untouched except for the minimum compile fixes needed once the Session Room stops importing mock data. Popout pages currently also read `mockSessions`; they will be pointed at the real record with no behaviour redesign.
 
 ## Technical notes
-- Files touched (approx): `session-store.ts`, `CreateSession.tsx`, `SessionRoom.tsx`, `Sessions.tsx`, `RecentSessionsPanel.tsx`, `SessionStatusBadge.tsx`, `SignalTile.tsx`, `DraggableSignalTile.tsx`, `use-live-metrics.ts`, `quinn-store.ts`, `SaveSessionPrompt.tsx` (delete), `ExpiredSessionDialog.tsx` → `EndedSessionDialog.tsx`, new `TestConnectionPanel.tsx`, new `CancelSetupDialog.tsx`.
-- No DB migration required for this pass — sessions in Supabase still use `active`/`ended` states; `draft` rows (if any) will be treated as ended on read.
-- Quinn cloud persistence for signed-in users: **not** included unless you want it now; current `quinn-store` is localStorage keyed by sessionId, which satisfies "history remains available" within the same browser.
+- New: `src/lib/stream-paths.ts` (slot → `camN`, WHEP URL builder, session-record → pane adapter).
+- Edited: `src/components/LiveCamera.tsx` (state machine, retry/backoff, no-publisher detection), `src/components/SignalTile.tsx` (use per-source stream name, drop mock video branch), `src/pages/SessionRoom.tsx` (real record, real pane list), `src/pages/CreateSession.tsx` (real Test Connection, slot/stream hints), `src/pages/SourcePopoutPage.tsx` and `src/pages/LayoutPopoutPage.tsx` (drop mock fallback).
+- `vite.config.ts` proxy stays as-is for local development.
 
-## Questions before I build
+## Verification
+1. Publish `publish:cam1` → Source 1 pane shows real video.
+2. Stop publisher → pane shows NO VIDEO STREAMING.
+3. Restart publisher → pane reconnects, same session.
+4. Configure Source 2 only → single pane, requests `cam2`.
+5. Refresh Session Room → same session, same real source configuration.
+6. No `mockSessions` reference remains in the create/monitor path.
 
-1. **Quinn persistence for signed-in users** — keep local (browser-only) for this pass, or add a `quinn_events` Supabase table now?
-2. **Test Connection realism** — mock results (fast, deterministic-random) or attempt a real probe via an edge function? Real SRT probing isn't feasible from the browser; a mock is what I'd ship.
-3. **Existing "draft" sessions in the DB** — treat as ended (hide/show under Recent) or delete them?
+## Open item
+Production WHEP endpoint: development uses the `/mediamtx` proxy. For the published app I will read `VITE_MEDIAMTX_WHEP_BASE`; if you want a specific public URL baked in instead, tell me and I will use it.
