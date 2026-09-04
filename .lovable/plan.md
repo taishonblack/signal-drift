@@ -84,3 +84,4 @@ MAKO browser  ->  <MEDIAMTX_WHEP_BASE>/cam1/whep
 
 4. **Milestone stopping point.** Prove Source 1 only — encoder at `134.209.119.136:8890`, caller mode, stream ID `publish:cam1`, encryption off; MAKO Source 1 "Test Feed", address `134.209.119.136`, port `8890` — playing through `/mediamtx/cam1/whep`. Then stop and report before expanding to Sources 2–4. Publisher stop/restart recovery is verified before moving to `cam2`.
 
+5. **Test Connection must not leave a persistent playback session.** If the check uses a temporary WebRTC/WHEP connection, it establishes the connection, confirms whether playable media exists, then immediately closes the `RTCPeerConnection` and clears any timers/listeners. No idle WHEP viewer is left connected to MediaMTX, and the test must not affect the later Session Room playback connection.
