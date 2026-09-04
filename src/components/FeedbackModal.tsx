@@ -36,10 +36,10 @@ export default function FeedbackModal({ collapsed }: FeedbackModalProps) {
   const location = useLocation();
 
   const valid =
-    firstName.trim() !== "" &&
-    lastName.trim() !== "" &&
-    emailRegex.test(email.trim()) &&
-    message.trim() !== "";
+    firstName.trim() !== "" && firstName.trim().length <= 80 &&
+    lastName.trim() !== "" && lastName.trim().length <= 80 &&
+    emailRegex.test(email.trim()) && email.trim().length <= 254 &&
+    message.trim() !== "" && message.trim().length <= 4000;
 
   const reset = () => {
     setFirstName("");
