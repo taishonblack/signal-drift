@@ -146,22 +146,13 @@ const SignalTile = ({
             onFocusPopout={onFocusPopout}
             onBringBack={onBringBack}
           />
-        ) : input.id === "line-1" && isActive ? (
+        ) : input.streamName ? (
           <LiveCamera
-            streamName="cam1"
+            streamName={input.streamName}
             muted={!wantsAudio}
             onAudioBlocked={() => setAudioBlocked(true)}
             onAudioPlaying={() => setAudioBlocked(false)}
-          />
-        ) : input.videoSrc && input.status === "live" ? (
-          <video
-            ref={videoRef}
-            src={input.videoSrc}
-            autoPlay
-            loop
-            muted
-            playsInline
-            className="absolute inset-0 w-full h-full object-contain"
+            onStateChange={setLiveState}
           />
         ) : (
           <PaneStatus status={input.status} label={input.label} onRetry={onEdit} />
