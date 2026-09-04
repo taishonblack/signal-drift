@@ -34,21 +34,47 @@ export function publishIdForSlot(slot: number): string {
  * (e.g. https://stream.makosrt.com). We never fall back to a raw http:// IP,
  * which browsers block as mixed content on an HTTPS site.
  */
-export function whepBase(): string {
+export type WhepBaseResult =
+  | { ok: true; base: string; source: "env" | "dev-proxy" }
+  | { ok: false; reason: "missing-production-whep-base" };
+
+export const MISSING_WHEP_BASE_MESSAGE =
+  "Production MediaMTX WHEP endpoint is not configured.";
+
+/** Typed resolution of the WHEP base. Never silently uses the SPA origin. */
+export function resolveWhepBase(): WhepBaseResult {
   const configured = (import.meta.env.VITE_MEDIAMTX_WHEP_BASE as string | undefined)?.trim();
-  if (configured) return configured.replace(/\/+$/, "");
-  return "/mediamtx";
+  if (configured) return { ok: true, base: configured.replace(/\/+$/, ""), source: "env" };
+  if (import.meta.env.DEV) return { ok: true, base: "/mediamtx", source: "dev-proxy" };
+  return { ok: false, reason: "missing-production-whep-base" };
 }
 
-/** Full WHEP endpoint for a stream name. */
+/** Diagnostics-friendly string form of the resolved base. */
+export function whepBase(): string {
+  const resolved = resolveWhepBase();
+  return resolved.ok ? resolved.base : `(unset — ${resolved.reason})`;
+}
+
+/** Full WHEP endpoint for a stream name, or a typed configuration error. */
+export function whepEndpointForStream(
+  streamName: string,
+): { ok: true; url: string } | { ok: false; reason: "missing-production-whep-base" } {
+  const resolved = resolveWhepBase();
+  if (!resolved.ok) return resolved;
+  return { ok: true, url: `${resolved.base}/${streamName}/whep` };
+}
+
+/** Full WHEP endpoint for a stream name (diagnostics only — may be unusable). */
 export function whepUrlForStream(streamName: string): string {
-  return `${whepBase()}/${streamName}/whep`;
+  const endpoint = whepEndpointForStream(streamName);
+  return endpoint.ok ? endpoint.url : MISSING_WHEP_BASE_MESSAGE;
 }
 
 /** Full WHEP endpoint for a 1-based source slot. */
 export function whepUrlForSlot(slot: number): string {
   return whepUrlForStream(streamNameForSlot(slot));
 }
+
 
 export type ProbeResult = "available" | "no_publisher" | "failed";
 
