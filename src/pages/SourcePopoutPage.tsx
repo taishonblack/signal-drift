@@ -3,7 +3,8 @@ import { useParams } from "react-router-dom";
 import { Maximize2, Volume2, VolumeX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SignalTile from "@/components/SignalTile";
-import { mockSessions } from "@/lib/mock-data";
+import { getSessionById, parseSrtInput } from "@/lib/session-store";
+import { inputsFromRecord } from "@/lib/stream-paths";
 import { useLiveMetrics } from "@/hooks/use-live-metrics";
 import { loadTimePrefs } from "@/lib/time-utils";
 
@@ -14,18 +15,25 @@ import { loadTimePrefs } from "@/lib/time-utils";
  */
 const SourcePopoutPage = () => {
   const { sessionId, sourceId } = useParams();
-  const session = mockSessions.find((s) => s.id === sessionId) ?? mockSessions[0];
-  const input = session.inputs.find((i) => i.id === sourceId) ?? session.inputs[0];
+  const record = sessionId ? getSessionById(sessionId) : undefined;
+  const inputs = record ? inputsFromRecord(record, parseSrtInput) : [];
+  const session = {
+    id: record?.id ?? sessionId ?? "",
+    name: record?.name ?? "Session",
+    inputs,
+  };
+  const input = inputs.find((i) => i.id === sourceId) ?? inputs[0];
 
   const [muted, setMuted] = useState(false);
   const [showMeta, setShowMeta] = useState(true);
   const { getMetrics } = useLiveMetrics(session.inputs);
-  const metrics = getMetrics(input.id);
+  const metrics = input ? getMetrics(input.id) : undefined;
   const timePrefs = loadTimePrefs(session.id);
 
   useEffect(() => {
+    if (!input) return;
     document.title = `${input.label} · ${session.name} — MAKO Popout`;
-  }, [input.label, session.name]);
+  }, [input?.label, session.name]);
 
   const enterFullscreen = () => {
     document.documentElement.requestFullscreen?.().catch(() => {
@@ -42,6 +50,14 @@ const SourcePopoutPage = () => {
       }
     }
   };
+
+  if (!input) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background text-sm text-muted-foreground">
+        Source not found for this session.
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-background flex flex-col">
