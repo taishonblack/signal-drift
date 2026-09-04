@@ -34,9 +34,15 @@ export function publishIdForSlot(slot: number): string {
  * (e.g. https://stream.makosrt.com). We never fall back to a raw http:// IP,
  * which browsers block as mixed content on an HTTPS site.
  */
-export type WhepBaseResult =
-  | { ok: true; base: string; source: "env" | "dev-proxy" }
-  | { ok: false; reason: "missing-production-whep-base" };
+export interface WhepBaseResult {
+  ok: boolean;
+  /** Present when ok. */
+  base?: string;
+  /** Present when ok: where the base came from. */
+  source?: "env" | "dev-proxy";
+  /** Present when not ok. */
+  reason?: "missing-production-whep-base";
+}
 
 export const MISSING_WHEP_BASE_MESSAGE =
   "Production MediaMTX WHEP endpoint is not configured.";
@@ -52,23 +58,28 @@ export function resolveWhepBase(): WhepBaseResult {
 /** Diagnostics-friendly string form of the resolved base. */
 export function whepBase(): string {
   const resolved = resolveWhepBase();
-  return resolved.ok ? resolved.base : `(unset — ${resolved.reason})`;
+  return resolved.ok ? (resolved.base as string) : `(unset — ${resolved.reason})`;
+}
+
+export interface WhepEndpointResult {
+  ok: boolean;
+  url?: string;
+  reason?: "missing-production-whep-base";
 }
 
 /** Full WHEP endpoint for a stream name, or a typed configuration error. */
-export function whepEndpointForStream(
-  streamName: string,
-): { ok: true; url: string } | { ok: false; reason: "missing-production-whep-base" } {
+export function whepEndpointForStream(streamName: string): WhepEndpointResult {
   const resolved = resolveWhepBase();
-  if (!resolved.ok) return resolved;
+  if (!resolved.ok) return { ok: false, reason: resolved.reason };
   return { ok: true, url: `${resolved.base}/${streamName}/whep` };
 }
 
 /** Full WHEP endpoint for a stream name (diagnostics only — may be unusable). */
 export function whepUrlForStream(streamName: string): string {
   const endpoint = whepEndpointForStream(streamName);
-  return endpoint.ok ? endpoint.url : MISSING_WHEP_BASE_MESSAGE;
+  return endpoint.ok ? (endpoint.url as string) : MISSING_WHEP_BASE_MESSAGE;
 }
+
 
 /** Full WHEP endpoint for a 1-based source slot. */
 export function whepUrlForSlot(slot: number): string {
