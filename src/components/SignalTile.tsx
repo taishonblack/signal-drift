@@ -75,7 +75,17 @@ const SignalTile = ({
   timePrefs, tileOriginTZ = "UTC", focusedOriginTZ = "UTC", sessionStartedAt = "",
   showSafeArea = false,
 }: SignalTileProps) => {
-  const badge = statusBadge[input.status];
+  // Real WebRTC pane state, reported by LiveCamera for live sources.
+  const [liveState, setLiveState] = useState<LiveCameraState | null>(null);
+  const liveBadge: Record<LiveCameraState, { label: string; cls: string }> = {
+    connecting: { label: "CONNECTING", cls: "bg-muted text-muted-foreground" },
+    live: { label: "LIVE", cls: "bg-primary/20 text-primary" },
+    no_video: { label: "NO VIDEO", cls: "bg-warning/20 text-warning" },
+    reconnecting: { label: "RECONNECTING", cls: "bg-warning/20 text-warning" },
+    failed: { label: "FAILED", cls: "bg-destructive/20 text-destructive" },
+  };
+  const badge =
+    input.streamName && liveState ? liveBadge[liveState] : statusBadge[input.status];
   const bitrate = liveMetrics?.bitrate ?? input.metrics.bitrate;
   const loss = liveMetrics?.packetLoss ?? input.metrics.packetLoss;
   const peakL = liveMetrics?.audioPeakL ?? 0;
