@@ -143,8 +143,11 @@ export async function negotiateWhep(
   streamName: string,
   pc: RTCPeerConnection,
   label = "whep",
+  baseOverride?: string,
 ): Promise<WhepNegotiation> {
-  const endpoint = whepEndpointForStream(streamName);
+  const endpoint = baseOverride
+    ? { ok: true, url: `${baseOverride.replace(/\/+$/, "")}/${streamName}/whep` }
+    : whepEndpointForStream(streamName);
   const log = (d: Record<string, unknown>) => {
     if (import.meta.env.DEV) console.info(`[${label}]`, { streamName, ...d });
   };
@@ -159,6 +162,7 @@ export async function negotiateWhep(
   }
 
   const url = endpoint.url as string;
+
 
   try {
     pc.addTransceiver("video", { direction: "recvonly" });
