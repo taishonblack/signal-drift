@@ -61,5 +61,26 @@ Quinn, Timeline behaviour, Ops, Sharing, Join, Explore, Account, Popouts, worksp
 5. Refresh Session Room → same session, same real source configuration.
 6. No `mockSessions` reference remains in the create/monitor path.
 
-## Open item
-Production WHEP endpoint: development uses the `/mediamtx` proxy. For the published app I will read `VITE_MEDIAMTX_WHEP_BASE`; if you want a specific public URL baked in instead, tell me and I will use it.
+## Important implementation clarifications
+
+1. **WHEP playback is never derived from the SRT Address field.** The Create page address describes the contribution/ingest destination only. Browser playback always uses the MediaMTX WHEP base plus the slot mapping (Source 1 → `cam1` … Source 4 → `cam4`).
+
+```text
+Magewell / encoder
+      | SRT
+      v
+134.209.119.136:8890   Stream ID publish:cam1
+      | MediaMTX
+      v
+cam1
+      | WebRTC / WHEP
+      v
+MAKO browser  ->  <MEDIAMTX_WHEP_BASE>/cam1/whep
+```
+
+2. **Development vs production WHEP base.** Development: `VITE_MEDIAMTX_WHEP_BASE` may be omitted and playback goes through the existing `/mediamtx` Vite proxy. Production: read `VITE_MEDIAMTX_WHEP_BASE` — never default to a raw `http://` IP, which would break under HTTPS on makosrt.com. A future `https://stream.makosrt.com` endpoint will be set there. This milestone is not blocked on production TLS.
+
+3. **Test Connection scope.** For this milestone it only determines whether the slot's MediaMTX path currently has playable media: "Signal available." / "No active signal detected on Source N." / "Connection failed." Codec, resolution, and scan-type probing comes later and must not block getting a picture on screen.
+
+4. **Milestone stopping point.** Prove Source 1 only — encoder at `134.209.119.136:8890`, caller mode, stream ID `publish:cam1`, encryption off; MAKO Source 1 "Test Feed", address `134.209.119.136`, port `8890` — playing through `/mediamtx/cam1/whep`. Then stop and report before expanding to Sources 2–4. Publisher stop/restart recovery is verified before moving to `cam2`.
+
