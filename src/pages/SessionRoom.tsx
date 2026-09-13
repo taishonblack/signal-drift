@@ -223,7 +223,9 @@ const SessionRoom = () => {
     return "1";
   })();
   const [layout, setLayout] = useState<Layout>(initialLayout);
-  const [audioSource, setAudioSource] = useState(activeInputs[0]?.id);
+  // Single source of truth for monitoring audio: null = nothing audible,
+  // otherwise exactly one source id. Every pane starts muted.
+  const [audioSource, setAudioSource] = useState<string | null>(null);
   const [showInspector, setShowInspector] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState("");
@@ -238,7 +240,7 @@ const SessionRoom = () => {
   const [showSafeArea, setShowSafeArea] = useState(false);
   const [activeDragSlot, setActiveDragSlot] = useState<SlotId | null>(null);
   const [cycleFlash, setCycleFlash] = useState(false);
-  const [muteAll, setMuteAll] = useState(false);
+  // Derived, never stored: "Mute All" simply means no source is selected.
   // Phase 1C: double-click a tile to maximize (1-up). Stores the layout to
   // restore on the next double-click. null = not currently maximized.
   const [maximizedRestoreLayout, setMaximizedRestoreLayout] = useState<Layout | null>(null);
@@ -404,19 +406,25 @@ const SessionRoom = () => {
   }, [id, layout, focusedId, audioSource, muteAll, popouts]);
 
   /**
-   * Personal audio-follows-selection: clicking a pane sets both visual
-   * focus AND audio to that source, and clears mute-all. Focus and audio
-   * are kept as separate state so a future preference can decouple them
-   * (spec §9). Do not merge into one variable.
+   * Clicking a pane sets visual focus ONLY. Audio never follows selection —
+   * the operator must explicitly press "Listen to this source".
    */
   const selectSourceForViewer = useCallback(
     (inputId: string) => {
       setFocus(inputId);
-      setAudioSource(inputId);
-      setMuteAll(false);
     },
     [setFocus],
   );
+
+  /**
+   * Exclusive audio monitoring: pressing the control on the active source
+   * silences everything; otherwise that source becomes the only audible one.
+   */
+  const toggleAudioSource = useCallback((inputId: string) => {
+    setAudioSource((current) => (current === inputId ? null : inputId));
+  }, []);
+
+  const muteAllSources = useCallback(() => setAudioSource(null), []);
 
   const toggleMaximize = useCallback(
     (inputId: string) => {
