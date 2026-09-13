@@ -624,7 +624,7 @@ const SessionRoom = () => {
         onFocusClick={() => selectSourceForViewer(input.id)}
         isAudioSource={audioSource === input.id}
         muteAll={muteAll}
-        onSelectAudio={() => selectSourceForViewer(input.id)}
+        onSelectAudio={() => toggleAudioSource(input.id)}
         onDoubleClick={() => toggleMaximize(input.id)}
         onFullscreen={() => setFullscreenId(input.id)}
         onEdit={() => openEdit(input)}
@@ -786,7 +786,7 @@ const SessionRoom = () => {
           isAudioSource={audioSource === fullscreenInput.id}
           onClose={() => setFullscreenId(null)}
           onFocusClick={() => selectSourceForViewer(fullscreenInput.id)}
-          onSelectAudio={() => selectSourceForViewer(fullscreenInput.id)}
+          onSelectAudio={() => toggleAudioSource(fullscreenInput.id)}
 
           onEdit={() => openEdit(fullscreenInput)}
         />
@@ -1050,7 +1050,7 @@ const SessionRoom = () => {
                       onFocusClick={() => selectSourceForViewer(input.id)}
                       isAudioSource={audioSource === input.id}
                       muteAll={muteAll}
-                      onSelectAudio={() => selectSourceForViewer(input.id)}
+                      onSelectAudio={() => toggleAudioSource(input.id)}
 
                       onFullscreen={() => setFullscreenId(input.id)}
                       onEdit={() => openEdit(input)}
