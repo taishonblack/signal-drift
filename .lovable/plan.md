@@ -27,7 +27,7 @@ Goal: play all sources through the new Opus-enabled playback paths, start everyt
 - New `toggleAudioSource(inputId)`: if already active → set `null`; otherwise set to that id. This is the only writer of audio state.
 - `selectSourceForViewer` (single click) sets focus only; it no longer sets audio or clears mute-all.
 - Remove the auto-assign of audio when the focused source is replaced (source list shrink handler keeps focus logic, drops `setAudioSource`).
-- `Mute All` remains a global override; when it is on, no pane is audible; turning it off restores the selected source only.
+- Mute All is folded into the single state — no hidden remembered selection. Pressing Mute All sets `activeAudioSourceId = null` (replacing the separate `muteAll` flag). All sources mute and stay muted until the operator explicitly presses "Listen to this source" on a pane. The toolbar button renders from state: active when `activeAudioSourceId === null`, labelled "Muted" / "Mute All"; pressing it while already null is a no-op. The **M** shortcut follows the same rule.
 - Pass `isAudioActive={activeAudioSourceId === input.id}` and `onAudioSelect={() => toggleAudioSource(input.id)}` to every tile, including the fullscreen overlay and drag ghost (ghost stays muted).
 
 ### 3. Tile control (`src/components/SignalTile.tsx`)
