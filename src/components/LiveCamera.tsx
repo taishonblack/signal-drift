@@ -96,6 +96,9 @@ const LiveCamera = ({
         if (!el) return;
         const stream = event.streams?.[0] ?? new MediaStream([event.track]);
         el.srcObject = stream;
+        // A (re)connecting source must never unmute itself: re-apply the
+        // requested mute state against the freshly attached stream.
+        el.muted = mutedRef.current;
         if (import.meta.env.DEV) {
           console.info("[LiveCamera]", streamName, {
             step: "ontrack",

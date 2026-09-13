@@ -236,11 +236,12 @@ const SignalTile = ({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={onSelectAudio}
+                onClick={(e) => { e.stopPropagation(); onSelectAudio?.(); }}
+                aria-pressed={!!isAudioSource}
                 className={`h-7 w-7 bg-background/60 hover:bg-background/80 ${isAudioSource ? "text-primary" : "text-foreground"}`}
-                title="Select audio source"
+                title={isAudioSource ? "Audio active — click to mute" : "Listen to this source"}
               >
-                <Volume2 className="h-3.5 w-3.5" />
+                {isAudioSource ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
               </Button>
               {onPopOut && !isFullscreen && (
                 <Button
