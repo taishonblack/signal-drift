@@ -108,7 +108,7 @@ const LayoutPopoutPage = () => {
         onFocusClick={() => selectPane(input.id)}
         isAudioSource={audioId === input.id}
         muteAll={muteAll}
-        onSelectAudio={() => selectPane(input.id)}
+        onSelectAudio={() => toggleAudio(input.id)}
         timePrefs={timePrefs}
         tileOriginTZ="America/Los_Angeles"
         focusedOriginTZ="America/Los_Angeles"
@@ -140,8 +140,9 @@ const LayoutPopoutPage = () => {
             variant="ghost"
             size="sm"
             className="h-7 gap-1.5 text-xs text-muted-foreground"
-            onClick={() => setMuteAll((m) => !m)}
-            aria-label={muteAll ? "Unmute All" : "Mute All"}
+            onClick={() => setAudioId(null)}
+            disabled={muteAll}
+            aria-label="Mute All"
           >
             {muteAll ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
             {muteAll ? "Muted" : "Audio"}
@@ -191,7 +192,7 @@ const LayoutPopoutPage = () => {
               isFocused
               isAudioSource={audioId === focusedInput.id}
               muteAll={muteAll}
-              onSelectAudio={() => selectPane(focusedInput.id)}
+              onSelectAudio={() => toggleAudio(focusedInput.id)}
               timePrefs={timePrefs}
               tileOriginTZ="America/Los_Angeles"
               focusedOriginTZ="America/Los_Angeles"
