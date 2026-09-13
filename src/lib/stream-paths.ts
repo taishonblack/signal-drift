@@ -89,11 +89,19 @@ export interface WhepEndpointResult {
   reason?: "missing-production-whep-base";
 }
 
-/** Full WHEP endpoint for a stream name, or a typed configuration error. */
-export function whepEndpointForStream(streamName: string): WhepEndpointResult {
+/**
+ * Full WHEP endpoint for a stream name, or a typed configuration error.
+ * Browser playback always targets the Opus variant of the path; pass
+ * `usePlaybackPath = false` to address the raw ingest path (probes).
+ */
+export function whepEndpointForStream(
+  streamName: string,
+  usePlaybackPath = true,
+): WhepEndpointResult {
   const resolved = resolveWhepBase();
   if (!resolved.ok) return { ok: false, reason: resolved.reason };
-  return { ok: true, url: `${resolved.base}/${streamName}/whep` };
+  const path = usePlaybackPath ? playbackStreamName(streamName) : streamName;
+  return { ok: true, url: `${resolved.base}/${path}/whep` };
 }
 
 /** Full WHEP endpoint for a stream name (diagnostics only — may be unusable). */
