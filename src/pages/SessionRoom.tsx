@@ -475,12 +475,11 @@ const SessionRoom = () => {
       });
     }
     if (n > 0 && !activeInputs.some((i) => i.id === focusedId)) {
-      const first = activeInputs[0].id;
-      setFocus(first);
-      setAudioSource(first);
+      // Focus moves; audio selection is never assigned automatically.
+      setFocus(activeInputs[0].id);
     }
     if (n === 0) {
-      setMuteAll(true);
+      setAudioSource(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeInputs.length]);
@@ -542,7 +541,8 @@ const SessionRoom = () => {
       if ((e.key === "m" || e.key === "M") && !e.altKey && !e.ctrlKey && !e.metaKey) {
         if (isTyping(e.target)) return;
         e.preventDefault();
-        setMuteAll((m) => !m);
+        // M always mutes everything; it never restores a past selection.
+        setAudioSource(null);
       }
     };
     window.addEventListener("keydown", handler);
@@ -867,7 +867,8 @@ const SessionRoom = () => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setMuteAll((m) => !m)}
+            onClick={muteAllSources}
+            disabled={muteAll}
             className={`h-7 gap-1.5 text-xs ${muteAll ? "text-primary bg-muted/30" : "text-muted-foreground"}`}
             title="Mute all sources (M)"
             aria-pressed={muteAll}
