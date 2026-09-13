@@ -26,6 +26,23 @@ export function publishIdForSlot(slot: number): string {
 }
 
 /**
+ * Browser playback path for an ingest stream name.
+ *
+ * The server runs an FFmpeg service per source that copies H.264 video and
+ * re-encodes AAC audio to Opus into `<camN>-opus`, which is the only variant
+ * a browser can decode audio from. Ingest identity (`camN`, `publish:camN`)
+ * is untouched — this suffix is a playback implementation detail.
+ */
+export function playbackStreamName(streamName: string): string {
+  return streamName.endsWith("-opus") ? streamName : `${streamName}-opus`;
+}
+
+/** Browser playback path for a 1-based source slot (`camN-opus`). */
+export function playbackStreamNameForSlot(slot: number): string {
+  return playbackStreamName(streamNameForSlot(slot));
+}
+
+/**
  * WHEP base URL.
  *
  * Development: omit VITE_MEDIAMTX_WHEP_BASE and requests go through the
@@ -72,11 +89,19 @@ export interface WhepEndpointResult {
   reason?: "missing-production-whep-base";
 }
 
-/** Full WHEP endpoint for a stream name, or a typed configuration error. */
-export function whepEndpointForStream(streamName: string): WhepEndpointResult {
+/**
+ * Full WHEP endpoint for a stream name, or a typed configuration error.
+ * Browser playback always targets the Opus variant of the path; pass
+ * `usePlaybackPath = false` to address the raw ingest path (probes).
+ */
+export function whepEndpointForStream(
+  streamName: string,
+  usePlaybackPath = true,
+): WhepEndpointResult {
   const resolved = resolveWhepBase();
   if (!resolved.ok) return { ok: false, reason: resolved.reason };
-  return { ok: true, url: `${resolved.base}/${streamName}/whep` };
+  const path = usePlaybackPath ? playbackStreamName(streamName) : streamName;
+  return { ok: true, url: `${resolved.base}/${path}/whep` };
 }
 
 /** Full WHEP endpoint for a stream name (diagnostics only — may be unusable). */
@@ -149,10 +174,12 @@ export async function negotiateWhep(
   pc: RTCPeerConnection,
   label = "whep",
   baseOverride?: string,
+  usePlaybackPath = true,
 ): Promise<WhepNegotiation> {
+  const path = usePlaybackPath ? playbackStreamName(streamName) : streamName;
   const endpoint = baseOverride
-    ? { ok: true, url: `${baseOverride.replace(/\/+$/, "")}/${streamName}/whep` }
-    : whepEndpointForStream(streamName);
+    ? { ok: true, url: `${baseOverride.replace(/\/+$/, "")}/${path}/whep` }
+    : whepEndpointForStream(streamName, usePlaybackPath);
   const log = (d: Record<string, unknown>) => {
     if (import.meta.env.DEV) console.info(`[${label}]`, { streamName, ...d });
   };
@@ -293,7 +320,8 @@ export async function probeStream(streamName: string): Promise<ProbeDiagnostics>
   let resourceUrl: string | null = null;
 
   try {
-    const n = await negotiateWhep(streamName, pc, "probeStream");
+    // Contribution verification: probe the RAW ingest path, not -opus.
+    const n = await negotiateWhep(streamName, pc, "probeStream", undefined, false);
     resourceUrl = n.resourceUrl ?? null;
 
     let result: ProbeResult = "failed";

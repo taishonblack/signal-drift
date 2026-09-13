@@ -17,7 +17,7 @@ import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
 import ShareSessionDialog from "@/components/session/ShareSessionDialog";
 import SessionEndIndicator from "@/components/session/SessionEndIndicator";
 import { mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
-import { inputsFromRecord, whepBase, whepUrlForStream } from "@/lib/stream-paths";
+import { inputsFromRecord, playbackStreamName, whepBase, whepUrlForStream } from "@/lib/stream-paths";
 import {
   getSessionById,
   updateSession,
@@ -223,7 +223,9 @@ const SessionRoom = () => {
     return "1";
   })();
   const [layout, setLayout] = useState<Layout>(initialLayout);
-  const [audioSource, setAudioSource] = useState(activeInputs[0]?.id);
+  // Single source of truth for monitoring audio: null = nothing audible,
+  // otherwise exactly one source id. Every pane starts muted.
+  const [audioSource, setAudioSource] = useState<string | null>(null);
   const [showInspector, setShowInspector] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState("");
@@ -238,7 +240,8 @@ const SessionRoom = () => {
   const [showSafeArea, setShowSafeArea] = useState(false);
   const [activeDragSlot, setActiveDragSlot] = useState<SlotId | null>(null);
   const [cycleFlash, setCycleFlash] = useState(false);
-  const [muteAll, setMuteAll] = useState(false);
+  // Derived, never stored: "Mute All" simply means no source is selected.
+  const muteAll = audioSource === null;
   // Phase 1C: double-click a tile to maximize (1-up). Stores the layout to
   // restore on the next double-click. null = not currently maximized.
   const [maximizedRestoreLayout, setMaximizedRestoreLayout] = useState<Layout | null>(null);
@@ -404,19 +407,25 @@ const SessionRoom = () => {
   }, [id, layout, focusedId, audioSource, muteAll, popouts]);
 
   /**
-   * Personal audio-follows-selection: clicking a pane sets both visual
-   * focus AND audio to that source, and clears mute-all. Focus and audio
-   * are kept as separate state so a future preference can decouple them
-   * (spec §9). Do not merge into one variable.
+   * Clicking a pane sets visual focus ONLY. Audio never follows selection —
+   * the operator must explicitly press "Listen to this source".
    */
   const selectSourceForViewer = useCallback(
     (inputId: string) => {
       setFocus(inputId);
-      setAudioSource(inputId);
-      setMuteAll(false);
     },
     [setFocus],
   );
+
+  /**
+   * Exclusive audio monitoring: pressing the control on the active source
+   * silences everything; otherwise that source becomes the only audible one.
+   */
+  const toggleAudioSource = useCallback((inputId: string) => {
+    setAudioSource((current) => (current === inputId ? null : inputId));
+  }, []);
+
+  const muteAllSources = useCallback(() => setAudioSource(null), []);
 
   const toggleMaximize = useCallback(
     (inputId: string) => {
@@ -466,12 +475,11 @@ const SessionRoom = () => {
       });
     }
     if (n > 0 && !activeInputs.some((i) => i.id === focusedId)) {
-      const first = activeInputs[0].id;
-      setFocus(first);
-      setAudioSource(first);
+      // Focus moves; audio selection is never assigned automatically.
+      setFocus(activeInputs[0].id);
     }
     if (n === 0) {
-      setMuteAll(true);
+      setAudioSource(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeInputs.length]);
@@ -533,7 +541,8 @@ const SessionRoom = () => {
       if ((e.key === "m" || e.key === "M") && !e.altKey && !e.ctrlKey && !e.metaKey) {
         if (isTyping(e.target)) return;
         e.preventDefault();
-        setMuteAll((m) => !m);
+        // M always mutes everything; it never restores a past selection.
+        setAudioSource(null);
       }
     };
     window.addEventListener("keydown", handler);
@@ -615,7 +624,7 @@ const SessionRoom = () => {
         onFocusClick={() => selectSourceForViewer(input.id)}
         isAudioSource={audioSource === input.id}
         muteAll={muteAll}
-        onSelectAudio={() => selectSourceForViewer(input.id)}
+        onSelectAudio={() => toggleAudioSource(input.id)}
         onDoubleClick={() => toggleMaximize(input.id)}
         onFullscreen={() => setFullscreenId(input.id)}
         onEdit={() => openEdit(input)}
@@ -739,7 +748,8 @@ const SessionRoom = () => {
           <div>session {session.id} · {activeInputs.length} source(s) · whep base {whepBase()}</div>
           {activeInputs.map((i) => (
             <div key={i.id}>
-              slot {i.slot} · {i.label} · {i.streamName} · {whepUrlForStream(i.streamName!)}
+              slot {i.slot} · {i.label} · ingest {i.streamName} · playback{" "}
+              {playbackStreamName(i.streamName!)} · {whepUrlForStream(i.streamName!)}
             </div>
           ))}
         </div>
@@ -777,7 +787,7 @@ const SessionRoom = () => {
           isAudioSource={audioSource === fullscreenInput.id}
           onClose={() => setFullscreenId(null)}
           onFocusClick={() => selectSourceForViewer(fullscreenInput.id)}
-          onSelectAudio={() => selectSourceForViewer(fullscreenInput.id)}
+          onSelectAudio={() => toggleAudioSource(fullscreenInput.id)}
 
           onEdit={() => openEdit(fullscreenInput)}
         />
@@ -858,7 +868,8 @@ const SessionRoom = () => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setMuteAll((m) => !m)}
+            onClick={muteAllSources}
+            disabled={muteAll}
             className={`h-7 gap-1.5 text-xs ${muteAll ? "text-primary bg-muted/30" : "text-muted-foreground"}`}
             title="Mute all sources (M)"
             aria-pressed={muteAll}
@@ -1040,7 +1051,7 @@ const SessionRoom = () => {
                       onFocusClick={() => selectSourceForViewer(input.id)}
                       isAudioSource={audioSource === input.id}
                       muteAll={muteAll}
-                      onSelectAudio={() => selectSourceForViewer(input.id)}
+                      onSelectAudio={() => toggleAudioSource(input.id)}
 
                       onFullscreen={() => setFullscreenId(input.id)}
                       onEdit={() => openEdit(input)}
