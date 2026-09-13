@@ -241,6 +241,7 @@ const SessionRoom = () => {
   const [activeDragSlot, setActiveDragSlot] = useState<SlotId | null>(null);
   const [cycleFlash, setCycleFlash] = useState(false);
   // Derived, never stored: "Mute All" simply means no source is selected.
+  const muteAll = audioSource === null;
   // Phase 1C: double-click a tile to maximize (1-up). Stores the layout to
   // restore on the next double-click. null = not currently maximized.
   const [maximizedRestoreLayout, setMaximizedRestoreLayout] = useState<Layout | null>(null);
