@@ -24,7 +24,8 @@ const SourcePopoutPage = () => {
   };
   const input = inputs.find((i) => i.id === sourceId) ?? inputs[0];
 
-  const [muted, setMuted] = useState(false);
+  // Popouts open silent (browser autoplay + one-audible-source rule).
+  const [muted, setMuted] = useState(true);
   const [showMeta, setShowMeta] = useState(true);
   const { getMetrics } = useLiveMetrics(session.inputs);
   const metrics = input ? getMetrics(input.id) : undefined;
