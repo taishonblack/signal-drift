@@ -1,61 +1,47 @@
-# Verify and harden production WHEP resolution
+# Browser Audio Monitoring — One Active Source at a Time
 
-## Verified root cause
+Goal: play all sources through the new Opus-enabled playback paths, start everything muted, and let the operator listen to exactly one source at a time without ever interrupting video.
 
-The current published asset at `https://makosrt.com/assets/index-WWgn8Ely.js` contains the hardcoded `https://stream.makosrt.com` base and constructs `${base}/${streamName}/whep`. Its production build has removed both the `/mediamtx` development branch and the unset environment-variable branch.
+## What changes for the operator
 
-The checked-in call chain is:
+- Video keeps working exactly as today, but is now pulled from the browser-friendly stream that carries Opus audio.
+- Every pane starts silent. Nothing becomes audible on its own — not on connect, not on reconnect.
+- Each pane's speaker button means "listen to this source". Pressing it silences whatever was audible and makes that source audible instantly.
+- Pressing the speaker button on the source you are already listening to turns audio off completely.
+- The pane being monitored shows a clear speaker indicator; all others show the muted speaker.
+- Clicking a pane still selects it visually (focus) but no longer starts audio by itself.
+- If the monitored source drops out, no other source takes over its audio. When it comes back it resumes as the monitored source.
+- Contribution details shown to operators (SRT address, stream ID `publish:camN`, source names) stay exactly as they are.
 
-```text
-SignalTile
-  -> LiveCamera (no baseUrl override)
-  -> negotiateWhep(streamName, pc, label)
-  -> whepEndpointForStream(streamName)
-  -> resolveWhepBase()
-  -> fetch(final WHEP URL)
-```
+## Technical detail
 
-Therefore, the observed POST to `https://makosrt.com/mediamtx/cam1/whep` did not come from the currently served production asset. It came from an older JavaScript bundle already loaded in that browser tab (or retained browser cache state during deployment propagation). It was not caused by the current production build setting `import.meta.env.DEV=true`; the deployed bundle proves the dev branch was statically removed.
+### 1. Playback path separation (`src/lib/stream-paths.ts`)
+- Keep `streamNameForSlot(slot)` → `camN` as the ingest/contribution identity used by all UI, Test Connection, and copy fields.
+- Add `playbackStreamName(streamName)` → appends `-opus` when not already suffixed, plus `playbackStreamNameForSlot(slot)` → `camN-opus`.
+- Apply the mapping inside `whepEndpointForStream()`/`negotiateWhep()` at the single point where the WHEP URL is built, so playback resolves to `https://stream.makosrt.com/camN-opus/whep` while `StreamInput.streamName` stays `camN`.
+- `probeStream()` (Test Connection) keeps probing the raw ingest path — contribution verification is unchanged.
+- Diagnostics line in Session Room will show both ingest path and resolved playback URL.
 
-## Changes
+### 2. Centralized exclusive audio state (`src/pages/SessionRoom.tsx`)
+- Change `audioSource` initial value from `activeInputs[0]?.id` to `null` (`activeAudioSourceId`).
+- New `toggleAudioSource(inputId)`: if already active → set `null`; otherwise set to that id. This is the only writer of audio state.
+- `selectSourceForViewer` (single click) sets focus only; it no longer sets audio or clears mute-all.
+- Remove the auto-assign of audio when the focused source is replaced (source list shrink handler keeps focus logic, drops `setAudioSource`).
+- `Mute All` remains a global override; when it is on, no pane is audible; turning it off restores the selected source only.
+- Pass `isAudioActive={activeAudioSourceId === input.id}` and `onAudioSelect={() => toggleAudioSource(input.id)}` to every tile, including the fullscreen overlay and drag ghost (ghost stays muted).
 
-1. **Preserve the existing resolution order**
-   - Keep `VITE_MEDIAMTX_WHEP_BASE` as an optional build-time override.
-   - Keep `/mediamtx` only when `DEV=true` and `PROD=false`.
-   - Keep `https://stream.makosrt.com` as the built-in production base.
+### 3. Tile control (`src/components/SignalTile.tsx`)
+- Speaker button reflects state: `Volume2` + primary tint when active, `VolumeX` muted when not; `aria-pressed`, title "Listen to this source" / "Stop listening".
+- Existing "Audio" badge stays as the subtle active indicator; no card redesign.
+- Keep the existing autoplay-blocked click-to-enable overlay and only surface it when the browser actually refuses.
 
-2. **Carry resolution metadata to the POST call**
-   - Extend the resolved endpoint result so `negotiateWhep()` receives the resolved base and source (`env`, `built-in`, or `dev-proxy`) together with the final URL.
-   - Preserve explicit `baseUrl` override behavior without changing WebRTC negotiation.
+### 4. Player (`src/components/LiveCamera.tsx`)
+- `<video>` keeps `muted` on mount; the mute effect already reacts to the `muted` prop against the existing element, so switching audio never touches the peer connection, WHEP resource, or `srcObject`.
+- Ensure the mute effect also re-applies after `ontrack` (new `srcObject`) so a reconnecting source honours the current selection rather than defaulting to audible.
+- `play()` rejection stays handled via `onAudioBlocked` — no error toast.
 
-3. **Add the requested runtime diagnostic immediately before `fetch()`**
-   - Emit one credential-free `console.info` entry in production and development containing:
-     - resolved base
-     - base source
-     - final WHEP URL
-     - `import.meta.env.DEV`
-     - `import.meta.env.PROD`
-   - Expected production values:
+### 5. Popouts
+- `LayoutPopoutPage` / `SourcePopoutPage`: audio still driven by the passed-in selection; popouts start muted and keep the single-active-source rule within their own window.
 
-```text
-base=https://stream.makosrt.com
-source=built-in
-url=https://stream.makosrt.com/cam1/whep
-DEV=false
-PROD=true
-```
-
-4. **Add a production invariant**
-   - Prevent a production build from ever using a relative `/mediamtx` base, including an accidental environment override.
-   - Resolve to the built-in HTTPS base instead and report the actual selected source in the diagnostic.
-   - Do not alter local Vite development or its proxy.
-
-5. **Verify without publishing**
-   - Test production-mode resolution for Source 1 and confirm the exact URL is `https://stream.makosrt.com/cam1/whep`.
-   - Test development-mode resolution remains `/mediamtx/cam1/whep`.
-   - Confirm the production bundle excludes the `/mediamtx` URL branch and contains the diagnostic fields.
-   - Do not publish.
-
-## Scope
-
-Only WHEP base resolution, endpoint metadata, diagnostics, and focused tests will change. MediaMTX paths, source mapping, SRT, SDP/WebRTC/ICE behavior, backend, authentication, and infrastructure remain untouched.
+### Not touched
+SRT ingest, port 8890, stream IDs, source creation/config UI, MediaMTX/FFmpeg/Caddy/Cloudflare, backend schema, auth, sharing, focus mode, Quinn, Timeline, Ops, layouts, ordering, naming.
