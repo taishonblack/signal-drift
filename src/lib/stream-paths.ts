@@ -26,6 +26,23 @@ export function publishIdForSlot(slot: number): string {
 }
 
 /**
+ * Browser playback path for an ingest stream name.
+ *
+ * The server runs an FFmpeg service per source that copies H.264 video and
+ * re-encodes AAC audio to Opus into `<camN>-opus`, which is the only variant
+ * a browser can decode audio from. Ingest identity (`camN`, `publish:camN`)
+ * is untouched — this suffix is a playback implementation detail.
+ */
+export function playbackStreamName(streamName: string): string {
+  return streamName.endsWith("-opus") ? streamName : `${streamName}-opus`;
+}
+
+/** Browser playback path for a 1-based source slot (`camN-opus`). */
+export function playbackStreamNameForSlot(slot: number): string {
+  return playbackStreamName(streamNameForSlot(slot));
+}
+
+/**
  * WHEP base URL.
  *
  * Development: omit VITE_MEDIAMTX_WHEP_BASE and requests go through the
