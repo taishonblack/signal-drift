@@ -40,6 +40,10 @@ const LiveCamera = ({
   const attemptRef = useRef(0);
   const timerRef = useRef<number | null>(null);
   const [state, setState] = useState<LiveCameraState>("connecting");
+  // Latest requested mute state, readable from callbacks without re-running
+  // the connection effect (which would tear down the peer connection).
+  const mutedRef = useRef(muted);
+  mutedRef.current = muted;
 
   const endpoint = whepEndpointForStream(streamName);
   const url = baseUrl
