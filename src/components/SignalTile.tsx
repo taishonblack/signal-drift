@@ -221,10 +221,33 @@ const SignalTile = ({
         {/* Audio meters */}
         {isActive && <AudioMeter peakL={peakL} peakR={peakR} />}
 
+        {/* Per-source audio monitor — persistent in every real source view. */}
+        {isActive && !isPoppedOut && onSelectAudio && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectAudio();
+            }}
+            aria-pressed={!!isAudioSource}
+            aria-label={isAudioSource ? "Stop listening" : "Listen to this source"}
+            className={cn(
+              "absolute bottom-2 left-2 z-20 h-7 w-7 border bg-background/70 hover:bg-background/90",
+              isAudioSource
+                ? "border-primary/50 bg-primary/20 text-primary hover:bg-primary/30"
+                : "border-border/30 text-foreground",
+            )}
+            title={isAudioSource ? "Stop listening" : "Listen to this source"}
+          >
+            {isAudioSource ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+          </Button>
+        )}
+
         {/* Overlay controls */}
         {isActive && !isPoppedOut && (
           <div className="absolute inset-0 flex items-end justify-between p-2 opacity-0 hover:opacity-100 transition-opacity pointer-events-none [&>*]:pointer-events-auto hover:pointer-events-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex gap-1">
+            <div className={cn("flex gap-1", onSelectAudio && "ml-8")}>
               {!isFullscreen && (
                 <Button variant="ghost" size="icon" onClick={onFullscreen} className="h-7 w-7 bg-background/60 hover:bg-background/80 text-foreground" title="Maximize pane">
                   <Maximize2 className="h-3.5 w-3.5" />
@@ -232,16 +255,6 @@ const SignalTile = ({
               )}
               <Button variant="ghost" size="icon" onClick={onEdit} className="h-7 w-7 bg-background/60 hover:bg-background/80 text-foreground" title="Edit source">
                 <Edit3 className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={(e) => { e.stopPropagation(); onSelectAudio?.(); }}
-                aria-pressed={!!isAudioSource}
-                className={`h-7 w-7 bg-background/60 hover:bg-background/80 ${isAudioSource ? "text-primary" : "text-foreground"}`}
-                title={isAudioSource ? "Audio active — click to mute" : "Listen to this source"}
-              >
-                {isAudioSource ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
               </Button>
               {onPopOut && !isFullscreen && (
                 <Button
