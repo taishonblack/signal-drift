@@ -49,12 +49,11 @@ const LayoutPopoutPage = () => {
   // then toggle mute/focus locally inside the popout).
   const initialLayout = (search.get("layout") ?? "1") as "1" | "2" | "3" | "4";
   const initialFocus = search.get("focus") ?? activeInputs[0]?.id ?? "";
-  const initialAudio = search.get("audio") ?? initialFocus;
-  const initialMute = search.get("mute") === "1";
-
   const [focusedId, setFocusedId] = useState(initialFocus);
-  const [audioId, setAudioId] = useState(initialAudio);
-  const [muteAll, setMuteAll] = useState(initialMute);
+  // Popouts always open silent — opening a window must never create a second
+  // audible source. One active audio source at a time inside this window.
+  const [audioId, setAudioId] = useState<string | null>(null);
+  const muteAll = audioId === null;
 
   // Slot map preserved from the main window's per-session storage.
   const slotMap: SlotMap = useMemo(
@@ -71,8 +70,10 @@ const LayoutPopoutPage = () => {
 
   const selectPane = (inputId: string) => {
     setFocusedId(inputId);
-    setAudioId(inputId);
-    setMuteAll(false);
+  };
+
+  const toggleAudio = (inputId: string) => {
+    setAudioId((current) => (current === inputId ? null : inputId));
   };
 
   const enterFullscreen = () => {
