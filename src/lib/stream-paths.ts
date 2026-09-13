@@ -174,10 +174,12 @@ export async function negotiateWhep(
   pc: RTCPeerConnection,
   label = "whep",
   baseOverride?: string,
+  usePlaybackPath = true,
 ): Promise<WhepNegotiation> {
+  const path = usePlaybackPath ? playbackStreamName(streamName) : streamName;
   const endpoint = baseOverride
-    ? { ok: true, url: `${baseOverride.replace(/\/+$/, "")}/${streamName}/whep` }
-    : whepEndpointForStream(streamName);
+    ? { ok: true, url: `${baseOverride.replace(/\/+$/, "")}/${path}/whep` }
+    : whepEndpointForStream(streamName, usePlaybackPath);
   const log = (d: Record<string, unknown>) => {
     if (import.meta.env.DEV) console.info(`[${label}]`, { streamName, ...d });
   };
@@ -318,7 +320,8 @@ export async function probeStream(streamName: string): Promise<ProbeDiagnostics>
   let resourceUrl: string | null = null;
 
   try {
-    const n = await negotiateWhep(streamName, pc, "probeStream");
+    // Contribution verification: probe the RAW ingest path, not -opus.
+    const n = await negotiateWhep(streamName, pc, "probeStream", undefined, false);
     resourceUrl = n.resourceUrl ?? null;
 
     let result: ProbeResult = "failed";
