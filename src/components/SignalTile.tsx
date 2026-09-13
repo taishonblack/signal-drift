@@ -233,7 +233,7 @@ const SignalTile = ({
             aria-pressed={!!isAudioSource}
             aria-label={isAudioSource ? "Stop listening" : "Listen to this source"}
             className={cn(
-              "absolute bottom-2 left-2 z-20 h-7 w-7 border bg-background/70 hover:bg-background/90",
+              "absolute top-2 right-2 z-20 h-7 w-7 border bg-background/70 hover:bg-background/90",
               isAudioSource
                 ? "border-primary/50 bg-primary/20 text-primary hover:bg-primary/30"
                 : "border-border/30 text-foreground",
