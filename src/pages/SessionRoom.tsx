@@ -17,7 +17,7 @@ import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
 import ShareSessionDialog from "@/components/session/ShareSessionDialog";
 import SessionEndIndicator from "@/components/session/SessionEndIndicator";
 import { mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
-import { inputsFromRecord, whepBase, whepUrlForStream } from "@/lib/stream-paths";
+import { inputsFromRecord, playbackStreamName, whepBase, whepUrlForStream } from "@/lib/stream-paths";
 import {
   getSessionById,
   updateSession,
