@@ -1,7 +1,15 @@
 import { useState } from "react";
-import { Loader2, Plus, RefreshCw, Server, Wrench } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Server, Trash2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +23,14 @@ interface IngestSource {
 
 type LoadState = "idle" | "loading" | "success" | "auth_error" | "generic_error";
 type CreateState = "idle" | "creating" | "success" | "auth_error" | "forbidden" | "generic_error";
+type DeleteState =
+  | "idle"
+  | "deleting"
+  | "success"
+  | "auth_error"
+  | "forbidden"
+  | "not_found"
+  | "generic_error";
 
 function statusOf(error: unknown): number | undefined {
   if (typeof error === "object" && error !== null) {
@@ -30,6 +46,9 @@ export function MakoIngestTestPanel() {
   const [sourceName, setSourceName] = useState("");
   const [createState, setCreateState] = useState<CreateState>("idle");
   const [created, setCreated] = useState<IngestSource | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<IngestSource | null>(null);
+  const [deleteState, setDeleteState] = useState<DeleteState>("idle");
+  const [deleted, setDeleted] = useState<IngestSource | null>(null);
 
   const loadSources = async () => {
     setState("loading");
@@ -84,6 +103,40 @@ export function MakoIngestTestPanel() {
       await loadSources();
     } catch {
       setCreateState("generic_error");
+    }
+  };
+
+  const confirmDelete = async () => {
+    const target = pendingDelete;
+    if (!target?.source_id) return;
+
+    setDeleteState("deleting");
+
+    try {
+      const { error } = await supabase.functions.invoke("mako-ingest", {
+        body: { action: "delete_source", source_id: target.source_id },
+      });
+
+      if (error) {
+        const status = statusOf(error);
+        setDeleteState(
+          status === 401
+            ? "auth_error"
+            : status === 403
+              ? "forbidden"
+              : status === 404
+                ? "not_found"
+                : "generic_error"
+        );
+        return;
+      }
+
+      setDeleted(target);
+      setDeleteState("success");
+      setPendingDelete(null);
+      await loadSources();
+    } catch {
+      setDeleteState("generic_error");
     }
   };
 
@@ -147,6 +200,7 @@ export function MakoIngestTestPanel() {
                 <th className="px-3 py-2 font-medium">Port</th>
                 <th className="px-3 py-2 font-medium">Output Path</th>
                 <th className="px-3 py-2 font-medium">State</th>
+                <th className="px-3 py-2 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/10">
@@ -175,6 +229,22 @@ export function MakoIngestTestPanel() {
                       <Server className="h-3 w-3 text-primary" />
                       <span className="text-foreground">{source.state ?? "—"}</span>
                     </span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 px-2 text-[11px] text-destructive hover:text-destructive"
+                      disabled={!source.source_id}
+                      onClick={() => {
+                        setPendingDelete(source);
+                        setDeleteState("idle");
+                        setDeleted(null);
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Delete Test Source
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -260,6 +330,81 @@ export function MakoIngestTestPanel() {
           </div>
         )}
       </div>
+
+      {deleteState === "success" && deleted && (
+        <div className="mt-4 rounded-md border border-primary/25 bg-primary/[0.06] p-3 text-xs">
+          <p className="font-semibold text-foreground">Source Deleted</p>
+          <p className="mt-1 text-muted-foreground">
+            {deleted.name ?? deleted.source_id} has been removed.
+          </p>
+        </div>
+      )}
+
+      <Dialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && deleteState !== "deleting") setPendingDelete(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle>Delete ingest source?</DialogTitle>
+            <DialogDescription>
+              This will stop the ingest service and release its allocated SRT port.
+            </DialogDescription>
+          </DialogHeader>
+
+          <dl className="space-y-1 text-xs">
+            <div className="flex gap-2">
+              <dt className="text-muted-foreground">Name</dt>
+              <dd className="text-foreground">{pendingDelete?.name ?? "—"}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="text-muted-foreground">Source ID</dt>
+              <dd className="font-mono text-foreground">{pendingDelete?.source_id ?? "—"}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="text-muted-foreground">Port</dt>
+              <dd className="font-mono text-foreground">{pendingDelete?.port ?? "—"}</dd>
+            </div>
+          </dl>
+
+          {(deleteState === "auth_error" ||
+            deleteState === "forbidden" ||
+            deleteState === "not_found" ||
+            deleteState === "generic_error") && (
+            <div className="rounded-md border border-destructive/25 bg-destructive/[0.06] p-3 text-xs text-destructive">
+              {deleteState === "auth_error" &&
+                "Your session is not authorized to access MAKO ingest."}
+              {deleteState === "forbidden" &&
+                "Your account is not authorized to delete ingest sources."}
+              {deleteState === "not_found" && "The ingest source no longer exists."}
+              {deleteState === "generic_error" && "Unable to delete the ingest source right now."}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPendingDelete(null)}
+              disabled={deleteState === "deleting"}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={confirmDelete}
+              disabled={deleteState === "deleting"}
+              className="gap-2"
+            >
+              {deleteState === "deleting" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Delete Source
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
