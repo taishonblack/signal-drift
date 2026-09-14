@@ -1,0 +1,89 @@
+// Secure bridge between the authenticated MAKO web app and the private
+// MAKO ingest API at https://api.makosrt.com.
+//
+// READ-ONLY in this first version: only action = "list_sources" is supported.
+// The MAKO_API_TOKEN never leaves this Edge Function.
+
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { z } from "npm:zod@3";
+
+const BodySchema = z.object({
+  action: z.string().min(1).max(64),
+});
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return json({ error: "method_not_allowed" }, 405);
+  }
+
+  // Verify the caller is a signed-in Supabase user.
+  const authz = req.headers.get("Authorization") ?? "";
+  if (!authz.startsWith("Bearer ")) {
+    return json({ error: "unauthorized" }, 401);
+  }
+  const jwt = authz.slice(7);
+
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const userClient = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
+  });
+  const { data: me, error: meErr } = await userClient.auth.getUser();
+  if (meErr || !me?.user) {
+    return json({ error: "unauthorized" }, 401);
+  }
+
+  // Validate request body.
+  const parsed = BodySchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return json({ error: "invalid_body" }, 400);
+  }
+  const { action } = parsed.data;
+
+  if (action !== "list_sources") {
+    return json({ error: "Unsupported action" }, 400);
+  }
+
+  // Forward to the private MAKO ingest API.
+  const apiBase = Deno.env.get("MAKO_API_BASE_URL");
+  const apiToken = Deno.env.get("MAKO_API_TOKEN");
+  if (!apiBase || !apiToken) {
+    console.error("mako-ingest: MAKO_API_BASE_URL or MAKO_API_TOKEN not configured");
+    return json({ error: "service_unavailable" }, 503);
+  }
+
+  try {
+    const upstream = await fetch(`${apiBase}/sources`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        Accept: "application/json",
+      },
+    });
+
+    if (!upstream.ok) {
+      console.error(`mako-ingest: upstream returned ${upstream.status}`);
+      return json({ error: "upstream_error" }, 502);
+    }
+
+    const data = await upstream.json().catch(() => null);
+    if (data === null) {
+      return json({ error: "invalid_upstream_response" }, 502);
+    }
+
+    return json(data, upstream.status);
+  } catch (e) {
+    console.error("mako-ingest: upstream fetch failed", e instanceof Error ? e.message : "unknown");
+    return json({ error: "upstream_unreachable" }, 502);
+  }
+});
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
