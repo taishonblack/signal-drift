@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Loader2, RefreshCw, Server, Wrench } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Server, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -13,10 +14,22 @@ interface IngestSource {
 }
 
 type LoadState = "idle" | "loading" | "success" | "auth_error" | "generic_error";
+type CreateState = "idle" | "creating" | "success" | "auth_error" | "forbidden" | "generic_error";
+
+function statusOf(error: unknown): number | undefined {
+  if (typeof error === "object" && error !== null) {
+    const e = error as { status?: number; context?: { status?: number } };
+    return e.status ?? e.context?.status;
+  }
+  return undefined;
+}
 
 export function MakoIngestTestPanel() {
   const [state, setState] = useState<LoadState>("idle");
   const [sources, setSources] = useState<IngestSource[]>([]);
+  const [sourceName, setSourceName] = useState("");
+  const [createState, setCreateState] = useState<CreateState>("idle");
+  const [created, setCreated] = useState<IngestSource | null>(null);
 
   const loadSources = async () => {
     setState("loading");
@@ -41,6 +54,36 @@ export function MakoIngestTestPanel() {
       setState("success");
     } catch {
       setState("generic_error");
+    }
+  };
+
+  const createSource = async () => {
+    const name = sourceName.trim();
+    if (!name) return;
+
+    setCreateState("creating");
+    setCreated(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("mako-ingest", {
+        body: { action: "create_source", name },
+      });
+
+      if (error) {
+        const status = statusOf(error);
+        setCreateState(
+          status === 401 ? "auth_error" : status === 403 ? "forbidden" : "generic_error"
+        );
+        return;
+      }
+
+      const source = ((data as { source?: IngestSource })?.source ?? data) as IngestSource;
+      setCreated(source);
+      setCreateState("success");
+      setSourceName("");
+      await loadSources();
+    } catch {
+      setCreateState("generic_error");
     }
   };
 
@@ -139,6 +182,84 @@ export function MakoIngestTestPanel() {
           </table>
         </div>
       )}
+
+      <div className="mt-6 border-t border-dashed border-border/30 pt-5">
+        <h3 className="text-xs font-semibold text-foreground">Create Test Source</h3>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Admin-only. Creates one ingest source, then reloads the list above.
+        </p>
+
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            <label
+              htmlFor="mako-ingest-source-name"
+              className="mb-1 block text-[11px] text-muted-foreground"
+            >
+              Source Name
+            </label>
+            <Input
+              id="mako-ingest-source-name"
+              value={sourceName}
+              onChange={(e) => setSourceName(e.target.value)}
+              placeholder="Remote API Test"
+              maxLength={64}
+              className="h-9 text-xs"
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={createSource}
+            disabled={createState === "creating" || sourceName.trim().length === 0}
+            className="gap-2 border-border/30 text-foreground sm:mt-5 shrink-0"
+          >
+            {createState === "creating" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plus className="h-3.5 w-3.5" />
+            )}
+            Create Test Source
+          </Button>
+        </div>
+
+        {createState === "auth_error" && (
+          <div className="mt-3 rounded-md border border-destructive/25 bg-destructive/[0.06] p-3 text-xs text-destructive">
+            Your session is not authorized to access MAKO ingest.
+          </div>
+        )}
+        {createState === "forbidden" && (
+          <div className="mt-3 rounded-md border border-destructive/25 bg-destructive/[0.06] p-3 text-xs text-destructive">
+            Your account is not authorized to create ingest sources.
+          </div>
+        )}
+        {createState === "generic_error" && (
+          <div className="mt-3 rounded-md border border-warning/25 bg-warning/[0.06] p-3 text-xs text-warning">
+            Unable to create the ingest source right now.
+          </div>
+        )}
+
+        {createState === "success" && created && (
+          <div className="mt-3 rounded-md border border-primary/25 bg-primary/[0.06] p-3">
+            <p className="text-xs font-semibold text-foreground">Source Created</p>
+            <dl className="mt-2 grid grid-cols-1 gap-1 text-[11px] sm:grid-cols-2">
+              {[
+                ["Name", created.name],
+                ["Source ID", created.source_id],
+                ["Port", created.port],
+                ["Output Path", created.output_path],
+                ["State", created.state],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="flex min-w-0 gap-2">
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className="min-w-0 truncate font-mono text-foreground">
+                    {value === undefined || value === null || value === "" ? "—" : String(value)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
