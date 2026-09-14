@@ -182,6 +182,84 @@ export function MakoIngestTestPanel() {
           </table>
         </div>
       )}
+
+      <div className="mt-6 border-t border-dashed border-border/30 pt-5">
+        <h3 className="text-xs font-semibold text-foreground">Create Test Source</h3>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Admin-only. Creates one ingest source, then reloads the list above.
+        </p>
+
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            <label
+              htmlFor="mako-ingest-source-name"
+              className="mb-1 block text-[11px] text-muted-foreground"
+            >
+              Source Name
+            </label>
+            <Input
+              id="mako-ingest-source-name"
+              value={sourceName}
+              onChange={(e) => setSourceName(e.target.value)}
+              placeholder="Remote API Test"
+              maxLength={64}
+              className="h-9 text-xs"
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={createSource}
+            disabled={createState === "creating" || sourceName.trim().length === 0}
+            className="gap-2 border-border/30 text-foreground sm:mt-5 shrink-0"
+          >
+            {createState === "creating" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plus className="h-3.5 w-3.5" />
+            )}
+            Create Test Source
+          </Button>
+        </div>
+
+        {createState === "auth_error" && (
+          <div className="mt-3 rounded-md border border-destructive/25 bg-destructive/[0.06] p-3 text-xs text-destructive">
+            Your session is not authorized to access MAKO ingest.
+          </div>
+        )}
+        {createState === "forbidden" && (
+          <div className="mt-3 rounded-md border border-destructive/25 bg-destructive/[0.06] p-3 text-xs text-destructive">
+            Your account is not authorized to create ingest sources.
+          </div>
+        )}
+        {createState === "generic_error" && (
+          <div className="mt-3 rounded-md border border-warning/25 bg-warning/[0.06] p-3 text-xs text-warning">
+            Unable to create the ingest source right now.
+          </div>
+        )}
+
+        {createState === "success" && created && (
+          <div className="mt-3 rounded-md border border-primary/25 bg-primary/[0.06] p-3">
+            <p className="text-xs font-semibold text-foreground">Source Created</p>
+            <dl className="mt-2 grid grid-cols-1 gap-1 text-[11px] sm:grid-cols-2">
+              {[
+                ["Name", created.name],
+                ["Source ID", created.source_id],
+                ["Port", created.port],
+                ["Output Path", created.output_path],
+                ["State", created.state],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="flex min-w-0 gap-2">
+                  <dt className="text-muted-foreground">{label}</dt>
+                  <dd className="min-w-0 truncate font-mono text-foreground">
+                    {value === undefined || value === null || value === "" ? "—" : String(value)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
