@@ -24,16 +24,6 @@ const NameSchema = z
   .refine((v) => v.length >= 1 && v.length <= 64, "invalid length")
   .refine((v) => /^[A-Za-z0-9 _-]+$/.test(v), "invalid characters");
 
-function sanitizeSource(raw: unknown) {
-  const s = (raw ?? {}) as Record<string, unknown>;
-  return {
-    name: s.name ?? null,
-    source_id: s.source_id ?? null,
-    port: s.port ?? null,
-    output_path: s.output_path ?? null,
-    state: s.state ?? null,
-  };
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
