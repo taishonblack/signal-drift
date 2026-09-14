@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Loader2, RefreshCw, Server, Wrench } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Server, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -13,10 +14,22 @@ interface IngestSource {
 }
 
 type LoadState = "idle" | "loading" | "success" | "auth_error" | "generic_error";
+type CreateState = "idle" | "creating" | "success" | "auth_error" | "forbidden" | "generic_error";
+
+function statusOf(error: unknown): number | undefined {
+  if (typeof error === "object" && error !== null) {
+    const e = error as { status?: number; context?: { status?: number } };
+    return e.status ?? e.context?.status;
+  }
+  return undefined;
+}
 
 export function MakoIngestTestPanel() {
   const [state, setState] = useState<LoadState>("idle");
   const [sources, setSources] = useState<IngestSource[]>([]);
+  const [sourceName, setSourceName] = useState("");
+  const [createState, setCreateState] = useState<CreateState>("idle");
+  const [created, setCreated] = useState<IngestSource | null>(null);
 
   const loadSources = async () => {
     setState("loading");
