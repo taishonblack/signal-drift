@@ -11,7 +11,10 @@ import { z } from "npm:zod@3";
 const BodySchema = z.object({
   action: z.string().min(1).max(64),
   name: z.string().max(200).optional(),
+  source_id: z.string().max(64).optional(),
 });
+
+const SourceIdSchema = z.string().regex(/^src_[a-f0-9]{6}$/);
 
 const NameSchema = z
   .string()
