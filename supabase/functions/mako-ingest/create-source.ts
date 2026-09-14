@@ -23,9 +23,11 @@ export type ProvisionResult = {
   status?: number;
 };
 
-export type InsertResult =
-  | { ok: true; id: string | null }
-  | { ok: false; duplicate?: boolean };
+export type InsertResult = {
+  ok: boolean;
+  id?: string | null;
+  duplicate?: boolean;
+};
 
 export type CreateSourceDeps = {
   /** POST /sources on the private MAKO ingest API. */
