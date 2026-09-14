@@ -16,9 +16,12 @@ export type ProvisionedSource = {
   state: string | null;
 };
 
-export type ProvisionResult =
-  | { ok: true; raw: Record<string, unknown> }
-  | { ok: false; error: string; status: number };
+export type ProvisionResult = {
+  ok: boolean;
+  raw?: Record<string, unknown>;
+  error?: string;
+  status?: number;
+};
 
 export type InsertResult =
   | { ok: true; id: string | null }
