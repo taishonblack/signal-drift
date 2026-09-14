@@ -826,6 +826,8 @@ const CreateSession = () => {
         <p className="text-[10px] text-muted-foreground/50 text-center">
           Ownership can be transferred inside the session if you leave.
         </p>
+
+        <MakoIngestTestPanel />
       </div>
 
       {/* ─── Right: Change log (configure) or Recent Sessions (create) ─── */}
