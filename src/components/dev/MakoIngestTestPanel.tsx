@@ -57,6 +57,36 @@ export function MakoIngestTestPanel() {
     }
   };
 
+  const createSource = async () => {
+    const name = sourceName.trim();
+    if (!name) return;
+
+    setCreateState("creating");
+    setCreated(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("mako-ingest", {
+        body: { action: "create_source", name },
+      });
+
+      if (error) {
+        const status = statusOf(error);
+        setCreateState(
+          status === 401 ? "auth_error" : status === 403 ? "forbidden" : "generic_error"
+        );
+        return;
+      }
+
+      const source = ((data as { source?: IngestSource })?.source ?? data) as IngestSource;
+      setCreated(source);
+      setCreateState("success");
+      setSourceName("");
+      await loadSources();
+    } catch {
+      setCreateState("generic_error");
+    }
+  };
+
   return (
     <div className="mako-glass-solid rounded-lg p-5 md:p-6 border border-dashed border-border/30">
       <div className="flex items-start justify-between gap-4">
