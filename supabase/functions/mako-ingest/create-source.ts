@@ -150,7 +150,7 @@ export async function createSource(
         output_path: source.output_path,
         state: source.state,
       },
-      ingest_source_id: inserted.id,
+      ingest_source_id: inserted.id ?? null,
     },
   };
 }
