@@ -1,7 +1,15 @@
 import { useState } from "react";
-import { Loader2, Plus, RefreshCw, Server, Wrench } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Server, Trash2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +23,14 @@ interface IngestSource {
 
 type LoadState = "idle" | "loading" | "success" | "auth_error" | "generic_error";
 type CreateState = "idle" | "creating" | "success" | "auth_error" | "forbidden" | "generic_error";
+type DeleteState =
+  | "idle"
+  | "deleting"
+  | "success"
+  | "auth_error"
+  | "forbidden"
+  | "not_found"
+  | "generic_error";
 
 function statusOf(error: unknown): number | undefined {
   if (typeof error === "object" && error !== null) {
@@ -30,6 +46,9 @@ export function MakoIngestTestPanel() {
   const [sourceName, setSourceName] = useState("");
   const [createState, setCreateState] = useState<CreateState>("idle");
   const [created, setCreated] = useState<IngestSource | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<IngestSource | null>(null);
+  const [deleteState, setDeleteState] = useState<DeleteState>("idle");
+  const [deleted, setDeleted] = useState<IngestSource | null>(null);
 
   const loadSources = async () => {
     setState("loading");
