@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
   }
   const { action } = parsed.data;
 
-  if (action !== "list_sources") {
+  if (action !== "list_sources" && action !== "create_source") {
     return json({ error: "Unsupported action" }, 400);
   }
 
@@ -71,6 +71,50 @@ Deno.serve(async (req) => {
   if (!apiBase || !apiToken) {
     console.error("mako-ingest: MAKO_API_BASE_URL or MAKO_API_TOKEN not configured");
     return json({ error: "service_unavailable" }, 503);
+  }
+
+  if (action === "create_source") {
+    // Infrastructure changes require the existing admin role model.
+    const { data: isAdmin, error: roleErr } = await userClient.rpc("has_role", {
+      _user_id: me.user.id,
+      _role: "admin",
+    });
+    if (roleErr || isAdmin !== true) {
+      return json({ error: "forbidden" }, 403);
+    }
+
+    const nameParsed = NameSchema.safeParse(parsed.data.name ?? "");
+    if (!nameParsed.success) {
+      return json({ error: "invalid_name" }, 400);
+    }
+
+    try {
+      const upstream = await fetch(`${apiBase}/sources`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ name: nameParsed.data }),
+      });
+
+      if (!upstream.ok) {
+        console.error(`mako-ingest: create upstream returned ${upstream.status}`);
+        return json({ error: "upstream_error" }, 502);
+      }
+
+      const created = await upstream.json().catch(() => null);
+      if (created === null) {
+        return json({ error: "invalid_upstream_response" }, 502);
+      }
+
+      const payload = (created as Record<string, unknown>).source ?? created;
+      return json({ source: sanitizeSource(payload) }, 200);
+    } catch (e) {
+      console.error("mako-ingest: create fetch failed", e instanceof Error ? e.message : "unknown");
+      return json({ error: "upstream_unreachable" }, 502);
+    }
   }
 
   try {
