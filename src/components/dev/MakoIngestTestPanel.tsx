@@ -147,6 +147,7 @@ export function MakoIngestTestPanel() {
                 <th className="px-3 py-2 font-medium">Port</th>
                 <th className="px-3 py-2 font-medium">Output Path</th>
                 <th className="px-3 py-2 font-medium">State</th>
+                <th className="px-3 py-2 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/10">
@@ -175,6 +176,22 @@ export function MakoIngestTestPanel() {
                       <Server className="h-3 w-3 text-primary" />
                       <span className="text-foreground">{source.state ?? "—"}</span>
                     </span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1.5 px-2 text-[11px] text-destructive hover:text-destructive"
+                      disabled={!source.source_id}
+                      onClick={() => {
+                        setPendingDelete(source);
+                        setDeleteState("idle");
+                        setDeleted(null);
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Delete Test Source
+                    </Button>
                   </td>
                 </tr>
               ))}
