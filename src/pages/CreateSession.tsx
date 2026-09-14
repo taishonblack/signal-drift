@@ -19,6 +19,7 @@ import DurationPicker from "@/components/session/DurationPicker";
 import SessionStatusBadge from "@/components/session/SessionStatusBadge";
 import SwitchActiveSessionDialog from "@/components/session/SwitchActiveSessionDialog";
 import SessionChangeLogPanel from "@/components/session/SessionChangeLogPanel";
+import MakoIngestTestPanel from "@/components/dev/MakoIngestTestPanel";
 import {
   type SrtLine, type SessionRecord,
   createDefaultLine, getSessions, addSession, getSessionById, updateSession,
