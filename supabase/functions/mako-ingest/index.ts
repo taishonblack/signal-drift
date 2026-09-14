@@ -120,6 +120,46 @@ Deno.serve(async (req) => {
     }
   }
 
+  if (action === "delete_source") {
+    // Infrastructure changes require the existing admin role model.
+    const { data: isAdmin, error: roleErr } = await userClient.rpc("has_role", {
+      _user_id: me.user.id,
+      _role: "admin",
+    });
+    if (roleErr || isAdmin !== true) {
+      return json({ error: "forbidden" }, 403);
+    }
+
+    const idParsed = SourceIdSchema.safeParse(parsed.data.source_id ?? "");
+    if (!idParsed.success) {
+      return json({ error: "invalid_source_id" }, 400);
+    }
+    const sourceId = idParsed.data;
+
+    try {
+      const upstream = await fetch(`${apiBase}/sources/${sourceId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          Accept: "application/json",
+        },
+      });
+
+      if (upstream.status === 404) {
+        return json({ error: "not_found" }, 404);
+      }
+      if (!upstream.ok) {
+        console.error(`mako-ingest: delete upstream returned ${upstream.status}`);
+        return json({ error: "upstream_error" }, 502);
+      }
+
+      return json({ source_id: sourceId, deleted: true }, 200);
+    } catch (e) {
+      console.error("mako-ingest: delete fetch failed", e instanceof Error ? e.message : "unknown");
+      return json({ error: "upstream_unreachable" }, 502);
+    }
+  }
+
   try {
     const upstream = await fetch(`${apiBase}/sources`, {
       method: "GET",
