@@ -1,12 +1,14 @@
 // Secure bridge between the authenticated MAKO web app and the private
 // MAKO ingest API at https://api.makosrt.com.
 //
-// READ-ONLY in this first version: only action = "list_sources" is supported.
+// Actions: list_sources, create_source (admin), delete_source (admin).
+// create_source also persists the provisioned source in public.ingest_sources.
 // The MAKO_API_TOKEN never leaves this Edge Function.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3";
+import { createSource } from "./create-source.ts";
 
 const BodySchema = z.object({
   action: z.string().min(1).max(64),
@@ -22,16 +24,6 @@ const NameSchema = z
   .refine((v) => v.length >= 1 && v.length <= 64, "invalid length")
   .refine((v) => /^[A-Za-z0-9 _-]+$/.test(v), "invalid characters");
 
-function sanitizeSource(raw: unknown) {
-  const s = (raw ?? {}) as Record<string, unknown>;
-  return {
-    name: s.name ?? null,
-    source_id: s.source_id ?? null,
-    port: s.port ?? null,
-    output_path: s.output_path ?? null,
-    state: s.state ?? null,
-  };
-}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -91,33 +83,69 @@ Deno.serve(async (req) => {
       return json({ error: "invalid_name" }, 400);
     }
 
-    try {
-      const upstream = await fetch(`${apiBase}/sources`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
+    // Service-role client: the only path allowed to write the
+    // infrastructure-managed columns on public.ingest_sources.
+    const adminDb = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+      auth: { persistSession: false },
+    });
+
+    const outcome = await createSource(
+      { ownerId: me.user.id, name: nameParsed.data },
+      {
+        provision: async (name) => {
+          try {
+            const upstream = await fetch(`${apiBase}/sources`, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${apiToken}`,
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              body: JSON.stringify({ name }),
+            });
+
+            if (!upstream.ok) {
+              console.error(`mako-ingest: create upstream returned ${upstream.status}`);
+              return { ok: false, error: "upstream_error", status: 502 };
+            }
+
+            const created = await upstream.json().catch(() => null);
+            if (created === null || typeof created !== "object") {
+              return { ok: false, error: "invalid_upstream_response", status: 502 };
+            }
+            return { ok: true, raw: created as Record<string, unknown> };
+          } catch (e) {
+            console.error(
+              "mako-ingest: create fetch failed",
+              e instanceof Error ? e.message : "unknown",
+            );
+            return { ok: false, error: "upstream_unreachable", status: 502 };
+          }
         },
-        body: JSON.stringify({ name: nameParsed.data }),
-      });
+        insertRegistryRow: async (row) => {
+          const { data, error } = await adminDb
+            .from("ingest_sources")
+            .insert(row)
+            .select("id")
+            .single();
+          if (error) {
+            console.error(`mako-ingest: registry insert failed (${error.code ?? "unknown"})`);
+            return { ok: false, duplicate: error.code === "23505" };
+          }
+          return { ok: true, id: (data as { id: string } | null)?.id ?? null };
+        },
+        deleteUpstream: async (sourceId) => {
+          const res = await fetch(`${apiBase}/sources/${sourceId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${apiToken}`, Accept: "application/json" },
+          });
+          return res.ok || res.status === 404;
+        },
+        logError: (message) => console.error(message),
+      },
+    );
 
-      if (!upstream.ok) {
-        console.error(`mako-ingest: create upstream returned ${upstream.status}`);
-        return json({ error: "upstream_error" }, 502);
-      }
-
-      const created = await upstream.json().catch(() => null);
-      if (created === null) {
-        return json({ error: "invalid_upstream_response" }, 502);
-      }
-
-      const payload = (created as Record<string, unknown>).source ?? created;
-      return json({ source: sanitizeSource(payload) }, 200);
-    } catch (e) {
-      console.error("mako-ingest: create fetch failed", e instanceof Error ? e.message : "unknown");
-      return json({ error: "upstream_unreachable" }, 502);
-    }
+    return json(outcome.body, outcome.status);
   }
 
   if (action === "delete_source") {
