@@ -1,7 +1,8 @@
 // Secure bridge between the authenticated MAKO web app and the private
 // MAKO ingest API at https://api.makosrt.com.
 //
-// READ-ONLY in this first version: only action = "list_sources" is supported.
+// Actions: list_sources, create_source (admin), delete_source (admin).
+// create_source also persists the provisioned source in public.ingest_sources.
 // The MAKO_API_TOKEN never leaves this Edge Function.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
