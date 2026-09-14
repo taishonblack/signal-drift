@@ -55,14 +55,20 @@ Two separate status fields, as you specified, so the UI can say "Ready / Encoder
 ## Access rules
 
 `ingest_sources`
-- A user can see and rename only their own sources.
-- Admins retain full access through the existing secure role check.
-- Users cannot set or change `infrastructure_source_id`, `srt_port`, or `playback_path` themselves — those are written only by the server-side ingest bridge in a later phase. A database rule blocks client-side changes to them, and the unique constraint is the backstop.
+- Source owner: can read and rename their own rows.
+- Admins: can read all rows through the existing secure role check.
+- Other session participants: **no direct read access at all**. `infrastructure_source_id`, `srt_port`, and connection detail stay owner/admin-only. A later phase will expose only safe playback metadata (`ingest_source_id`, `label`, `slot`, `playback_path`, `lifecycle_status`, `connection_status`) to viewers through a restricted server-side view or function.
 - No anonymous access.
 
+Infrastructure-managed columns — `infrastructure_source_id`, `srt_port`, `playback_path` — are protected explicitly, not by UI convention:
+- Column-level privileges: `authenticated` gets insert/update rights only on the operator-editable columns (`name`, `connection_mode`), never on the infrastructure columns.
+- A trigger additionally rejects any non-service-role attempt to set or change those three columns, so the rule holds regardless of how a request arrives.
+- `service_role` retains full write access; the ingest bridge owns these fields in a later phase. The unique constraint on `infrastructure_source_id` is the backstop against claiming another user's infrastructure.
+
 `session_sources`
-- Readable by anyone with access to that session (owner or shared viewer), so viewers can watch a feed without seeing SRT credentials.
+- Readable by authorized session participants (session owner or shared viewer) — the relationship only, never the source's contribution fields.
 - Writable only by the session owner, and only for a source that owner actually owns — enforced with a security-definer helper.
+- Deleting a session row cascades away its join rows only; the ingest source is never affected. Normal session ending sets `detached_at` instead (later phase).
 
 ## The rule we are locking in
 
