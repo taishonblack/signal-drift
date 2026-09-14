@@ -95,14 +95,18 @@ export async function createSource(
 ): Promise<CreateSourceOutcome> {
   const provisioned = await deps.provision(params.name);
   if (!provisioned.ok) {
-    return { status: provisioned.status, body: { error: provisioned.error } };
+    return {
+      status: provisioned.status ?? 502,
+      body: { error: provisioned.error ?? "upstream_error" },
+    };
   }
 
-  const source = validateProvisionedSource(provisioned.raw);
+  const raw = provisioned.raw ?? {};
+  const source = validateProvisionedSource(raw);
   if (!source) {
     // Upstream claims success but the response is unusable. Treat the whole
     // provision as failed; we cannot safely target cleanup without a valid id.
-    const claimed = ((provisioned.raw.source ?? provisioned.raw) ?? {}) as Record<string, unknown>;
+    const claimed = ((raw.source ?? raw) ?? {}) as Record<string, unknown>;
     const claimedId = typeof claimed.source_id === "string" ? claimed.source_id : "";
     if (SOURCE_ID_PATTERN.test(claimedId)) {
       await compensate(claimedId, deps, "malformed upstream response");
