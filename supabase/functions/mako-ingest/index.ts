@@ -10,7 +10,25 @@ import { z } from "npm:zod@3";
 
 const BodySchema = z.object({
   action: z.string().min(1).max(64),
+  name: z.string().max(200).optional(),
 });
+
+const NameSchema = z
+  .string()
+  .transform((v) => v.trim())
+  .refine((v) => v.length >= 1 && v.length <= 64, "invalid length")
+  .refine((v) => /^[A-Za-z0-9 _-]+$/.test(v), "invalid characters");
+
+function sanitizeSource(raw: unknown) {
+  const s = (raw ?? {}) as Record<string, unknown>;
+  return {
+    name: s.name ?? null,
+    source_id: s.source_id ?? null,
+    port: s.port ?? null,
+    output_path: s.output_path ?? null,
+    state: s.state ?? null,
+  };
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
