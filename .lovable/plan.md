@@ -72,7 +72,7 @@ Infrastructure-managed columns — `infrastructure_source_id`, `srt_port`, `play
 
 ## The rule we are locking in
 
-Ending a session detaches its `session_sources` rows. It never deletes an `ingest_source` and never releases a port. Releasing port `10021` happens only when the user explicitly deletes "MSG Truck Feed" from their Sources area. This phase encodes that by keeping the two lifecycles fully separate and blocking cascade deletes from sessions to sources.
+Ending a session detaches its `session_sources` rows. It never deletes an `ingest_source` and never releases a port. Releasing port `10021` happens only when the user explicitly deletes "MSG Truck Feed" from their Sources area. This phase encodes that by keeping the two lifecycles fully separate: nothing can cascade from a session into a source.
 
 ## Backward compatibility
 
