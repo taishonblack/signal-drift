@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
   }
   const { action } = parsed.data;
 
-  if (action !== "list_sources" && action !== "create_source") {
+  if (action !== "list_sources" && action !== "create_source" && action !== "delete_source") {
     return json({ error: "Unsupported action" }, 400);
   }
 
