@@ -89,6 +89,54 @@ export type Database = {
         }
         Relationships: []
       }
+      ingest_sources: {
+        Row: {
+          connection_checked_at: string | null
+          connection_mode: string
+          connection_status: string
+          created_at: string
+          id: string
+          infrastructure_source_id: string
+          last_error: string | null
+          lifecycle_status: string
+          name: string
+          owner_id: string
+          playback_path: string | null
+          srt_port: number | null
+          updated_at: string
+        }
+        Insert: {
+          connection_checked_at?: string | null
+          connection_mode?: string
+          connection_status?: string
+          created_at?: string
+          id?: string
+          infrastructure_source_id: string
+          last_error?: string | null
+          lifecycle_status?: string
+          name: string
+          owner_id: string
+          playback_path?: string | null
+          srt_port?: number | null
+          updated_at?: string
+        }
+        Update: {
+          connection_checked_at?: string | null
+          connection_mode?: string
+          connection_status?: string
+          created_at?: string
+          id?: string
+          infrastructure_source_id?: string
+          last_error?: string | null
+          lifecycle_status?: string
+          name?: string
+          owner_id?: string
+          playback_path?: string | null
+          srt_port?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -133,6 +181,54 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      session_sources: {
+        Row: {
+          attached_at: string
+          created_at: string
+          detached_at: string | null
+          id: string
+          ingest_source_id: string
+          label: string | null
+          session_id: string
+          slot: number
+        }
+        Insert: {
+          attached_at?: string
+          created_at?: string
+          detached_at?: string | null
+          id?: string
+          ingest_source_id: string
+          label?: string | null
+          session_id: string
+          slot: number
+        }
+        Update: {
+          attached_at?: string
+          created_at?: string
+          detached_at?: string | null
+          id?: string
+          ingest_source_id?: string
+          label?: string | null
+          session_id?: string
+          slot?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_sources_ingest_source_id_fkey"
+            columns: ["ingest_source_id"]
+            isOneToOne: false
+            referencedRelation: "ingest_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_sources_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       session_timeline_entries: {
         Row: {
@@ -339,6 +435,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_use_ingest_source: {
+        Args: { _source_id: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
