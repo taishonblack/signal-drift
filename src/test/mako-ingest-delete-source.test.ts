@@ -47,7 +47,7 @@ function harness(opts: {
     updateRegistryRow: async (id, patch) => {
       patches.push({ id, patch });
       if (updateResults) return updateResults.shift() ?? true;
-      return opts.updateOk ?? true;
+      return typeof opts.updateOk === "boolean" ? opts.updateOk : true;
     },
     deleteUpstream: async (id) => {
       if (opts.upstreamThrows) throw new Error("network");
