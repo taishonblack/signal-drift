@@ -47,7 +47,7 @@ Security tests: User A can attach their own Source; User A cannot attach User B'
 
 ## Live verification
 
-One Source, one session: attach to slot 1, Start Monitoring, confirm the `session_sources` row with the snapshotted label and `src_xxxxxx-opus`, confirm Session Room and a popout request that path (not `cam1-opus`), confirm a legacy session still resolves `cam1-opus`, complete the session and confirm `detached_at` is stamped while the Source remains reusable in My Sources. Second-user viewer check if an authorized account is available. Only deliberately created test sessions are cleaned up.
+One Source, one session: attach to slot 1, Start Monitoring, then report the real `session_sources` row verbatim — Source UUID, slot, snapshotted label, `src_xxxxxx-opus`. Confirm Session Room and a popout request that path (not `cam1-opus`), confirm a legacy session still resolves `cam1-opus`, complete the session and report the same row again showing `detached_at` populated while the underlying Source is intact and reusable in My Sources. Second-user viewer check if an authorized account is available. Only deliberately created test sessions are cleaned up.
 
 ## Later hardening (recorded, not built)
 
