@@ -16,7 +16,8 @@ import { loadTimePrefs } from "@/lib/time-utils";
 const SourcePopoutPage = () => {
   const { sessionId, sourceId } = useParams();
   const record = sessionId ? getSessionById(sessionId) : undefined;
-  const inputs = record ? inputsFromRecord(record, parseSrtInput) : [];
+  const { withAttachments } = useSessionAttachments(sessionId);
+  const inputs = record ? inputsFromRecord(withAttachments(record), parseSrtInput) : [];
   const session = {
     id: record?.id ?? sessionId ?? "",
     name: record?.name ?? "Session",
