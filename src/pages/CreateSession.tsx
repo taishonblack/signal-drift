@@ -664,14 +664,73 @@ const CreateSession = () => {
 
             {activeLine.enabled && (
               <>
+                {/* My Sources picker — persistent MAKO Receive sources.
+                    Selecting one attaches it to this slot; the session keeps a
+                    label snapshot and the source itself survives the session. */}
+                {!isGuest && (
+                  <div className="rounded-md border border-primary/20 bg-primary/[0.04] p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        My Sources
+                      </span>
+                      {isSourceBacked(activeLine) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={detachMySource}
+                          className="h-6 text-[11px] text-muted-foreground hover:text-foreground"
+                        >
+                          Use manual address instead
+                        </Button>
+                      )}
+                    </div>
+                    {sourcesLoading ? (
+                      <p className="text-[11px] text-muted-foreground">Loading your sources…</p>
+                    ) : mySources.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        No sources yet. Create one on the Sources page, then select it here.
+                      </p>
+                    ) : (
+                      <Select
+                        value={activeLine.ingestSourceId ?? ""}
+                        onValueChange={attachMySource}
+                      >
+                        <SelectTrigger className="bg-muted/15 border-border/15 text-sm h-9">
+                          <SelectValue placeholder="Select one of your sources…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {mySources.map((src) => (
+                            <SelectItem
+                              key={src.id}
+                              value={src.id}
+                              disabled={claimedElsewhere.has(src.id)}
+                            >
+                              {src.name}
+                              {claimedElsewhere.has(src.id) ? " — already in this session" : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                )}
+
                 {/* Ingest mapping hint — SRT contribution details for the encoder. */}
-                <div className="rounded-md border border-border/15 bg-muted/10 p-2.5 text-[11px] text-muted-foreground">
-                  Publishes to MediaMTX path{" "}
-                  <span className="font-mono text-foreground">{streamNameForSlot(activeTab)}</span>.
-                  Set the encoder Stream ID to{" "}
-                  <span className="font-mono text-foreground">{publishIdForSlot(activeTab)}</span> in
-                  caller mode.
-                </div>
+                {isSourceBacked(activeLine) ? (
+                  <div className="rounded-md border border-border/15 bg-muted/10 p-2.5 text-[11px] text-muted-foreground">
+                    Send your encoder to{" "}
+                    <span className="font-mono text-foreground">{activeLine.srtAddress || RECEIVE_DESTINATION}</span>{" "}
+                    in caller mode. This source keeps its own dedicated port.
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-border/15 bg-muted/10 p-2.5 text-[11px] text-muted-foreground">
+                    Publishes to MediaMTX path{" "}
+                    <span className="font-mono text-foreground">{streamNameForSlot(activeTab)}</span>.
+                    Set the encoder Stream ID to{" "}
+                    <span className="font-mono text-foreground">{publishIdForSlot(activeTab)}</span> in
+                    caller mode.
+                  </div>
+                )}
 
                 {/* Friendly Name */}
                 <div className="space-y-1">
