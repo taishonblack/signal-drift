@@ -95,7 +95,10 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
     if (!pendingSwitch || !grouped.yourActive) return;
     const current = grouped.yourActive;
     const isOwner = (current.ownerUserId ?? current.hostUserId) === currentUser.id;
-    if (isOwner) endSession(current.id);
+    if (isOwner) {
+      endSession(current.id);
+      syncEndedSessionRemote(current.id);
+    }
     else leaveSession(current.id, currentUser.id);
     joinSession(pendingSwitch.id, currentUser);
     const id = pendingSwitch.id;

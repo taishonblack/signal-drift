@@ -19,6 +19,7 @@ import SessionEndIndicator from "@/components/session/SessionEndIndicator";
 import { mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
 import { inputsFromRecord, playbackStreamName, whepBase, whepUrlForStream } from "@/lib/stream-paths";
 import { useSessionAttachments } from "@/hooks/use-session-attachments";
+import { syncEndedSessionRemote } from "@/lib/sessions-remote";
 import {
   getSessionById,
   updateSession,
@@ -511,6 +512,7 @@ const SessionRoom = () => {
   const handleOrphanExpired = useCallback(() => {
     if (!id) return;
     endSessionRecord(id);
+    syncEndedSessionRemote(id);
     setOwnerLeftOpen(false);
     toast({ title: "Session ended", description: "No owner claimed the session." });
     navigate("/sessions");
@@ -683,7 +685,10 @@ const SessionRoom = () => {
       setSaveOpen(true);
       return;
     }
-    if (id) endSessionRecord(id);
+    if (id) {
+      endSessionRecord(id);
+      syncEndedSessionRemote(id);
+    }
     toast({ title: "Session ended" });
     navigate("/sessions");
   }, [id, navigate, identity.kind, currentUserRef.id]);
@@ -691,7 +696,10 @@ const SessionRoom = () => {
   const finalizeEnd = useCallback(
     (mode: "keep" | "discard") => {
       setSaveOpen(false);
-      if (id) endSessionRecord(id);
+      if (id) {
+        endSessionRecord(id);
+        syncEndedSessionRemote(id);
+      }
       toast({
         title: mode === "discard" ? "Session discarded" : "Session ended",
       });

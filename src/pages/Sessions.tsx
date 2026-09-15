@@ -127,6 +127,7 @@ const Sessions = () => {
     const isOwner = (current.ownerUserId ?? current.hostUserId) === currentUser.id;
     if (isOwner) {
       endSession(current.id);
+      syncEndedSessionRemote(current.id);
     } else {
       leaveSession(current.id, currentUser.id);
     }
@@ -210,6 +211,7 @@ const Sessions = () => {
                     className="gap-1.5 text-muted-foreground hover:text-destructive"
                     onClick={() => {
                       endSession(current.id);
+                      syncEndedSessionRemote(current.id);
                       refresh();
                     }}
                   >
