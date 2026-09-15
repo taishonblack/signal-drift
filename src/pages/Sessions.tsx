@@ -16,6 +16,7 @@ import {
   type SessionRecord,
 } from "@/lib/session-store";
 import { useIdentity } from "@/lib/identity";
+import { syncEndedSessionRemote } from "@/lib/sessions-remote";
 import { DEMO_DATA_ENABLED } from "@/lib/demo-flag";
 import SessionCard from "@/components/session/SessionCard";
 import SessionActionsDialog from "@/components/session/SessionActionsDialog";

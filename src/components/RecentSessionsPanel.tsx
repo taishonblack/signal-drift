@@ -11,6 +11,7 @@ import {
   type SessionRecord,
 } from "@/lib/session-store";
 import { useIdentity } from "@/lib/identity";
+import { syncEndedSessionRemote } from "@/lib/sessions-remote";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import SessionCard from "@/components/session/SessionCard";
 import JoinActiveSessionDialog from "@/components/session/JoinActiveSessionDialog";
