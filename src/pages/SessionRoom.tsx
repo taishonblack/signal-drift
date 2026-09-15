@@ -105,11 +105,14 @@ const SessionRoom = () => {
     return () => window.clearTimeout(t);
   }, []);
 
-  // Real panes, derived from the stored session record. Only enabled
-  // sources with a valid address+port are rendered — no mock fallback.
+  // Persistent-source attachments (viewer-safe playback paths) for this session.
+  const { withAttachments } = useSessionAttachments(id);
+
+  // Real panes, derived from the stored session record. Slots backed by a
+  // persistent source use its playback path; legacy slots keep camN.
   const activeInputs = useMemo(
-    () => (record ? inputsFromRecord(record, parseSrtInput) : []),
-    [record],
+    () => (record ? inputsFromRecord(withAttachments(record), parseSrtInput) : []),
+    [record, withAttachments],
   );
   const session = useMemo(
     () => ({
