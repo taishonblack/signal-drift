@@ -6,6 +6,7 @@ import SignalTile from "@/components/SignalTile";
 import { getSessionById, parseSrtInput } from "@/lib/session-store";
 import { inputsFromRecord } from "@/lib/stream-paths";
 import { useLiveMetrics } from "@/hooks/use-live-metrics";
+import { useSessionAttachments } from "@/hooks/use-session-attachments";
 import { loadTimePrefs } from "@/lib/time-utils";
 import { loadSlotMap, type SlotId, type SlotMap } from "@/lib/slot-map";
 import { useWorkspacePrefs } from "@/hooks/use-workspace-prefs";
