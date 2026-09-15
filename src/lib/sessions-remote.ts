@@ -18,11 +18,16 @@ import {
 // `sessions` table (everything else is stuffed into `payload`).
 const TOP_LEVEL_KEYS = ["id", "name", "status", "pin"] as const;
 
+// Runtime-only fields. Attachments live in public.session_sources and are
+// derived there — they must never be round-tripped through the payload.
+const RUNTIME_ONLY_KEYS = ["attachments", "attachmentsLoaded"] as const;
+
 /** Split a SessionRecord into the shape save-session expects. */
 function toRemote(session: SessionRecord) {
   const payload: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(session)) {
     if ((TOP_LEVEL_KEYS as readonly string[]).includes(k)) continue;
+    if ((RUNTIME_ONLY_KEYS as readonly string[]).includes(k)) continue;
     payload[k] = v;
   }
   return {
