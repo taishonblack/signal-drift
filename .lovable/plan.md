@@ -43,7 +43,7 @@ One migration:
 
 ## Tests
 
-Fake-dependency unit tests for the attachment synchronization and validation rules (ownership, forged source id, duplicate slot/source, rollback on a mid-set failure), resolver tests (dynamic path, no double `-opus`, exact `https://stream.makosrt.com/src_xxxxxx-opus/whep`, legacy `camN-opus` for all four slots, no fallback while loading), lifecycle tests (scheduled/active/paused keep attachments, completed/archived detach, source survives), reuse tests (same Source in two sessions, ending one leaves the other), and Create Session picker tests. Then the full suite plus typecheck.
+Security tests: User A can attach their own Source; User A cannot attach User B's Source; an admin account using normal Create Session cannot attach User B's Source; a browser-supplied `owner_id`/`_owner` is rejected/ignored; a forged `ingest_source_id` cannot bypass ownership; a collaborator cannot create or change attachments. Plus fake-dependency unit tests for the attachment synchronization and validation rules (duplicate slot/source, rollback on a mid-set failure), resolver tests (dynamic path, no double `-opus`, exact `https://stream.makosrt.com/src_xxxxxx-opus/whep`, legacy `camN-opus` for all four slots, no fallback while loading), lifecycle tests (scheduled/active/paused keep attachments, completed/archived detach, source survives), reuse tests (same Source in two sessions, ending one leaves the other), and Create Session picker tests. Then the full suite plus typecheck.
 
 ## Live verification
 
