@@ -18,6 +18,7 @@ import ShareSessionDialog from "@/components/session/ShareSessionDialog";
 import SessionEndIndicator from "@/components/session/SessionEndIndicator";
 import { mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
 import { inputsFromRecord, playbackStreamName, whepBase, whepUrlForStream } from "@/lib/stream-paths";
+import { useSessionAttachments } from "@/hooks/use-session-attachments";
 import {
   getSessionById,
   updateSession,
