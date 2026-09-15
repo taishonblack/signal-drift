@@ -34,16 +34,25 @@ import { saveSessionRemote } from "@/lib/sessions-remote";
 import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 import { toast } from "@/components/ui/sonner";
 import { probeStream, publishIdForSlot, streamNameForSlot } from "@/lib/stream-paths";
+import { useMySources, RECEIVE_DESTINATION } from "@/hooks/use-my-sources";
 
 type LineStatus = "empty" | "configured" | "error";
 
+/** True when this slot is backed by a persistent MAKO Receive source. */
+const isSourceBacked = (line: SrtLine) =>
+  line.sourceKind === "mako" && !!line.ingestSourceId;
+
 const isConfigured = (line: SrtLine) => {
+  // A persistent source carries its own dedicated port and playback identity,
+  // so it is configured by selection alone.
+  if (isSourceBacked(line)) return true;
   const { host, port } = parseSrtInput(line.srtAddress);
   return !!host && !!port;
 };
 
 const getLineStatus = (line: SrtLine): LineStatus => {
   if (!line.enabled) return "empty";
+  if (isSourceBacked(line)) return "configured";
   if (!line.srtAddress.trim()) return "empty";
   const { host } = parseSrtInput(line.srtAddress);
   if (!host) return "error";
@@ -200,6 +209,47 @@ const CreateSession = () => {
     saveAddressBook(next);
     toast(`Saved "${tag}" to Address Book.`);
   };
+
+  // The Operator's private source library. Members only; guests keep the
+  // manual address flow untouched.
+  const { sources: mySources, loading: sourcesLoading } = useMySources(!isGuest);
+
+  /** Sources already claimed by another slot in this session. */
+  const claimedElsewhere = useMemo(
+    () =>
+      new Set(
+        lines
+          .filter((l) => l.id !== activeTab && l.enabled && !!l.ingestSourceId)
+          .map((l) => l.ingestSourceId as string),
+      ),
+    [lines, activeTab],
+  );
+
+  const attachMySource = useCallback(
+    (sourceId: string) => {
+      const src = mySources.find((s) => s.id === sourceId);
+      if (!src) return;
+      updateLine({
+        enabled: true,
+        sourceKind: "mako",
+        ingestSourceId: src.id,
+        label: src.name,
+        mode: "caller",
+        // Encoder destination for this dedicated MAKO Receive port.
+        srtAddress: src.srtPort ? `${RECEIVE_DESTINATION}:${src.srtPort}` : "",
+      });
+    },
+    [mySources, updateLine],
+  );
+
+  const detachMySource = useCallback(() => {
+    updateLine({
+      sourceKind: "legacy",
+      ingestSourceId: undefined,
+      srtAddress: "",
+      label: `Line ${activeTab}`,
+    });
+  }, [updateLine, activeTab]);
 
   const configureSource = () => {
     updateLine({ enabled: true });
