@@ -1,10 +1,15 @@
-// Upserts a persistent session for a signed-in member. Accepts the full
-// SessionRecord payload from the client and hashes the PIN before
-// storage. Owner is always the authenticated caller — the caller cannot
-// spoof owner_id.
+// Upserts a persistent session for a signed-in member, together with the
+// complete intended set of persistent-source attachments, in ONE database
+// transaction (public.save_session_with_sources).
 //
-// Request:  POST { session: SessionRecord }
-// Response: { ok, session: { id } }
+// Identity chain — the only source of ownership:
+//   browser JWT -> auth.getUser() -> verified user.id -> RPC _owner
+// owner_id / _owner / playback_path / infrastructure ids are never accepted
+// from the browser: the schema below rejects unknown keys on attachments and
+// nothing but slot + ingest_source_id + optional label is forwarded.
+//
+// Request:  POST { session: SessionRecord, attachments?: [{ slot, ingest_source_id, label? }] }
+// Response: { ok, session: { id }, active_attachments }
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
@@ -18,7 +23,39 @@ const SessionSchema = z.object({
   payload: z.record(z.unknown()),
 });
 
-const Body = z.object({ session: SessionSchema });
+/** Attachment INTENT only. `.strict()` rejects any attempt to smuggle
+ *  owner_id, playback_path, infrastructure_source_id or srt_port. */
+const AttachmentSchema = z
+  .object({
+    slot: z.number().int().min(1).max(4),
+    ingest_source_id: z.string().uuid(),
+    label: z.string().min(1).max(120).optional(),
+  })
+  .strict();
+
+const Body = z.object({
+  session: SessionSchema,
+  attachments: z.array(AttachmentSchema).max(4).optional(),
+});
+
+/** Validation failures raised by the database function, mapped to 4xx. */
+const CLIENT_ERRORS = new Set([
+  "forbidden",
+  "invalid_attachment",
+  "invalid_attachments",
+  "invalid_slot",
+  "invalid_source",
+  "duplicate_slot",
+  "duplicate_source",
+  "source_not_found",
+  "source_not_ready",
+  "session_id_required",
+]);
+
+function reasonFrom(message: string): string | null {
+  for (const code of CLIENT_ERRORS) if (message.includes(code)) return code;
+  return null;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
