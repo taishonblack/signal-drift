@@ -18,6 +18,8 @@ import ShareSessionDialog from "@/components/session/ShareSessionDialog";
 import SessionEndIndicator from "@/components/session/SessionEndIndicator";
 import { mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
 import { inputsFromRecord, playbackStreamName, whepBase, whepUrlForStream } from "@/lib/stream-paths";
+import { useSessionAttachments } from "@/hooks/use-session-attachments";
+import { syncEndedSessionRemote } from "@/lib/sessions-remote";
 import {
   getSessionById,
   updateSession,
@@ -105,11 +107,14 @@ const SessionRoom = () => {
     return () => window.clearTimeout(t);
   }, []);
 
-  // Real panes, derived from the stored session record. Only enabled
-  // sources with a valid address+port are rendered — no mock fallback.
+  // Persistent-source attachments (viewer-safe playback paths) for this session.
+  const { withAttachments } = useSessionAttachments(id);
+
+  // Real panes, derived from the stored session record. Slots backed by a
+  // persistent source use its playback path; legacy slots keep camN.
   const activeInputs = useMemo(
-    () => (record ? inputsFromRecord(record, parseSrtInput) : []),
-    [record],
+    () => (record ? inputsFromRecord(withAttachments(record), parseSrtInput) : []),
+    [record, withAttachments],
   );
   const session = useMemo(
     () => ({
@@ -507,6 +512,7 @@ const SessionRoom = () => {
   const handleOrphanExpired = useCallback(() => {
     if (!id) return;
     endSessionRecord(id);
+    syncEndedSessionRemote(id);
     setOwnerLeftOpen(false);
     toast({ title: "Session ended", description: "No owner claimed the session." });
     navigate("/sessions");
@@ -679,7 +685,10 @@ const SessionRoom = () => {
       setSaveOpen(true);
       return;
     }
-    if (id) endSessionRecord(id);
+    if (id) {
+      endSessionRecord(id);
+      syncEndedSessionRemote(id);
+    }
     toast({ title: "Session ended" });
     navigate("/sessions");
   }, [id, navigate, identity.kind, currentUserRef.id]);
@@ -687,7 +696,10 @@ const SessionRoom = () => {
   const finalizeEnd = useCallback(
     (mode: "keep" | "discard") => {
       setSaveOpen(false);
-      if (id) endSessionRecord(id);
+      if (id) {
+        endSessionRecord(id);
+        syncEndedSessionRemote(id);
+      }
       toast({
         title: mode === "discard" ? "Session discarded" : "Session ended",
       });

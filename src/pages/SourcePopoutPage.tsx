@@ -6,6 +6,7 @@ import SignalTile from "@/components/SignalTile";
 import { getSessionById, parseSrtInput } from "@/lib/session-store";
 import { inputsFromRecord } from "@/lib/stream-paths";
 import { useLiveMetrics } from "@/hooks/use-live-metrics";
+import { useSessionAttachments } from "@/hooks/use-session-attachments";
 import { loadTimePrefs } from "@/lib/time-utils";
 
 /**
@@ -16,7 +17,8 @@ import { loadTimePrefs } from "@/lib/time-utils";
 const SourcePopoutPage = () => {
   const { sessionId, sourceId } = useParams();
   const record = sessionId ? getSessionById(sessionId) : undefined;
-  const inputs = record ? inputsFromRecord(record, parseSrtInput) : [];
+  const { withAttachments } = useSessionAttachments(sessionId);
+  const inputs = record ? inputsFromRecord(withAttachments(record), parseSrtInput) : [];
   const session = {
     id: record?.id ?? sessionId ?? "",
     name: record?.name ?? "Session",

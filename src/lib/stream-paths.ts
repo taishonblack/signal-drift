@@ -364,24 +364,75 @@ const emptyMetrics = {
   lufs: 0,
 };
 
+/** Session-specific display label for a slot, in preference order. */
+function labelForSlot(slot: number, line: SrtLine, snapshot?: string | null): string {
+  const attached = (snapshot ?? "").trim();
+  if (attached) return `Source ${slot} — ${attached}`;
+  const friendly = (line.label ?? "").trim();
+  const isDefaultLabel = /^(line|source)\s*\d+$/i.test(friendly);
+  return friendly && !isDefaultLabel ? `Source ${slot} — ${friendly}` : `Source ${slot}`;
+}
+
 /**
- * Build the real pane list for a session record. Only enabled sources that
- * have a valid address+port are rendered; every other slot is omitted.
+ * Build the real pane list for a session record. This is the single playback
+ * resolution point for SessionRoom and both popouts:
+ *
+ *   active session_sources attachment for the slot  ->  its playback_path
+ *   otherwise                                       ->  legacy camN mapping
+ *
+ * A slot backed by a persistent source whose attachments have not loaded yet
+ * renders as connecting (no streamName) rather than briefly resolving to camN.
  */
 export function inputsFromRecord(
   record: SessionRecord,
   parseSrtInput: (v: string) => { host: string; port: string },
 ): StreamInput[] {
+  const attachments = record.attachments ?? [];
+  const loaded = record.attachmentsLoaded === true;
+
   return (record.lines ?? [])
-    .filter((line) => line.enabled && lineHasEndpoint(line, parseSrtInput))
-    .map((line) => {
+    .filter((line) => line.enabled)
+    .map((line): StreamInput | null => {
       const slot = line.id;
+      const attachment = attachments.find((a) => a.slot === slot && !!a.playbackPath);
+      const sourceBacked = line.sourceKind === "mako" && !!line.ingestSourceId;
+
+      // Persistent source: playback identity comes from the attachment.
+      if (attachment || sourceBacked) {
+        if (!attachment) {
+          // Attachments still loading (or the source was detached). Never fall
+          // back to the legacy camN path for a source-backed slot.
+          if (loaded) return null;
+          return {
+            id: `line-${slot}`,
+            label: labelForSlot(slot, line),
+            enabled: true,
+            srtAddress: "",
+            status: "connecting" as const,
+            metrics: { ...emptyMetrics },
+            slot,
+          } satisfies StreamInput;
+        }
+        return {
+          id: `line-${slot}`,
+          label: labelForSlot(slot, line, attachment.label),
+          enabled: true,
+          srtAddress: "",
+          status: "connecting" as const,
+          metrics: { ...emptyMetrics },
+          // Already the browser playback identity (`src_xxxxxx-opus`);
+          // playbackStreamName() is a no-op on it, so nothing is suffixed twice.
+          streamName: attachment.playbackPath as string,
+          slot,
+        } satisfies StreamInput;
+      }
+
+      // Legacy / manual slot — unchanged: needs host + port, maps to camN.
+      if (!lineHasEndpoint(line, parseSrtInput)) return null;
       const { host, port } = parseSrtInput(line.srtAddress ?? "");
-      const friendly = (line.label ?? "").trim();
-      const isDefaultLabel = /^(line|source)\s*\d+$/i.test(friendly);
       return {
         id: `line-${slot}`,
-        label: friendly && !isDefaultLabel ? `Source ${slot} — ${friendly}` : `Source ${slot}`,
+        label: labelForSlot(slot, line),
         enabled: true,
         srtAddress: `srt://${host}:${port}`,
         passphrase: line.passphrase || undefined,
@@ -390,5 +441,6 @@ export function inputsFromRecord(
         streamName: streamNameForSlot(slot),
         slot,
       } satisfies StreamInput;
-    });
+    })
+    .filter((i): i is StreamInput => i !== null);
 }

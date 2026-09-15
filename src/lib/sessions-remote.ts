@@ -5,7 +5,9 @@
 // hydration. The local session-store stays the UI source of truth — this
 // layer only mirrors it in the background.
 
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { attachmentIntents } from "@/lib/session-attachments";
 import {
   addSession,
   getSessionById,
@@ -18,11 +20,16 @@ import {
 // `sessions` table (everything else is stuffed into `payload`).
 const TOP_LEVEL_KEYS = ["id", "name", "status", "pin"] as const;
 
+// Runtime-only fields. Attachments live in public.session_sources and are
+// derived there — they must never be round-tripped through the payload.
+const RUNTIME_ONLY_KEYS = ["attachments", "attachmentsLoaded"] as const;
+
 /** Split a SessionRecord into the shape save-session expects. */
 function toRemote(session: SessionRecord) {
   const payload: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(session)) {
     if ((TOP_LEVEL_KEYS as readonly string[]).includes(k)) continue;
+    if ((RUNTIME_ONLY_KEYS as readonly string[]).includes(k)) continue;
     payload[k] = v;
   }
   return {
@@ -78,13 +85,48 @@ export async function loadAuthorizedSession(sessionId: string): Promise<SessionR
 
 // ─── Edge function wrappers ──────────────────────────────────────────
 
-/** Persist an owner's session upstream. Member-only. */
+/**
+ * Persist an owner's session upstream. Member-only.
+ *
+ * The session row and the complete intended persistent-source attachment set
+ * are written in ONE database transaction by save-session, so a session can
+ * never end up with a half-applied source configuration. Only slot +
+ * ingest_source_id (+ optional session label) are sent: ownership and the
+ * playback path are derived server-side from the owner's own sources.
+ */
 export async function saveSessionRemote(session: SessionRecord): Promise<void> {
   const { data, error } = await supabase.functions.invoke("save-session", {
-    body: { session: toRemote(session) },
+    body: {
+      session: toRemote(session),
+      attachments: attachmentIntents(session.lines ?? []),
+    },
   });
-  if (error) throw error;
+  if (error) {
+    const details =
+      error instanceof FunctionsHttpError ? await error.context.text() : error.message;
+    throw new Error(details || "save-session failed");
+  }
   if (data?.error) throw new Error(String(data.error));
+}
+
+/**
+ * Mirror a locally-ended session upstream so the server stamps
+ * `session_sources.detached_at` for its attachments. Best-effort and silent:
+ * the local end is authoritative for the UI. The persistent sources themselves
+ * are never touched — only the attachment rows are released.
+ */
+export function syncEndedSessionRemote(sessionId: string): void {
+  void (async () => {
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (!data?.user) return; // guest sessions are purely local
+      const record = getSessionById(sessionId);
+      if (!record) return;
+      await saveSessionRemote(record);
+    } catch {
+      // Non-fatal: reconciliation happens on the next successful save.
+    }
+  })();
 }
 
 /**

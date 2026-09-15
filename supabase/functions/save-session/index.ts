@@ -1,10 +1,15 @@
-// Upserts a persistent session for a signed-in member. Accepts the full
-// SessionRecord payload from the client and hashes the PIN before
-// storage. Owner is always the authenticated caller — the caller cannot
-// spoof owner_id.
+// Upserts a persistent session for a signed-in member, together with the
+// complete intended set of persistent-source attachments, in ONE database
+// transaction (public.save_session_with_sources).
 //
-// Request:  POST { session: SessionRecord }
-// Response: { ok, session: { id } }
+// Identity chain — the only source of ownership:
+//   browser JWT -> auth.getUser() -> verified user.id -> RPC _owner
+// owner_id / _owner / playback_path / infrastructure ids are never accepted
+// from the browser: the schema below rejects unknown keys on attachments and
+// nothing but slot + ingest_source_id + optional label is forwarded.
+//
+// Request:  POST { session: SessionRecord, attachments?: [{ slot, ingest_source_id, label? }] }
+// Response: { ok, session: { id }, active_attachments }
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
@@ -18,7 +23,39 @@ const SessionSchema = z.object({
   payload: z.record(z.unknown()),
 });
 
-const Body = z.object({ session: SessionSchema });
+/** Attachment INTENT only. `.strict()` rejects any attempt to smuggle
+ *  owner_id, playback_path, infrastructure_source_id or srt_port. */
+const AttachmentSchema = z
+  .object({
+    slot: z.number().int().min(1).max(4),
+    ingest_source_id: z.string().uuid(),
+    label: z.string().min(1).max(120).optional(),
+  })
+  .strict();
+
+const Body = z.object({
+  session: SessionSchema,
+  attachments: z.array(AttachmentSchema).max(4).optional(),
+});
+
+/** Validation failures raised by the database function, mapped to 4xx. */
+const CLIENT_ERRORS = new Set([
+  "forbidden",
+  "invalid_attachment",
+  "invalid_attachments",
+  "invalid_slot",
+  "invalid_source",
+  "duplicate_slot",
+  "duplicate_source",
+  "source_not_found",
+  "source_not_ready",
+  "session_id_required",
+]);
+
+function reasonFrom(message: string): string | null {
+  for (const code of CLIENT_ERRORS) if (message.includes(code)) return code;
+  return null;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -38,13 +75,14 @@ Deno.serve(async (req) => {
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return json({ error: "invalid_body", details: parsed.error.flatten() }, 400);
-  const { session } = parsed.data;
+  const { session, attachments } = parsed.data;
 
   const service = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Verify this user actually owns the session (if it exists).
+  // Verify this user actually owns the session (if it exists). The database
+  // function re-checks this inside the transaction; this is the early exit.
   const { data: existing } = await service
     .from("sessions")
     .select("owner_id, pin_hash")
@@ -64,17 +102,29 @@ Deno.serve(async (req) => {
     pin_hash = hash as string;
   }
 
-  const row = {
-    id: session.id,
-    owner_id: userId,
-    name: session.name,
-    status: session.status,
-    pin_hash,
-    payload: session.payload,
-  };
+  // One transaction: session row + the complete intended attachment set.
+  // _owner is the JWT-verified id — never anything the browser sent.
+  const { data: saved, error: rpcErr } = await service.rpc("save_session_with_sources", {
+    _owner: userId,
+    _session: {
+      id: session.id,
+      name: session.name,
+      status: session.status,
+      pin_hash,
+      payload: session.payload,
+    },
+    _attachments: attachments ?? [],
+  });
 
-  const { error: upErr } = await service.from("sessions").upsert(row, { onConflict: "id" });
-  if (upErr) return json({ error: upErr.message }, 500);
+  if (rpcErr) {
+    const reason = reasonFrom(rpcErr.message ?? "");
+    if (reason) {
+      console.error(`save-session: rejected (${reason})`);
+      return json({ error: reason }, reason === "forbidden" ? 403 : 400);
+    }
+    console.error(`save-session: transaction failed — ${rpcErr.message}`);
+    return json({ error: "save_failed" }, 500);
+  }
 
   // Ensure owner has a shared_session_access "owner" record so listing works uniformly.
   await service
@@ -91,7 +141,12 @@ Deno.serve(async (req) => {
       { onConflict: "session_id,user_id" },
     );
 
-  return json({ ok: true, session: { id: session.id } });
+  const result = (saved ?? {}) as { active_attachments?: number };
+  return json({
+    ok: true,
+    session: { id: session.id },
+    active_attachments: result.active_attachments ?? 0,
+  });
 });
 
 function json(body: unknown, status = 200) {

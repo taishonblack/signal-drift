@@ -34,16 +34,25 @@ import { saveSessionRemote } from "@/lib/sessions-remote";
 import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 import { toast } from "@/components/ui/sonner";
 import { probeStream, publishIdForSlot, streamNameForSlot } from "@/lib/stream-paths";
+import { useMySources, RECEIVE_DESTINATION } from "@/hooks/use-my-sources";
 
 type LineStatus = "empty" | "configured" | "error";
 
+/** True when this slot is backed by a persistent MAKO Receive source. */
+const isSourceBacked = (line: SrtLine) =>
+  line.sourceKind === "mako" && !!line.ingestSourceId;
+
 const isConfigured = (line: SrtLine) => {
+  // A persistent source carries its own dedicated port and playback identity,
+  // so it is configured by selection alone.
+  if (isSourceBacked(line)) return true;
   const { host, port } = parseSrtInput(line.srtAddress);
   return !!host && !!port;
 };
 
 const getLineStatus = (line: SrtLine): LineStatus => {
   if (!line.enabled) return "empty";
+  if (isSourceBacked(line)) return "configured";
   if (!line.srtAddress.trim()) return "empty";
   const { host } = parseSrtInput(line.srtAddress);
   if (!host) return "error";
@@ -200,6 +209,47 @@ const CreateSession = () => {
     saveAddressBook(next);
     toast(`Saved "${tag}" to Address Book.`);
   };
+
+  // The Operator's private source library. Members only; guests keep the
+  // manual address flow untouched.
+  const { sources: mySources, loading: sourcesLoading } = useMySources(!isGuest);
+
+  /** Sources already claimed by another slot in this session. */
+  const claimedElsewhere = useMemo(
+    () =>
+      new Set(
+        lines
+          .filter((l) => l.id !== activeTab && l.enabled && !!l.ingestSourceId)
+          .map((l) => l.ingestSourceId as string),
+      ),
+    [lines, activeTab],
+  );
+
+  const attachMySource = useCallback(
+    (sourceId: string) => {
+      const src = mySources.find((s) => s.id === sourceId);
+      if (!src) return;
+      updateLine({
+        enabled: true,
+        sourceKind: "mako",
+        ingestSourceId: src.id,
+        label: src.name,
+        mode: "caller",
+        // Encoder destination for this dedicated MAKO Receive port.
+        srtAddress: src.srtPort ? `${RECEIVE_DESTINATION}:${src.srtPort}` : "",
+      });
+    },
+    [mySources, updateLine],
+  );
+
+  const detachMySource = useCallback(() => {
+    updateLine({
+      sourceKind: "legacy",
+      ingestSourceId: undefined,
+      srtAddress: "",
+      label: `Line ${activeTab}`,
+    });
+  }, [updateLine, activeTab]);
 
   const configureSource = () => {
     updateLine({ enabled: true });
@@ -614,14 +664,73 @@ const CreateSession = () => {
 
             {activeLine.enabled && (
               <>
+                {/* My Sources picker — persistent MAKO Receive sources.
+                    Selecting one attaches it to this slot; the session keeps a
+                    label snapshot and the source itself survives the session. */}
+                {!isGuest && (
+                  <div className="rounded-md border border-primary/20 bg-primary/[0.04] p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        My Sources
+                      </span>
+                      {isSourceBacked(activeLine) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={detachMySource}
+                          className="h-6 text-[11px] text-muted-foreground hover:text-foreground"
+                        >
+                          Use manual address instead
+                        </Button>
+                      )}
+                    </div>
+                    {sourcesLoading ? (
+                      <p className="text-[11px] text-muted-foreground">Loading your sources…</p>
+                    ) : mySources.length === 0 ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        No sources yet. Create one on the Sources page, then select it here.
+                      </p>
+                    ) : (
+                      <Select
+                        value={activeLine.ingestSourceId ?? ""}
+                        onValueChange={attachMySource}
+                      >
+                        <SelectTrigger className="bg-muted/15 border-border/15 text-sm h-9">
+                          <SelectValue placeholder="Select one of your sources…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {mySources.map((src) => (
+                            <SelectItem
+                              key={src.id}
+                              value={src.id}
+                              disabled={claimedElsewhere.has(src.id)}
+                            >
+                              {src.name}
+                              {claimedElsewhere.has(src.id) ? " — already in this session" : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                )}
+
                 {/* Ingest mapping hint — SRT contribution details for the encoder. */}
-                <div className="rounded-md border border-border/15 bg-muted/10 p-2.5 text-[11px] text-muted-foreground">
-                  Publishes to MediaMTX path{" "}
-                  <span className="font-mono text-foreground">{streamNameForSlot(activeTab)}</span>.
-                  Set the encoder Stream ID to{" "}
-                  <span className="font-mono text-foreground">{publishIdForSlot(activeTab)}</span> in
-                  caller mode.
-                </div>
+                {isSourceBacked(activeLine) ? (
+                  <div className="rounded-md border border-border/15 bg-muted/10 p-2.5 text-[11px] text-muted-foreground">
+                    Send your encoder to{" "}
+                    <span className="font-mono text-foreground">{activeLine.srtAddress || RECEIVE_DESTINATION}</span>{" "}
+                    in caller mode. This source keeps its own dedicated port.
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-border/15 bg-muted/10 p-2.5 text-[11px] text-muted-foreground">
+                    Publishes to MediaMTX path{" "}
+                    <span className="font-mono text-foreground">{streamNameForSlot(activeTab)}</span>.
+                    Set the encoder Stream ID to{" "}
+                    <span className="font-mono text-foreground">{publishIdForSlot(activeTab)}</span> in
+                    caller mode.
+                  </div>
+                )}
 
                 {/* Friendly Name */}
                 <div className="space-y-1">
@@ -638,45 +747,51 @@ const CreateSession = () => {
                   />
                 </div>
 
-                {/* Address + Port + Save */}
-                <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] items-end">
-                  <div className="space-y-1 min-w-0">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Address
-                    </label>
-                    <Input
-                      value={activeHost}
-                      onChange={(e) => handleHostChange(e.target.value)}
-                      placeholder="134.209.119.136"
-                      className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1 sm:w-28">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Port
-                    </label>
-                    <Input
-                      value={activePort}
-                      onChange={(e) => handlePortChange(e.target.value)}
-                      placeholder="8890"
-                      inputMode="numeric"
-                      className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
-                    />
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSaveToAddressBook}
-                    disabled={!activeHost || !activePort}
-                    className="gap-1.5 border-border/30 text-foreground h-9"
-                    title="Save this source to your Address Book"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Save Source
-                  </Button>
-                </div>
-                <p className="text-[10px] text-muted-foreground/50 -mt-2">
-                  Paste a full <span className="font-mono">srt://</span> URL and MAKO splits it for you.
-                </p>
+                {/* Address + Port + Save — manual sources only. A persistent
+                    source owns its address, so it is not editable here. */}
+                {!isSourceBacked(activeLine) && (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] items-end">
+                      <div className="space-y-1 min-w-0">
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          Address
+                        </label>
+                        <Input
+                          value={activeHost}
+                          onChange={(e) => handleHostChange(e.target.value)}
+                          placeholder="134.209.119.136"
+                          className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1 sm:w-28">
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          Port
+                        </label>
+                        <Input
+                          value={activePort}
+                          onChange={(e) => handlePortChange(e.target.value)}
+                          placeholder="8890"
+                          inputMode="numeric"
+                          className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
+                        />
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSaveToAddressBook}
+                        disabled={!activeHost || !activePort}
+                        className="gap-1.5 border-border/30 text-foreground h-9"
+                        title="Save this source to your Address Book"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Save Source
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/50 -mt-2">
+                      Paste a full <span className="font-mono">srt://</span> URL and MAKO splits it for you.
+                    </p>
+                  </>
+                )}
+
 
                 {/* Notes */}
                 <div className="space-y-1">
