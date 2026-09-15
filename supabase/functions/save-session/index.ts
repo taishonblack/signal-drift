@@ -75,13 +75,14 @@ Deno.serve(async (req) => {
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return json({ error: "invalid_body", details: parsed.error.flatten() }, 400);
-  const { session } = parsed.data;
+  const { session, attachments } = parsed.data;
 
   const service = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Verify this user actually owns the session (if it exists).
+  // Verify this user actually owns the session (if it exists). The database
+  // function re-checks this inside the transaction; this is the early exit.
   const { data: existing } = await service
     .from("sessions")
     .select("owner_id, pin_hash")
@@ -101,17 +102,29 @@ Deno.serve(async (req) => {
     pin_hash = hash as string;
   }
 
-  const row = {
-    id: session.id,
-    owner_id: userId,
-    name: session.name,
-    status: session.status,
-    pin_hash,
-    payload: session.payload,
-  };
+  // One transaction: session row + the complete intended attachment set.
+  // _owner is the JWT-verified id — never anything the browser sent.
+  const { data: saved, error: rpcErr } = await service.rpc("save_session_with_sources", {
+    _owner: userId,
+    _session: {
+      id: session.id,
+      name: session.name,
+      status: session.status,
+      pin_hash,
+      payload: session.payload,
+    },
+    _attachments: attachments ?? [],
+  });
 
-  const { error: upErr } = await service.from("sessions").upsert(row, { onConflict: "id" });
-  if (upErr) return json({ error: upErr.message }, 500);
+  if (rpcErr) {
+    const reason = reasonFrom(rpcErr.message ?? "");
+    if (reason) {
+      console.error(`save-session: rejected (${reason})`);
+      return json({ error: reason }, reason === "forbidden" ? 403 : 400);
+    }
+    console.error(`save-session: transaction failed — ${rpcErr.message}`);
+    return json({ error: "save_failed" }, 500);
+  }
 
   // Ensure owner has a shared_session_access "owner" record so listing works uniformly.
   await service
@@ -128,7 +141,12 @@ Deno.serve(async (req) => {
       { onConflict: "session_id,user_id" },
     );
 
-  return json({ ok: true, session: { id: session.id } });
+  const result = (saved ?? {}) as { active_attachments?: number };
+  return json({
+    ok: true,
+    session: { id: session.id },
+    active_attachments: result.active_attachments ?? 0,
+  });
 });
 
 function json(body: unknown, status = 200) {
