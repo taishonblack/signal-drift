@@ -9,6 +9,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3";
 import { createSource } from "./create-source.ts";
+import { deleteSource, type RegistrySourceRow } from "./delete-source.ts";
 
 const BodySchema = z.object({
   action: z.string().min(1).max(64),
@@ -164,28 +165,71 @@ Deno.serve(async (req) => {
     }
     const sourceId = idParsed.data;
 
-    try {
-      const upstream = await fetch(`${apiBase}/sources/${sourceId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
-          Accept: "application/json",
+    // Service-role client: the only path allowed to write the
+    // infrastructure-managed columns on public.ingest_sources.
+    const adminDb = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+      auth: { persistSession: false },
+    });
+
+    const outcome = await deleteSource(
+      { sourceId, userId: me.user.id, isAdmin: true },
+      {
+        loadRegistryRow: async (id) => {
+          const { data, error } = await adminDb
+            .from("ingest_sources")
+            .select("id, owner_id, infrastructure_source_id, lifecycle_status, connection_status")
+            .eq("infrastructure_source_id", id)
+            .maybeSingle();
+          if (error) {
+            console.error(`mako-ingest: registry lookup failed (${error.code ?? "unknown"})`);
+            return null;
+          }
+          return (data as RegistrySourceRow | null) ?? null;
         },
-      });
+        countActiveAttachments: async (ingestSourceId) => {
+          const { count, error } = await adminDb
+            .from("session_sources")
+            .select("id", { count: "exact", head: true })
+            .eq("ingest_source_id", ingestSourceId)
+            .is("detached_at", null);
+          if (error) {
+            console.error(`mako-ingest: attachment check failed (${error.code ?? "unknown"})`);
+            // Fail safe: treat an unknown attachment state as "in use".
+            return 1;
+          }
+          return count ?? 0;
+        },
+        updateRegistryRow: async (id, patch) => {
+          const { error } = await adminDb.from("ingest_sources").update(patch).eq("id", id);
+          if (error) {
+            console.error(`mako-ingest: registry update failed (${error.code ?? "unknown"})`);
+            return false;
+          }
+          return true;
+        },
+        deleteUpstream: async (infrastructureSourceId) => {
+          try {
+            const res = await fetch(`${apiBase}/sources/${infrastructureSourceId}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${apiToken}`, Accept: "application/json" },
+            });
+            if (!res.ok && res.status !== 404) {
+              console.error(`mako-ingest: delete upstream returned ${res.status}`);
+            }
+            return res.ok || res.status === 404;
+          } catch (e) {
+            console.error(
+              "mako-ingest: delete fetch failed",
+              e instanceof Error ? e.message : "unknown",
+            );
+            return false;
+          }
+        },
+        logError: (message) => console.error(message),
+      },
+    );
 
-      if (upstream.status === 404) {
-        return json({ error: "not_found" }, 404);
-      }
-      if (!upstream.ok) {
-        console.error(`mako-ingest: delete upstream returned ${upstream.status}`);
-        return json({ error: "upstream_error" }, 502);
-      }
-
-      return json({ source_id: sourceId, deleted: true }, 200);
-    } catch (e) {
-      console.error("mako-ingest: delete fetch failed", e instanceof Error ? e.message : "unknown");
-      return json({ error: "upstream_unreachable" }, 502);
-    }
+    return json(outcome.body, outcome.status);
   }
 
   try {
