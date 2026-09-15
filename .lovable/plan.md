@@ -21,9 +21,9 @@ One migration:
 2. Drop the two table constraints and replace them with partial unique indexes limited to `detached_at IS NULL`, preserving the active-state invariants while allowing detached history and later reattachment:
    - `UNIQUE (session_id, slot) WHERE detached_at IS NULL`
    - `UNIQUE (session_id, ingest_source_id) WHERE detached_at IS NULL`
-3. `public.save_session_with_sources(_session jsonb, _attachments jsonb)` — `SECURITY DEFINER`, `SET search_path = public`, `REVOKE` from `PUBLIC`/`anon`/`authenticated`, `GRANT EXECUTE` to `service_role` only. It takes the owner id as an argument supplied by the already-authenticated edge function, never from the request body, and runs as one statement (one transaction):
-   - upsert `public.sessions` after verifying any existing row's `owner_id` matches;
-   - for each intended attachment: validate `slot BETWEEN 1 AND 4`, reject duplicate slots and duplicate source ids in the payload, then look up `ingest_sources` by id requiring `owner_id = _owner OR has_role(_owner,'admin')`, `lifecycle_status <> 'deleted'` and a non-null `playback_path`. Any failure raises, rolling back the session write too;
+3. `public.save_session_with_sources(_owner uuid, _session jsonb, _attachments jsonb)` — `SECURITY DEFINER`, `SET search_path = public`, `REVOKE` from `PUBLIC`/`anon`/`authenticated`, `GRANT EXECUTE` to `service_role` only. `_owner` is the JWT-verified user id passed by the edge function; it is never read from request JSON. The whole body runs as one transaction:
+   - upsert `public.sessions` after verifying any existing row's `owner_id` matches `_owner`;
+   - for each intended attachment: validate `slot BETWEEN 1 AND 4`, reject duplicate slots and duplicate source ids in the payload, then look up `ingest_sources` by id requiring strictly `owner_id = _owner` — **no admin bypass**; `has_role(...,'admin')` plays no part in normal attachment, so an admin using Create Session can only attach their own Sources — plus `lifecycle_status <> 'deleted'` and a non-null `playback_path`. Any failure raises, rolling back the session write too;
    - synchronize the active set: stamp `detached_at = now()` on active rows no longer intended or whose source changed, then insert the intended ones with the trusted `playback_path` and the label snapshot (`ingest_sources.name` unless a session label was supplied);
    - when the incoming status is `completed` or `archived`, stamp `detached_at = now()` on every remaining active row for that session.
 
