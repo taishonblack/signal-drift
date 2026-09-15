@@ -110,6 +110,26 @@ export async function saveSessionRemote(session: SessionRecord): Promise<void> {
 }
 
 /**
+ * Mirror a locally-ended session upstream so the server stamps
+ * `session_sources.detached_at` for its attachments. Best-effort and silent:
+ * the local end is authoritative for the UI. The persistent sources themselves
+ * are never touched — only the attachment rows are released.
+ */
+export function syncEndedSessionRemote(sessionId: string): void {
+  void (async () => {
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (!data?.user) return; // guest sessions are purely local
+      const record = getSessionById(sessionId);
+      if (!record) return;
+      await saveSessionRemote(record);
+    } catch {
+      // Non-fatal: reconciliation happens on the next successful save.
+    }
+  })();
+}
+
+/**
  * Owner-side revoke: mark a viewer's shared_session_access row revoked.
  * RLS restricts this to the session owner (see policy
  * "Owner updates shares for own sessions").
