@@ -13,7 +13,15 @@
 - `MakoIngestTestPanel` stops rendering on `/create`. The component file stays in the repo, unrendered, for development. No Ops changes in this phase.
 
 ### Server actions (`supabase/functions/mako-ingest/`)
-- `create_source`: admin gate removed, authentication still required. `owner_id` always from the verified token, never the request. Before any upstream call, count the caller's non-deleted sources; at the limit return `source_limit_reached` with no provisioning and no row. All Phase 2 protections (name validation, upstream response validation, service-role persistence, compensating delete, sanitized errors) unchanged. The limit lives in one exported constant (`MAX_ACTIVE_SOURCES = 4`).
+- `create_source`: admin gate removed, authentication still required. `owner_id` always from the verified token, never the request. All Phase 2 protections (name validation, upstream response validation, service-role persistence, compensating delete, sanitized errors) unchanged. The limit lives in one exported constant (`MAX_ACTIVE_SOURCES = 4`).
+
+### Quota with concurrency protection
+A plain count-then-provision check races across tabs, so the slot is reserved atomically before any external call:
+
+- One small database function (security definer, service-role only) takes a per-owner transaction advisory lock keyed on the owner ID, counts that owner's non-deleted rows, and — only if under the limit — inserts a placeholder `provisioning` row and returns its ID. Two simultaneous requests from an owner with three sources therefore serialize, and the second is refused with `source_limit_reached` before any infrastructure is touched.
+- Provisioning then fills that reserved row in place. Any failure — upstream error, invalid response, persistence failure — deletes the reservation row so the slot is released, and the existing compensating upstream delete still runs unchanged.
+- Deleted rows never hold a reservation and never count toward the limit.
+- No organizations, billing, or generalized quota system.
 - `delete_source`: admin gate removed; the loaded registry row's `owner_id` must equal the caller. Admin no longer bypasses ownership on this product action. All Phase 3 behaviour (in-use protection, `deleting` mark, authoritative stored ID, `deleted`/`offline` finalization, idempotency, error state, preserved history) unchanged.
 - New `rename_source`: authenticated, owner-only, `name` only, same validation as creation, refused on deleted rows. Implemented as a direct client update through existing RLS if that is sufficient — the trigger already blocks infrastructure columns — otherwise as a thin function action. The report will state which was used and why.
 
