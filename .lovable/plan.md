@@ -13,7 +13,15 @@
 - `MakoIngestTestPanel` stops rendering on `/create`. The component file stays in the repo, unrendered, for development. No Ops changes in this phase.
 
 ### Server actions (`supabase/functions/mako-ingest/`)
-- `create_source`: admin gate removed, authentication still required. `owner_id` always from the verified token, never the request. Before any upstream call, count the caller's non-deleted sources; at the limit return `source_limit_reached` with no provisioning and no row. All Phase 2 protections (name validation, upstream response validation, service-role persistence, compensating delete, sanitized errors) unchanged. The limit lives in one exported constant (`MAX_ACTIVE_SOURCES = 4`).
+- `create_source`: admin gate removed, authentication still required. `owner_id` always from the verified token, never the request. All Phase 2 protections (name validation, upstream response validation, service-role persistence, compensating delete, sanitized errors) unchanged. The limit lives in one exported constant (`MAX_ACTIVE_SOURCES = 4`).
+
+### Quota with concurrency protection
+A plain count-then-provision check races across tabs, so the slot is reserved atomically before any external call:
+
+- One small database function (security definer, service-role only) takes a per-owner transaction advisory lock keyed on the owner ID, counts that owner's non-deleted rows, and — only if under the limit — inserts a placeholder `provisioning` row and returns its ID. Two simultaneous requests from an owner with three sources therefore serialize, and the second is refused with `source_limit_reached` before any infrastructure is touched.
+- Provisioning then fills that reserved row in place. Any failure — upstream error, invalid response, persistence failure — deletes the reservation row so the slot is released, and the existing compensating upstream delete still runs unchanged.
+- Deleted rows never hold a reservation and never count toward the limit.
+- No organizations, billing, or generalized quota system.
 - `delete_source`: admin gate removed; the loaded registry row's `owner_id` must equal the caller. Admin no longer bypasses ownership on this product action. All Phase 3 behaviour (in-use protection, `deleting` mark, authoritative stored ID, `deleted`/`offline` finalization, idempotency, error state, preserved history) unchanged.
 - New `rename_source`: authenticated, owner-only, `name` only, same validation as creation, refused on deleted rows. Implemented as a direct client update through existing RLS if that is sufficient — the trigger already blocks infrastructure columns — otherwise as a thin function action. The report will state which was used and why.
 
@@ -32,10 +40,12 @@ Read `public.ingest_sources` directly from the client with RLS as the boundary, 
 Create Session's four-source workflow, `stream-paths.ts`, `cam1..cam4`, Address Book, session ownership/sharing, and session storage. The only `/create` change is dropping the developer panel. The `mako_sessions_v3` localStorage cross-account risk is recorded as a Phase 5+ hardening item and is not copied into Sources.
 
 ## Tests
-Fake-based unit tests extending the existing `src/test/mako-ingest-*.test.ts` pattern: creation without admin, owner from identity, quota checked before provisioning, fifth source refused, deleted rows not counted, compensation intact; rename by owner, refusal for non-owner, infrastructure fields unchanged; delete by owner, refusal for non-owner, in-use/idempotency/error paths intact; admin requirement on global `list_sources`. Plus UI tests that `/sources` shows nothing signed out and that the developer panel is gone from `/create`.
+Fake-based unit tests extending the existing `src/test/mako-ingest-*.test.ts` pattern: creation without admin, owner from identity, reservation taken before provisioning, fifth source refused, deleted rows not counted, reservation released on failure, compensation intact; a focused concurrency test where two simultaneous creates for an owner holding three sources produce exactly one new source; rename by owner, refusal for non-owner, infrastructure fields unchanged; delete by owner, refusal for non-owner, in-use/idempotency/error paths intact; admin requirement on global `list_sources`. Plus UI tests that `/sources` shows nothing signed out and that the developer panel is gone from `/create`.
 
 ## Live verification
 Two normal (non-admin) accounts: A creates and renames a source and sees its port; B cannot see, rename, or delete A's source and can create its own; global `list_sources` is refused for both and still works for admin. Existing sessions and playback checked unaffected. Typecheck and full suite run. Quota exhaustion stays in tests only — no port burning.
 
 ## Files this touches
-`supabase/functions/mako-ingest/index.ts`, `create-source.ts`, `delete-source.ts`, new `rename-source.ts`; `src/App.tsx`, `src/components/AppSidebar.tsx`, `src/pages/CreateSession.tsx` (panel removal only), new `src/pages/Sources.tsx` plus small source components and a sources hook; new and extended test files. No migrations.
+`supabase/functions/mako-ingest/index.ts`, `create-source.ts`, `delete-source.ts`, new `rename-source.ts`; `src/App.tsx`, `src/components/AppSidebar.tsx`, `src/pages/CreateSession.tsx` (panel removal only), new `src/pages/Sources.tsx` plus small source components and a sources hook; new and extended test files. One small migration adding the per-owner slot-reservation function — no table or policy changes.
+
+Live verification also confirms that after User A deletes a source it disappears from My Sources, stays in the database as history, and frees a slot against the four-source limit.
