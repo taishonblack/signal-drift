@@ -32,14 +32,15 @@ const LayoutPopoutPage = () => {
   const [search] = useSearchParams();
 
   const record = sessionId ? getSessionById(sessionId) : undefined;
+  const { withAttachments } = useSessionAttachments(sessionId);
   const session = useMemo(
     () => ({
       id: record?.id ?? sessionId ?? "",
       name: record?.name ?? "Session",
       createdAt: record?.createdAt ?? new Date().toISOString(),
-      inputs: record ? inputsFromRecord(record, parseSrtInput) : [],
+      inputs: record ? inputsFromRecord(withAttachments(record), parseSrtInput) : [],
     }),
-    [record, sessionId],
+    [record, sessionId, withAttachments],
   );
   const activeInputs = session.inputs;
   const { getMetrics } = useLiveMetrics(session.inputs);
