@@ -17,6 +17,9 @@ export type SessionPurpose =
   | "Engineering"
   | "Custom";
 
+/** How a slot gets its feed. Absent means legacy/manual (address + port). */
+export type SourceKind = "mako" | "legacy";
+
 export interface SrtLine {
   id: number;
   enabled: boolean;
@@ -27,6 +30,22 @@ export interface SrtLine {
   mode: SrtMode;
   notes: string;
   originTimeZone: string;
+  /** Phase 5, additive: persistent MAKO Receive source chosen for this slot. */
+  ingestSourceId?: string;
+  /** Phase 5, additive: "mako" when backed by a persistent source. */
+  sourceKind?: SourceKind;
+}
+
+/**
+ * Viewer-safe playback metadata for one attached persistent source, read from
+ * public.session_sources. Never carries SRT port, infrastructure id or owner.
+ */
+export interface SessionAttachment {
+  slot: number;
+  label: string | null;
+  playbackPath: string | null;
+  ingestSourceId: string;
+  attachedAt: string;
 }
 
 export interface SessionDraft {
