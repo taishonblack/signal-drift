@@ -747,45 +747,51 @@ const CreateSession = () => {
                   />
                 </div>
 
-                {/* Address + Port + Save */}
-                <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] items-end">
-                  <div className="space-y-1 min-w-0">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Address
-                    </label>
-                    <Input
-                      value={activeHost}
-                      onChange={(e) => handleHostChange(e.target.value)}
-                      placeholder="134.209.119.136"
-                      className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1 sm:w-28">
-                    <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Port
-                    </label>
-                    <Input
-                      value={activePort}
-                      onChange={(e) => handlePortChange(e.target.value)}
-                      placeholder="8890"
-                      inputMode="numeric"
-                      className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
-                    />
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSaveToAddressBook}
-                    disabled={!activeHost || !activePort}
-                    className="gap-1.5 border-border/30 text-foreground h-9"
-                    title="Save this source to your Address Book"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Save Source
-                  </Button>
-                </div>
-                <p className="text-[10px] text-muted-foreground/50 -mt-2">
-                  Paste a full <span className="font-mono">srt://</span> URL and MAKO splits it for you.
-                </p>
+                {/* Address + Port + Save — manual sources only. A persistent
+                    source owns its address, so it is not editable here. */}
+                {!isSourceBacked(activeLine) && (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] items-end">
+                      <div className="space-y-1 min-w-0">
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          Address
+                        </label>
+                        <Input
+                          value={activeHost}
+                          onChange={(e) => handleHostChange(e.target.value)}
+                          placeholder="134.209.119.136"
+                          className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1 sm:w-28">
+                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          Port
+                        </label>
+                        <Input
+                          value={activePort}
+                          onChange={(e) => handlePortChange(e.target.value)}
+                          placeholder="8890"
+                          inputMode="numeric"
+                          className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
+                        />
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSaveToAddressBook}
+                        disabled={!activeHost || !activePort}
+                        className="gap-1.5 border-border/30 text-foreground h-9"
+                        title="Save this source to your Address Book"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Save Source
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground/50 -mt-2">
+                      Paste a full <span className="font-mono">srt://</span> URL and MAKO splits it for you.
+                    </p>
+                  </>
+                )}
+
 
                 {/* Notes */}
                 <div className="space-y-1">
