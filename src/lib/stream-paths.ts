@@ -392,7 +392,7 @@ export function inputsFromRecord(
 
   return (record.lines ?? [])
     .filter((line) => line.enabled)
-    .map((line) => {
+    .map((line): StreamInput | null => {
       const slot = line.id;
       const attachment = attachments.find((a) => a.slot === slot && !!a.playbackPath);
       const sourceBacked = line.sourceKind === "mako" && !!line.ingestSourceId;
