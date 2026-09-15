@@ -147,6 +147,16 @@ export interface SessionRecord {
   idleDeadline?: number | null;
   /** Recorded reason the session ended. */
   endReason?: EndReason;
+  /**
+   * Active persistent-source attachments (detached_at IS NULL), loaded from the
+   * database. Not part of the saved payload — see sessions-remote.
+   */
+  attachments?: SessionAttachment[];
+  /**
+   * False/undefined means the attachment query has not completed. A slot backed
+   * by a persistent source must NOT fall back to legacy camN in that window.
+   */
+  attachmentsLoaded?: boolean;
 }
 
 
