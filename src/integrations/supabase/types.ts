@@ -96,7 +96,7 @@ export type Database = {
           connection_status: string
           created_at: string
           id: string
-          infrastructure_source_id: string
+          infrastructure_source_id: string | null
           last_error: string | null
           lifecycle_status: string
           name: string
@@ -111,7 +111,7 @@ export type Database = {
           connection_status?: string
           created_at?: string
           id?: string
-          infrastructure_source_id: string
+          infrastructure_source_id?: string | null
           last_error?: string | null
           lifecycle_status?: string
           name: string
@@ -126,7 +126,7 @@ export type Database = {
           connection_status?: string
           created_at?: string
           id?: string
-          infrastructure_source_id?: string
+          infrastructure_source_id?: string | null
           last_error?: string | null
           lifecycle_status?: string
           name?: string
@@ -454,6 +454,10 @@ export type Database = {
       is_session_owner: {
         Args: { _session_id: string; _user_id: string }
         Returns: boolean
+      }
+      reserve_ingest_source_slot: {
+        Args: { _max: number; _name: string; _owner: string }
+        Returns: string
       }
       verify_session_pin: {
         Args: { _pin: string; _session_id: string }

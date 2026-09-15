@@ -70,15 +70,8 @@ Deno.serve(async (req) => {
   }
 
   if (action === "create_source") {
-    // Infrastructure changes require the existing admin role model.
-    const { data: isAdmin, error: roleErr } = await userClient.rpc("has_role", {
-      _user_id: me.user.id,
-      _role: "admin",
-    });
-    if (roleErr || isAdmin !== true) {
-      return json({ error: "forbidden" }, 403);
-    }
-
+    // Normal Operator capability: any authenticated user may create a source
+    // for THEMSELVES. owner_id always comes from the verified token.
     const nameParsed = NameSchema.safeParse(parsed.data.name ?? "");
     if (!nameParsed.success) {
       return json({ error: "invalid_name" }, 400);
@@ -93,6 +86,20 @@ Deno.serve(async (req) => {
     const outcome = await createSource(
       { ownerId: me.user.id, name: nameParsed.data },
       {
+        reserveSlot: async ({ ownerId, name, max }) => {
+          const { data, error } = await adminDb.rpc("reserve_ingest_source_slot", {
+            _owner: ownerId,
+            _name: name,
+            _max: max,
+          });
+          if (error) {
+            console.error(`mako-ingest: slot reservation failed (${error.code ?? "unknown"})`);
+            return { ok: false as const, reason: "error" as const };
+          }
+          const id = typeof data === "string" ? data : null;
+          if (!id) return { ok: false as const, reason: "limit_reached" as const };
+          return { ok: true as const, id };
+        },
         provision: async (name) => {
           try {
             const upstream = await fetch(`${apiBase}/sources`, {
@@ -123,17 +130,21 @@ Deno.serve(async (req) => {
             return { ok: false, error: "upstream_unreachable", status: 502 };
           }
         },
-        insertRegistryRow: async (row) => {
-          const { data, error } = await adminDb
-            .from("ingest_sources")
-            .insert(row)
-            .select("id")
-            .single();
+        finalizeRegistryRow: async (id, patch) => {
+          const { error } = await adminDb.from("ingest_sources").update(patch).eq("id", id);
           if (error) {
-            console.error(`mako-ingest: registry insert failed (${error.code ?? "unknown"})`);
-            return { ok: false, duplicate: error.code === "23505" };
+            console.error(`mako-ingest: registry finalize failed (${error.code ?? "unknown"})`);
+            return false;
           }
-          return { ok: true, id: (data as { id: string } | null)?.id ?? null };
+          return true;
+        },
+        releaseReservation: async (id) => {
+          const { error } = await adminDb.from("ingest_sources").delete().eq("id", id);
+          if (error) {
+            console.error(`mako-ingest: reservation release failed (${error.code ?? "unknown"})`);
+            return false;
+          }
+          return true;
         },
         deleteUpstream: async (sourceId) => {
           const res = await fetch(`${apiBase}/sources/${sourceId}`, {
@@ -150,15 +161,6 @@ Deno.serve(async (req) => {
   }
 
   if (action === "delete_source") {
-    // Infrastructure changes require the existing admin role model.
-    const { data: isAdmin, error: roleErr } = await userClient.rpc("has_role", {
-      _user_id: me.user.id,
-      _role: "admin",
-    });
-    if (roleErr || isAdmin !== true) {
-      return json({ error: "forbidden" }, 403);
-    }
-
     const idParsed = SourceIdSchema.safeParse(parsed.data.source_id ?? "");
     if (!idParsed.success) {
       return json({ error: "invalid_source_id" }, 400);
@@ -171,8 +173,11 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     });
 
+    // Normal product action: strictly owner scoped. Admin status intentionally
+    // does NOT bypass ownership here; emergency infrastructure controls would
+    // be a separate, deliberate Ops action.
     const outcome = await deleteSource(
-      { sourceId, userId: me.user.id, isAdmin: true },
+      { sourceId, userId: me.user.id, isAdmin: false },
       {
         loadRegistryRow: async (id) => {
           const { data, error } = await adminDb
@@ -230,6 +235,19 @@ Deno.serve(async (req) => {
     );
 
     return json(outcome.body, outcome.status);
+  }
+
+  // list_sources is the GLOBAL infrastructure listing — internal admin
+  // troubleshooting only. It is never used by the My Sources product, which
+  // reads public.ingest_sources through RLS instead.
+  {
+    const { data: isAdmin, error: roleErr } = await userClient.rpc("has_role", {
+      _user_id: me.user.id,
+      _role: "admin",
+    });
+    if (roleErr || isAdmin !== true) {
+      return json({ error: "forbidden" }, 403);
+    }
   }
 
   try {

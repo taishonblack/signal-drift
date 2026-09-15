@@ -19,7 +19,6 @@ import DurationPicker from "@/components/session/DurationPicker";
 import SessionStatusBadge from "@/components/session/SessionStatusBadge";
 import SwitchActiveSessionDialog from "@/components/session/SwitchActiveSessionDialog";
 import SessionChangeLogPanel from "@/components/session/SessionChangeLogPanel";
-import MakoIngestTestPanel from "@/components/dev/MakoIngestTestPanel";
 import {
   type SrtLine, type SessionRecord,
   createDefaultLine, getSessions, addSession, getSessionById, updateSession,
@@ -826,8 +825,6 @@ const CreateSession = () => {
         <p className="text-[10px] text-muted-foreground/50 text-center">
           Ownership can be transferred inside the session if you leave.
         </p>
-
-        <MakoIngestTestPanel />
       </div>
 
       {/* ─── Right: Change log (configure) or Recent Sessions (create) ─── */}

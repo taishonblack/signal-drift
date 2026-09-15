@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Landing from "./pages/Landing";
 import Sessions from "./pages/Sessions";
+import Sources from "./pages/Sources";
 import CreateSession from "./pages/CreateSession";
 import SessionRoom from "./pages/SessionRoom";
 import JoinSession from "./pages/JoinSession";
@@ -55,6 +56,7 @@ const App = () => (
           <Route path="/create" element={<AppLayout><CreateSession /></AppLayout>} />
           <Route path="/session/:id/configure" element={<AppLayout><CreateSession /></AppLayout>} />
           <Route path="/session/:id" element={<AppLayout><SessionRoom /></AppLayout>} />
+          <Route path="/sources" element={<AppLayout><Sources /></AppLayout>} />
           <Route path="/join" element={<AppLayout><JoinSession /></AppLayout>} />
           <Route path="/join/:sessionId" element={<AppLayout><JoinSession /></AppLayout>} />
           <Route path="/account" element={<AppLayout><AccountPage /></AppLayout>} />
