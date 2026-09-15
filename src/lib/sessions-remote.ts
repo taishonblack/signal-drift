@@ -83,12 +83,27 @@ export async function loadAuthorizedSession(sessionId: string): Promise<SessionR
 
 // ─── Edge function wrappers ──────────────────────────────────────────
 
-/** Persist an owner's session upstream. Member-only. */
+/**
+ * Persist an owner's session upstream. Member-only.
+ *
+ * The session row and the complete intended persistent-source attachment set
+ * are written in ONE database transaction by save-session, so a session can
+ * never end up with a half-applied source configuration. Only slot +
+ * ingest_source_id (+ optional session label) are sent: ownership and the
+ * playback path are derived server-side from the owner's own sources.
+ */
 export async function saveSessionRemote(session: SessionRecord): Promise<void> {
   const { data, error } = await supabase.functions.invoke("save-session", {
-    body: { session: toRemote(session) },
+    body: {
+      session: toRemote(session),
+      attachments: attachmentIntents(session.lines ?? []),
+    },
   });
-  if (error) throw error;
+  if (error) {
+    const details =
+      error instanceof FunctionsHttpError ? await error.context.text() : error.message;
+    throw new Error(details || "save-session failed");
+  }
   if (data?.error) throw new Error(String(data.error));
 }
 
