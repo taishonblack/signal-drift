@@ -21,9 +21,9 @@ One migration:
 2. Drop the two table constraints and replace them with partial unique indexes limited to `detached_at IS NULL`, preserving the active-state invariants while allowing detached history and later reattachment:
    - `UNIQUE (session_id, slot) WHERE detached_at IS NULL`
    - `UNIQUE (session_id, ingest_source_id) WHERE detached_at IS NULL`
-3. `public.save_session_with_sources(_session jsonb, _attachments jsonb)` — `SECURITY DEFINER`, `SET search_path = public`, `REVOKE` from `PUBLIC`/`anon`/`authenticated`, `GRANT EXECUTE` to `service_role` only. It takes the owner id as an argument supplied by the already-authenticated edge function, never from the request body, and runs as one statement (one transaction):
-   - upsert `public.sessions` after verifying any existing row's `owner_id` matches;
-   - for each intended attachment: validate `slot BETWEEN 1 AND 4`, reject duplicate slots and duplicate source ids in the payload, then look up `ingest_sources` by id requiring `owner_id = _owner OR has_role(_owner,'admin')`, `lifecycle_status <> 'deleted'` and a non-null `playback_path`. Any failure raises, rolling back the session write too;
+3. `public.save_session_with_sources(_owner uuid, _session jsonb, _attachments jsonb)` — `SECURITY DEFINER`, `SET search_path = public`, `REVOKE` from `PUBLIC`/`anon`/`authenticated`, `GRANT EXECUTE` to `service_role` only. `_owner` is the JWT-verified user id passed by the edge function; it is never read from request JSON. The whole body runs as one transaction:
+   - upsert `public.sessions` after verifying any existing row's `owner_id` matches `_owner`;
+   - for each intended attachment: validate `slot BETWEEN 1 AND 4`, reject duplicate slots and duplicate source ids in the payload, then look up `ingest_sources` by id requiring strictly `owner_id = _owner` — **no admin bypass**; `has_role(...,'admin')` plays no part in normal attachment, so an admin using Create Session can only attach their own Sources — plus `lifecycle_status <> 'deleted'` and a non-null `playback_path`. Any failure raises, rolling back the session write too;
    - synchronize the active set: stamp `detached_at = now()` on active rows no longer intended or whose source changed, then insert the intended ones with the trusted `playback_path` and the label snapshot (`ingest_sources.name` unless a session label was supplied);
    - when the incoming status is `completed` or `archived`, stamp `detached_at = now()` on every remaining active row for that session.
 
@@ -31,7 +31,7 @@ One migration:
 
 ## Backend
 
-`supabase/functions/save-session/index.ts`: keep authentication and the owner-from-JWT rule. Extend the request schema with an optional `attachments: [{ slot, ingest_source_id, label? }]` and replace the current sequential upserts with a single service-role `rpc("save_session_with_sources", …)`, passing the verified user id. `shared_session_access` owner upsert stays. Validation failures return a 4xx with the reason (`source_not_found`, `source_forbidden`, `duplicate_slot`, …). `playback_path`, `owner_id`, `infrastructure_source_id`, `srt_port` sent by a browser are ignored.
+`supabase/functions/save-session/index.ts`: the identity chain is browser JWT → `auth.getUser()` → verified `user.id` → service-role RPC `_owner`. The request schema gains only `attachments: [{ slot, ingest_source_id, label? }]`; `owner_id`/`_owner`/`playback_path`/`infrastructure_source_id`/`srt_port` are not accepted from the browser (rejected by the schema, never forwarded). The current sequential upserts are replaced by one service-role `rpc("save_session_with_sources", { _owner: user.id, … })`. The function keeps refusing to modify a session whose stored `owner_id` differs from the verified `user.id`, and the `shared_session_access` owner upsert stays. Validation failures return a 4xx with the reason (`source_not_found`, `source_forbidden`, `duplicate_slot`, …).
 
 ## Frontend
 
@@ -43,11 +43,11 @@ One migration:
 
 ## Tests
 
-Fake-dependency unit tests for the attachment synchronization and validation rules (ownership, forged source id, duplicate slot/source, rollback on a mid-set failure), resolver tests (dynamic path, no double `-opus`, exact `https://stream.makosrt.com/src_xxxxxx-opus/whep`, legacy `camN-opus` for all four slots, no fallback while loading), lifecycle tests (scheduled/active/paused keep attachments, completed/archived detach, source survives), reuse tests (same Source in two sessions, ending one leaves the other), and Create Session picker tests. Then the full suite plus typecheck.
+Security tests: User A can attach their own Source; User A cannot attach User B's Source; an admin account using normal Create Session cannot attach User B's Source; a browser-supplied `owner_id`/`_owner` is rejected/ignored; a forged `ingest_source_id` cannot bypass ownership; a collaborator cannot create or change attachments. Plus fake-dependency unit tests for the attachment synchronization and validation rules (duplicate slot/source, rollback on a mid-set failure), resolver tests (dynamic path, no double `-opus`, exact `https://stream.makosrt.com/src_xxxxxx-opus/whep`, legacy `camN-opus` for all four slots, no fallback while loading), lifecycle tests (scheduled/active/paused keep attachments, completed/archived detach, source survives), reuse tests (same Source in two sessions, ending one leaves the other), and Create Session picker tests. Then the full suite plus typecheck.
 
 ## Live verification
 
-One Source, one session: attach to slot 1, Start Monitoring, confirm the `session_sources` row with the snapshotted label and `src_xxxxxx-opus`, confirm Session Room and a popout request that path (not `cam1-opus`), confirm a legacy session still resolves `cam1-opus`, complete the session and confirm `detached_at` is stamped while the Source remains reusable in My Sources. Second-user viewer check if an authorized account is available. Only deliberately created test sessions are cleaned up.
+One Source, one session: attach to slot 1, Start Monitoring, then report the real `session_sources` row verbatim — Source UUID, slot, snapshotted label, `src_xxxxxx-opus`. Confirm Session Room and a popout request that path (not `cam1-opus`), confirm a legacy session still resolves `cam1-opus`, complete the session and report the same row again showing `detached_at` populated while the underlying Source is intact and reusable in My Sources. Second-user viewer check if an authorized account is available. Only deliberately created test sessions are cleaned up.
 
 ## Later hardening (recorded, not built)
 
