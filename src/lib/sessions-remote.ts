@@ -5,7 +5,9 @@
 // hydration. The local session-store stays the UI source of truth — this
 // layer only mirrors it in the background.
 
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { attachmentIntents } from "@/lib/session-attachments";
 import {
   addSession,
   getSessionById,
