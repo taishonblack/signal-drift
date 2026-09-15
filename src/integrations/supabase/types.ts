@@ -190,6 +190,7 @@ export type Database = {
           id: string
           ingest_source_id: string
           label: string | null
+          playback_path: string | null
           session_id: string
           slot: number
         }
@@ -200,6 +201,7 @@ export type Database = {
           id?: string
           ingest_source_id: string
           label?: string | null
+          playback_path?: string | null
           session_id: string
           slot: number
         }
@@ -210,6 +212,7 @@ export type Database = {
           id?: string
           ingest_source_id?: string
           label?: string | null
+          playback_path?: string | null
           session_id?: string
           slot?: number
         }
@@ -458,6 +461,10 @@ export type Database = {
       reserve_ingest_source_slot: {
         Args: { _max: number; _name: string; _owner: string }
         Returns: string
+      }
+      save_session_with_sources: {
+        Args: { _attachments: Json; _owner: string; _session: Json }
+        Returns: Json
       }
       verify_session_pin: {
         Args: { _pin: string; _session_id: string }
