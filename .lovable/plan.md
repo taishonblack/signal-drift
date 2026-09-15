@@ -31,7 +31,7 @@ One migration:
 
 ## Backend
 
-`supabase/functions/save-session/index.ts`: keep authentication and the owner-from-JWT rule. Extend the request schema with an optional `attachments: [{ slot, ingest_source_id, label? }]` and replace the current sequential upserts with a single service-role `rpc("save_session_with_sources", …)`, passing the verified user id. `shared_session_access` owner upsert stays. Validation failures return a 4xx with the reason (`source_not_found`, `source_forbidden`, `duplicate_slot`, …). `playback_path`, `owner_id`, `infrastructure_source_id`, `srt_port` sent by a browser are ignored.
+`supabase/functions/save-session/index.ts`: the identity chain is browser JWT → `auth.getUser()` → verified `user.id` → service-role RPC `_owner`. The request schema gains only `attachments: [{ slot, ingest_source_id, label? }]`; `owner_id`/`_owner`/`playback_path`/`infrastructure_source_id`/`srt_port` are not accepted from the browser (rejected by the schema, never forwarded). The current sequential upserts are replaced by one service-role `rpc("save_session_with_sources", { _owner: user.id, … })`. The function keeps refusing to modify a session whose stored `owner_id` differs from the verified `user.id`, and the `shared_session_access` owner upsert stays. Validation failures return a 4xx with the reason (`source_not_found`, `source_forbidden`, `duplicate_slot`, …).
 
 ## Frontend
 
