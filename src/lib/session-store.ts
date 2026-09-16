@@ -17,8 +17,12 @@ export type SessionPurpose =
   | "Engineering"
   | "Custom";
 
-/** How a slot gets its feed. Absent means legacy/manual (address + port). */
-export type SourceKind = "mako" | "legacy";
+/**
+ * How a slot gets its feed. Absent means legacy/manual (address + port).
+ *   "mako"    — persistent My Sources library source (MAKO Receive/listener)
+ *   "runtime" — Phase C caller-first: MAKO dials the operator's SRT listener
+ */
+export type SourceKind = "mako" | "legacy" | "runtime";
 
 export interface SrtLine {
   id: number;
