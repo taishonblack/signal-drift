@@ -38,6 +38,11 @@ export interface SrtLine {
   ingestSourceId?: string;
   /** Phase 5, additive: "mako" when backed by a persistent source. */
   sourceKind?: SourceKind;
+  /**
+   * Phase C, additive: the session-scoped caller route provisioned for this
+   * slot. Server-assigned; the browser never invents it.
+   */
+  runtimeRouteId?: string;
 }
 
 /**
