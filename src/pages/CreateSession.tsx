@@ -303,7 +303,7 @@ const CreateSession = () => {
 
   };
 
-  const createAndNavigate = () => {
+  const createAndNavigate = async () => {
     const enabledLines = lines.filter((l) => l.enabled && isConfigured(l));
     if (enabledLines.length === 0) return;
     const firstLabel = enabledLines[0].label;
