@@ -1,82 +1,67 @@
-# Caller-First Session Sources — Audit and Phased Plan
+# Phase A — Backend Caller Support (approved scope only)
 
-Audit only; nothing was changed. Findings below are from the current code.
+Only the `mako-ingest` Edge Function and its tests change. No database, no session lifecycle, no UI. Phases B–E stay unbuilt; the audit findings behind them are archived below for later.
 
-## 1. How Create Session stores Name / Address / Port
+## What gets built
 
-- Each of the four slots is an `SrtLine` (`src/lib/session-store.ts:23`): `id`, `enabled`, `label`, `srtAddress`, `passphrase`, `bitrate`, `mode`, `notes`, `originTimeZone`, plus the Phase 5 additions `ingestSourceId` and `sourceKind`.
-- There are no separate host/port fields. The page keeps a single `srtAddress` string and splits/joins it with `parseSrtInput` / `composeSrt` (`session-store.ts:1033`, `:1043`). Friendly name is `label`.
-- `mode` exists and is forced to `"caller"` everywhere (`createDefaultLine`, and `createAndNavigate` normalizes every enabled line to `caller`), so no mode selector needs removing — only the wording and semantics.
-- Picking a My Source overwrites `srtAddress` with `stream.makosrt.com:<srtPort>` (`CreateSession.tsx:239`) — i.e. today the address field is the *encoder's* destination, the opposite of caller semantics.
+Three new authenticated actions on `supabase/functions/mako-ingest/index.ts`, alongside the existing `list_sources` / `create_source` / `delete_source`, which are untouched.
 
-## 2. What Start Monitoring does today
+- `create_pull_source` — accepts exactly `{ name, host, port }` and calls `POST {MAKO_API_BASE_URL}/pull-sources` with that body.
+- `get_pull_source` — accepts `{ source_id }` and calls `GET /pull-sources/{source_id}`.
+- `delete_pull_source` — accepts `{ source_id }` and calls `DELETE /pull-sources/{source_id}`.
 
-`handleStart` (`CreateSession.tsx:368`) → `createAndNavigate`: builds a `SessionRecord` with `status: "active"`, writes it to localStorage/sessionStorage through the session store, then navigates to the Session Room. For members, `saveSessionRemote` posts `{ session, attachments }` to `save-session`, which hashes the PIN and calls `save_session_with_sources`. **No infrastructure is provisioned at start** — a source must already exist in My Sources.
+There is no `list_pull_sources` action: global caller listing is not exposed in this phase.
 
-## 3. Extending `mako-ingest` for `/pull-sources`
+## Validation
 
-`supabase/functions/mako-ingest/index.ts` already has the right shape: JWT verify → validated action → server-only `MAKO_API_BASE_URL` / `MAKO_API_TOKEN` → sanitized upstream errors. Add actions `create_pull_source` / `delete_pull_source` that accept only `{ name, host, port }` / `{ source_id }`, validate host as a public hostname/IP and port range in the function, and reuse the existing injected-dependency pattern of `create-source.ts` (`validateProvisionedSource` already enforces `src_[a-f0-9]{6}`, port range, and `output_path === "<id>-opus"` — reusable almost verbatim for the caller response). The token stays server-side; the browser never sees host/port of anyone else's route.
+Request side (defense in depth only — the infrastructure API remains the authoritative security boundary for public-address validation, and no DNS resolution happens in the Edge Function):
 
-## 4. Should `ingest_sources` still model caller routes?
+- `name`: trimmed, 1–64 chars, `[A-Za-z0-9 _-]` — a human label, never used in a URL or transport decision.
+- `host`: non-empty, max 253 chars, syntactically a hostname or IPv4/IPv6 literal, no scheme, no path, no credentials, no whitespace. Obvious private/loopback/link-local literals are rejected early with a clear reason.
+- `port`: integer 1–65535.
+- `source_id`: must match `^src_[a-f0-9]{6}$` **before** it is interpolated into any upstream URL, for both get and delete.
 
-No — not as *library* rows, but reuse the table rather than adding a parallel one. Reasons from the live schema: `ingest_sources` carries owner-scoped RLS, the infra-column guard trigger, the provisioning invariant trigger, and the quota RPC `reserve_ingest_source_slot` which counts every non-deleted row per owner. If session-scoped caller routes land in that table unchanged, a 3-slot session immediately eats the 4-source quota and the routes appear in My Sources.
+Response side, before any success is returned (reusing the shape of the existing `validateProvisionedSource`):
 
-Recommended direction: add `origin` (`'library' | 'session'`), `session_id`, `remote_host`, `remote_port` to `ingest_sources`; exclude `origin = 'session'` from the quota count and from the My Sources query; keep everything else (RLS, triggers, `save_session_with_sources`, `session_sources`) intact. This preserves Phase 5 wholesale and keeps one reconciliation surface for orphaned infrastructure.
+- required fields present;
+- `source_id` matches `^src_[a-f0-9]{6}$`;
+- `output_path` equals exactly `<source_id>-opus`;
+- returned `host` syntactically valid;
+- returned `port` an integer 1–65535.
 
-## 5. How `session_sources` snapshots the playback path
+A response failing any check is treated as an upstream failure and returns a sanitized error — never a partial success.
 
-Unchanged. `save_session_with_sources` already copies `ingest_sources.playback_path` into `session_sources.playback_path` server-side and refuses a source with a null path (`source_not_ready`). Caller provisioning fills `playback_path` with the returned `src_xxxxxx-opus` before the save runs, so the existing viewer-safe snapshot and the active-only partial unique indexes need no change.
+## Security
 
-## 6. Safe provision → save sequence
+- `MAKO_API_TOKEN` and `MAKO_API_BASE_URL` are read only inside the function; neither is logged or returned.
+- Every action requires a verified Supabase user, exactly as today (`auth.getUser()` on the caller's JWT).
+- Upstream URLs are built from the server-side base plus a regex-validated `source_id`; no browser-supplied path or URL is ever forwarded.
+- Upstream errors are logged as status codes only and returned as sanitized codes (`upstream_error`, `upstream_unreachable`, `invalid_upstream_response`).
+- No RLS, role, or authorization change.
 
-```text
-validate form (name, public host, port, no duplicates)
-  -> per slot: reserve session-scoped ingest_sources row (provisioning)
-  -> POST /pull-sources { name, host, port }; validate response
-  -> finalize row (source_id, port, playback_path, ready)
-  -> save-session (session + attachments) in ONE transaction
-  -> only on success: write local record + navigate to Session Room
-compensation, in reverse: DELETE /pull-sources/{id} for every route created
-by THIS attempt, then delete its reservation row; log any failure for
-reconciliation.
-```
-This mirrors the proven `createSource` reserve/provision/finalize/release/compensate flow.
+## Explicitly out of scope in this phase
 
-## 7. Ending a session
+No `ingest_sources` rows are created; `session_sources`, `save-session`, `save_session_with_sources`, Create Session, My Sources, Session Room, `stream-paths.ts`, and session lifecycle are all left alone.
 
-Terminal statuses (`completed`, `archived`) already stamp `detached_at` server-side. Add a teardown step in `save-session` (or a dedicated action) that, for that session's `origin = 'session'` routes, calls `DELETE /pull-sources/{id}` and marks the row `deleted`. Session deletion cascades `session_sources`, so teardown must run before/with the delete. Library sources keep today's behaviour: never deleted by a session ending.
+## Technical notes
 
-## 8. Reopening / editing an active session
+The three caller actions land in a new `supabase/functions/mako-ingest/pull-sources.ts` with the same injected-dependency style as `create-source.ts` / `delete-source.ts`, so every path is unit-testable without Deno, network access, or real infrastructure. `index.ts` gains the schema branches and the injected fetch/log dependencies; `BodySchema` widens to accept `host` and `port`.
 
-Provision only for slots that changed. Key an existing route by `(session_id, slot)`; if the row exists, is `ready`, and `remote_host`/`remote_port` still match the form, reuse it. If host/port changed, provision the new route, re-save attachments, then delete the old route. Guard the double-submit path in the UI too.
+## Tests
 
-## 9. Collaborators
+New fake-dependency tests covering: valid caller creation; malformed upstream `source_id`; mismatched `output_path`; invalid port (request and response); invalid host (request and response); unauthenticated request; valid get; invalid get `source_id`; valid delete; invalid delete `source_id`; sanitized upstream failure. Then the full existing Vitest suite and typecheck.
 
-Unchanged and already correct: collaborators read only `session_sources` (slot, label, `playback_path`, attach time) under the participant policy, never `ingest_sources`. Caller host/port live only on the owner-scoped row, so no RLS change is needed or wanted.
+## Report and stop
 
-## 10. Remaining cam1–cam4 / My-Sources-first assumptions
+I report exactly which files changed and the test results, then stop for your approval before Phase B.
 
-- `src/lib/stream-paths.ts`: header comment, `streamNameForSlot`, `publishIdForSlot`, `playbackStreamNameForSlot`, `whepUrlForSlot`, and the legacy branch of `inputsFromRecord` (`:441`).
-- `src/pages/CreateSession.tsx`: `probeStream(streamNameForSlot(slot))` (`:268`), the encoder-instructions block showing `camN` / `publish:camN` (`:722`-`:730`), diagnostics text (`:883`), the My Source picker as the configured path (`:695`, `attachMySource` at `:228`).
-- `src/lib/mock-data.ts:12` comment; `src/hooks/use-my-sources.ts` `RECEIVE_DESTINATION` used as the address for a slot.
-- `src/pages/Sources.tsx` stays as the optional library.
+---
 
-The legacy `camN` branch should remain for already-saved sessions but must no longer be reachable for new ones.
+## Archived audit (Phases B–E, not approved)
 
-## 11. Test Connection
+Findings retained for the next decision, including your two corrections:
 
-Today it probes `camN` on MediaMTX — meaningless for a caller. Target behaviour: after a caller route exists, ask the backend for `GET /pull-sources/{source_id}` and report the real service state; before provisioning, do a form-level validation only (public host, resolvable, port range). Both go through `mako-ingest`, never the browser.
-
-## 12. localStorage-first risk
-
-Real risk today. `createAndNavigate` writes the local record and navigates immediately; the remote save is fire-and-forget. With caller provisioning, the Session Room could open with a slot that has no attachment yet — `inputsFromRecord` shows "connecting" while `attachmentsLoaded` is false, so there is no *wrong* playback, but a failed provision would leave a locally-active session with no route. Fix: await provisioning + `save-session` before the local write and navigation, and show a provisioning state on the button.
-
-## Proposed phases
-
-- **Phase A** — Backend caller support: `mako-ingest` gains validated `create_pull_source` / `delete_pull_source` / `get_pull_source` with server-side public-host and port validation, plus fake-dependency tests. No UI, no schema.
-- **Phase B** — Schema: `origin`, `session_id`, `remote_host`, `remote_port` on `ingest_sources`; quota RPC and My Sources query exclude session-scoped rows; triggers/RLS otherwise untouched.
-- **Phase C** — Create Session workflow: Name → Address/IP → Port → Start Monitoring, with the provision→save→navigate sequence and full compensation; My Source picker demoted to optional.
-- **Phase D** — Lifecycle: teardown of session-scoped routes on complete/archive/delete, and reuse-not-duplicate on reconfigure of an active session.
-- **Phase E** — Test Connection against the real route, plus removal of `camN` guidance from new-session UI (legacy playback fallback kept).
-
-Nothing is implemented until you approve.
+- **Phase B (schema)** — reuse `ingest_sources` to preserve the Phase 5 RPC, RLS, triggers, `session_sources`, and playback snapshots. `remote_host` / `remote_port` must be treated as sensitive runtime configuration, owner/backend-only, not ordinary library data. `session_id` should be a real foreign-key relationship to `public.sessions` where practical, not an informational text column. Session-scoped rows must be excluded from the quota count and from My Sources.
+- **Phase C** — Create Session becomes Name → Address/IP → Port → Start Monitoring, with provision → save → navigate and full compensation; My Sources demoted to optional.
+- **Phase D (lifecycle)** — external infrastructure deletion must **not** sit inside a database transaction or database function; Supabase cannot make an external call atomic. Instead an explicit application-level orchestration: update/end session → tear down caller routes → record the teardown result → retain enough state to retry and reconcile when the infrastructure delete fails, so a transient API failure never leaves the database ambiguous.
+- **Phase E** — Test Connection targets the real caller route via `GET /pull-sources/{source_id}`; `camN` guidance is removed from new-session UI while legacy playback fallback stays for already-saved sessions.
