@@ -72,7 +72,13 @@ export function fromRemote(row: {
   };
 }
 
-/** Load one session through its normal RLS-protected row access. */
+/**
+ * Load one session through its normal RLS-protected row access.
+ *
+ * A `draft` row is an in-flight provisioning attempt: it is deliberately
+ * invisible to operator-facing loading, so nobody can walk into a session whose
+ * callers are not resolved yet. Server-side provisioning/recovery still reads it.
+ */
 export async function loadAuthorizedSession(sessionId: string): Promise<SessionRecord | null> {
   const { data, error } = await supabase
     .from("sessions")
@@ -80,7 +86,8 @@ export async function loadAuthorizedSession(sessionId: string): Promise<SessionR
     .eq("id", sessionId)
     .maybeSingle();
   if (error) throw error;
-  return data ? fromRemote(data) : null;
+  if (!data || data.status === "draft") return null;
+  return fromRemote(data);
 }
 
 // ─── Edge function wrappers ──────────────────────────────────────────
@@ -107,6 +114,65 @@ export async function saveSessionRemote(session: SessionRecord): Promise<void> {
     throw new Error(details || "save-session failed");
   }
   if (data?.error) throw new Error(String(data.error));
+}
+
+/** One caller-backed slot: MAKO dials this external SRT listener. */
+export interface RuntimeSlotIntent {
+  slot: number;
+  name: string;
+  host: string;
+  port: number;
+}
+
+export interface ProvisionSessionResult {
+  routes: { slot: number; route_id: string; playback_path: string }[];
+}
+
+const PROVISION_MESSAGES: Record<string, string> = {
+  endpoint_conflict:
+    "This slot is already connected to a different address and port. End the session or use a new session to change it.",
+  route_tearing_down: "This slot is still being released. Try again in a moment.",
+  route_tombstoned:
+    "That connection was permanently removed. Start a new session to monitor this feed.",
+  provisioning_failed: "MAKO could not connect to that SRT listener. Check the address and port.",
+  route_persist_failed: "MAKO could not save the connection. Nothing was left running.",
+  save_failed: "MAKO could not save the session.",
+  unauthorized: "Please sign in again.",
+  service_unavailable: "Monitoring infrastructure is unavailable right now.",
+};
+
+/**
+ * Phase C — caller-first provisioning. AWAITED on purpose: MAKO provisions a
+ * caller to every enabled external listener, persists the trusted runtime
+ * identities, attaches them to the session and activates it. The browser may
+ * only enter the Session Room after this resolves successfully.
+ */
+export async function provisionSessionRemote(
+  session: SessionRecord,
+  slots: RuntimeSlotIntent[],
+): Promise<ProvisionSessionResult> {
+  const { data, error } = await supabase.functions.invoke("provision-session", {
+    body: {
+      session: toRemote(session),
+      slots,
+      library_attachments: attachmentIntents(session.lines ?? []),
+    },
+  });
+
+  let payload: Record<string, unknown> | null =
+    data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+  if (error) {
+    if (error instanceof FunctionsHttpError) {
+      payload = await error.context.json().catch(() => null);
+    }
+    if (!payload?.error) throw new Error(error.message || "provision-session failed");
+  }
+  const code = payload?.error ? String(payload.error) : null;
+  if (code) throw new Error(PROVISION_MESSAGES[code] ?? code);
+
+  return {
+    routes: (payload?.routes as ProvisionSessionResult["routes"]) ?? [],
+  };
 }
 
 /**
@@ -213,7 +279,10 @@ export async function hydrateMemberSessions(): Promise<void> {
 
   const existing = new Map(getSessions().map((s) => [s.id, s]));
   const TERMINAL = new Set(["completed", "archived"]);
-  for (const row of rows) {
+  // Phase C: a `draft` row is a provisioning attempt, not an operator session.
+  // It stays out of the normal list entirely (the server can still resolve it
+  // for retry/recovery) and is never rewritten as completed.
+  for (const row of (rows ?? []).filter((r) => r.status !== "draft")) {
     const record = fromRemote(row);
     const prior = existing.get(row.id);
     if (prior) {

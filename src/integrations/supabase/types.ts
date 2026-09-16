@@ -585,9 +585,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      archive_session_runtime_route: {
+        Args: { _final_status: string; _owner: string; _route_id: string }
+        Returns: Json
+      }
       can_use_ingest_source: {
         Args: { _source_id: string; _user_id: string }
         Returns: boolean
+      }
+      fail_session_runtime_route: {
+        Args: { _error: string; _owner: string; _route_id: string }
+        Returns: Json
+      }
+      finalize_session_runtime_route: {
+        Args: {
+          _infrastructure_source_id: string
+          _owner: string
+          _playback_path: string
+          _route_id: string
+        }
+        Returns: Json
       }
       has_role: {
         Args: {
@@ -605,9 +622,24 @@ export type Database = {
         Args: { _session_id: string; _user_id: string }
         Returns: boolean
       }
+      record_runtime_route_teardown_failure: {
+        Args: { _error: string; _owner: string; _route_id: string }
+        Returns: Json
+      }
       reserve_ingest_source_slot: {
         Args: { _max: number; _name: string; _owner: string }
         Returns: string
+      }
+      reserve_session_runtime_route: {
+        Args: {
+          _host: string
+          _name: string
+          _owner: string
+          _port: number
+          _session_id: string
+          _slot: number
+        }
+        Returns: Json
       }
       save_session_with_sources: {
         Args: { _attachments: Json; _owner: string; _session: Json }

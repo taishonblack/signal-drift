@@ -16,9 +16,18 @@ export interface AttachmentIntent {
   label?: string;
 }
 
-/** True when this slot is backed by a persistent MAKO source. */
+/** True when this slot is backed by a persistent MAKO library source. */
 export function isSourceBacked(line: SrtLine): boolean {
   return line.sourceKind === "mako" && !!line.ingestSourceId;
+}
+
+/**
+ * True when this slot is backed by a session-scoped caller route (Phase C):
+ * MAKO dials the operator's external SRT listener. Its playback identity comes
+ * from the runtime route, never from the legacy camN mapping.
+ */
+export function isRuntimeBacked(line: SrtLine): boolean {
+  return line.sourceKind === "runtime";
 }
 
 /**
@@ -45,7 +54,7 @@ export async function loadSessionAttachments(
 ): Promise<SessionAttachment[]> {
   const { data, error } = await supabase
     .from("session_sources")
-    .select("slot, label, playback_path, ingest_source_id, attached_at")
+    .select("slot, label, playback_path, ingest_source_id, runtime_route_id, attached_at")
     .eq("session_id", sessionId)
     .is("detached_at", null)
     .order("slot", { ascending: true });
@@ -57,6 +66,7 @@ export async function loadSessionAttachments(
     label: row.label,
     playbackPath: row.playback_path,
     ingestSourceId: row.ingest_source_id,
+    runtimeRouteId: row.runtime_route_id,
     attachedAt: row.attached_at,
   }));
 }

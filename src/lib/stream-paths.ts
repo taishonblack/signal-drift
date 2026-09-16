@@ -395,7 +395,12 @@ export function inputsFromRecord(
     .map((line): StreamInput | null => {
       const slot = line.id;
       const attachment = attachments.find((a) => a.slot === slot && !!a.playbackPath);
-      const sourceBacked = line.sourceKind === "mako" && !!line.ingestSourceId;
+      // Both attachment kinds resolve dynamically and must never fall back to
+      // camN: a persistent library source (Phase 5) or a session-scoped caller
+      // route (Phase C).
+      const sourceBacked =
+        (line.sourceKind === "mako" && !!line.ingestSourceId) ||
+        line.sourceKind === "runtime";
 
       // Persistent source: playback identity comes from the attachment.
       if (attachment || sourceBacked) {

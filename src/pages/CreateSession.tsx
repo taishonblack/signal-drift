@@ -30,7 +30,11 @@ import {
   diffSessionConfig, appendChangeLog,
 } from "@/lib/session-store";
 import { ensureIdentity, useIdentity } from "@/lib/identity";
-import { saveSessionRemote } from "@/lib/sessions-remote";
+import {
+  provisionSessionRemote,
+  saveSessionRemote,
+  type RuntimeSlotIntent,
+} from "@/lib/sessions-remote";
 import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 import { toast } from "@/components/ui/sonner";
 import { probeStream, publishIdForSlot, streamNameForSlot } from "@/lib/stream-paths";
@@ -41,6 +45,12 @@ type LineStatus = "empty" | "configured" | "error";
 /** True when this slot is backed by a persistent MAKO Receive source. */
 const isSourceBacked = (line: SrtLine) =>
   line.sourceKind === "mako" && !!line.ingestSourceId;
+
+/** A manually entered external SRT listener endpoint (host + port). */
+const hasManualEndpoint = (line: SrtLine) => {
+  const { host, port } = parseSrtInput(line.srtAddress);
+  return !!host && !!port;
+};
 
 const isConfigured = (line: SrtLine) => {
   // A persistent source carries its own dedicated port and playback identity,
@@ -141,6 +151,8 @@ const CreateSession = () => {
     Record<number, { state: "testing" | "available" | "no_publisher" | "misconfigured" | "failed"; detail?: string }>
 
   >({});
+  /** True while MAKO is connecting to the operator's external SRT listeners. */
+  const [starting, setStarting] = useState(false);
   const [pendingActiveSession, setPendingActiveSession] = useState<SessionRecord | null>(null);
   const [pendingStart, setPendingStart] = useState<null | (() => void)>(null);
   const sessions = getSessions();
@@ -214,6 +226,17 @@ const CreateSession = () => {
   // manual address flow untouched.
   const { sources: mySources, loading: sourcesLoading } = useMySources(!isGuest);
 
+  /**
+   * Caller-first slot (Phase C): the operator typed an external SRT listener
+   * address and port, so MAKO provisions a caller to it. Guests have no
+   * server-side provisioning and keep the legacy local behaviour.
+   */
+  const callerBacked = useCallback(
+    (line: SrtLine) =>
+      !isGuest && line.enabled && !isSourceBacked(line) && hasManualEndpoint(line),
+    [isGuest],
+  );
+
   /** Sources already claimed by another slot in this session. */
   const claimedElsewhere = useMemo(
     () =>
@@ -261,6 +284,16 @@ const CreateSession = () => {
 
   const testConnection = async () => {
     const slot = activeTab;
+    // Phase C: a caller-backed slot has no playback path until MAKO has dialled
+    // the listener, and the legacy camN path is NOT this slot's feed. Probing it
+    // would report on an unrelated stream, so Test Connection is unavailable
+    // until a caller-aware test exists.
+    if (callerBacked(lines.find((l) => l.id === slot)!)) {
+      toast("Test Connection isn't available for this input yet.", {
+        description: "Start Monitoring — MAKO connects to the address and port you entered.",
+      });
+      return;
+    }
     setTestResult((prev) => ({ ...prev, [slot]: { state: "testing" } }));
     // Availability check only: does the MediaMTX path for this slot have a
     // publisher right now? The probe tears its peer connection down
@@ -276,14 +309,36 @@ const CreateSession = () => {
 
   };
 
-  const createAndNavigate = () => {
+  const createAndNavigate = async () => {
     const enabledLines = lines.filter((l) => l.enabled && isConfigured(l));
     if (enabledLines.length === 0) return;
     const firstLabel = enabledLines[0].label;
     const sessionName = name.trim() || firstLabel || "Untitled Session";
+    // Caller-first slots are marked "runtime": MAKO dials the operator's
+    // external SRT listener, and playback resolves from the provisioned route
+    // rather than the legacy camN mapping.
     const normalized = lines.map((l) =>
-      l.enabled ? { ...l, mode: "caller" as const } : l
+      l.enabled
+        ? {
+            ...l,
+            mode: "caller" as const,
+            ...(callerBacked(l) ? { sourceKind: "runtime" as const } : {}),
+          }
+        : l,
     );
+    const runtimeSlots: RuntimeSlotIntent[] = normalized
+      .filter((l) => l.sourceKind === "runtime")
+      .map((l) => {
+        const { host, port } = parseSrtInput(l.srtAddress);
+        const custom = (l.label ?? "").trim();
+        const isDefaultLabel = /^(line|source)\s*\d+$/i.test(custom);
+        return {
+          slot: l.id,
+          name: custom && !isDefaultLabel ? custom : `Source ${l.id}`,
+          host,
+          port: Number(port),
+        };
+      });
     const createdAtIso = new Date().toISOString();
     // Authoritative scheduled_end_at: for preset durations, rebase to
     // (session_started_at + duration) so slow configuration doesn't eat
@@ -319,6 +374,29 @@ const CreateSession = () => {
         },
       ],
     };
+    // Caller-backed session: provisioning is an AWAITED transaction. Nothing is
+    // stored locally and nothing navigates until MAKO has actually connected to
+    // every external listener and attached the resulting feeds.
+    if (!isGuest && runtimeSlots.length > 0) {
+      setStarting(true);
+      try {
+        const result = await provisionSessionRemote(session, runtimeSlots);
+        const routeBySlot = new Map(result.routes.map((r) => [r.slot, r.route_id]));
+        session.lines = session.lines.map((l) =>
+          routeBySlot.has(l.id) ? { ...l, runtimeRouteId: routeBySlot.get(l.id) } : l,
+        );
+        addSession(session);
+        navigate(`/session/${session.id}`);
+      } catch (e) {
+        toast("Could not start monitoring.", {
+          description: e instanceof Error ? e.message : "Unknown error.",
+        });
+      } finally {
+        setStarting(false);
+      }
+      return;
+    }
+
     addSession(session);
     if (!isGuest) {
       saveSessionRemote(session).catch((e) => {
@@ -380,7 +458,7 @@ const CreateSession = () => {
       setPendingStart(() => createAndNavigate);
       return;
     }
-    createAndNavigate();
+    void createAndNavigate();
   };
 
   const confirmSwitch = () => {
@@ -895,7 +973,9 @@ const CreateSession = () => {
             <Button
               onClick={handleStart}
               size="lg"
-              disabled={(mode === "create" && !hasValidLine) || isReadOnly || !allowed}
+              disabled={
+                starting || (mode === "create" && !hasValidLine) || isReadOnly || !allowed
+              }
               className="flex-1 gap-2"
             >
               {mode === "create" || !isActiveConfigure ? (
@@ -903,7 +983,7 @@ const CreateSession = () => {
               ) : (
                 <Save className="h-4 w-4" />
               )}{" "}
-              {primaryLabel}
+              {starting ? "Connecting…" : primaryLabel}
             </Button>
             {mode === "create" && (
               <Button

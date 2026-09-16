@@ -17,8 +17,12 @@ export type SessionPurpose =
   | "Engineering"
   | "Custom";
 
-/** How a slot gets its feed. Absent means legacy/manual (address + port). */
-export type SourceKind = "mako" | "legacy";
+/**
+ * How a slot gets its feed. Absent means legacy/manual (address + port).
+ *   "mako"    — persistent My Sources library source (MAKO Receive/listener)
+ *   "runtime" — Phase C caller-first: MAKO dials the operator's SRT listener
+ */
+export type SourceKind = "mako" | "legacy" | "runtime";
 
 export interface SrtLine {
   id: number;
@@ -34,6 +38,11 @@ export interface SrtLine {
   ingestSourceId?: string;
   /** Phase 5, additive: "mako" when backed by a persistent source. */
   sourceKind?: SourceKind;
+  /**
+   * Phase C, additive: the session-scoped caller route provisioned for this
+   * slot. Server-assigned; the browser never invents it.
+   */
+  runtimeRouteId?: string;
 }
 
 /**
@@ -44,7 +53,10 @@ export interface SessionAttachment {
   slot: number;
   label: string | null;
   playbackPath: string | null;
-  ingestSourceId: string;
+  /** Set when the slot is backed by a persistent library source. */
+  ingestSourceId: string | null;
+  /** Set when the slot is backed by a session-scoped caller route (Phase C). */
+  runtimeRouteId?: string | null;
   attachedAt: string;
 }
 
@@ -402,8 +414,14 @@ const seedSessions: SessionRecord[] = [
   },
 ];
 
+/**
+ * `draft` is a SERVER-SIDE provisioning state (Phase C). It must never be
+ * translated into a normal operator-visible status — a session mid-provision is
+ * not a completed session. Draft rows are filtered out of local state instead
+ * (see getSessions / hydrateMemberSessions), so this never sees one in practice.
+ */
 function migrateStatus(s: any): SessionStatus {
-  if (s === "expired" || s === "ended" || s === "draft") return "completed";
+  if (s === "expired" || s === "ended") return "completed";
   if (s === "live") return "active";
   if (["scheduled","active","paused","completed","archived"].includes(s)) return s;
   return "completed";
@@ -420,7 +438,11 @@ export function getSessions(): SessionRecord[] {
     }
     return [];
   }
-  return stored.map((s) => ({
+  return stored
+    // A provisioning draft is invisible to the operator UI — hidden, never
+    // rewritten into some other status.
+    .filter((s) => (s as any).status !== "draft")
+    .map((s) => ({
     ...s,
     status: migrateStatus((s as any).status),
     ownerUserId: s.ownerUserId ?? s.hostUserId,
