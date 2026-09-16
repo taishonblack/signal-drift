@@ -95,7 +95,7 @@ All-or-nothing, sequential, max four slots. The browser is authoritative for non
 ## 6. Required changes outside MAKO
 
 - `mako-pull-manager` / DigitalOcean API: accept and persist `idempotency_key` on `POST /pull-sources`, return the existing caller on a repeat key (option A), and ideally expose a key lookup (option B).
-- `mako-ingest` `create_pull_source`: forward a validated UUID `idempostency_key` (strict UUID check, never interpolated into a URL). Listener actions unchanged.
+- `mako-ingest` `create_pull_source`: forward a validated UUID `idempotency_key` (strict UUID check, never interpolated into a URL). Listener actions unchanged.
 
 **Blocking flag:** until the upstream idempotency key exists, Start Monitoring cannot safely create callers. If that upstream change is not available, Phase C implementation should stop at the database/UI layer and not fire `create_pull_source`.
 
