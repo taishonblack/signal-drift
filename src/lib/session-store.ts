@@ -414,8 +414,14 @@ const seedSessions: SessionRecord[] = [
   },
 ];
 
+/**
+ * `draft` is a SERVER-SIDE provisioning state (Phase C). It must never be
+ * translated into a normal operator-visible status — a session mid-provision is
+ * not a completed session. Draft rows are filtered out of local state instead
+ * (see getSessions / hydrateMemberSessions), so this never sees one in practice.
+ */
 function migrateStatus(s: any): SessionStatus {
-  if (s === "expired" || s === "ended" || s === "draft") return "completed";
+  if (s === "expired" || s === "ended") return "completed";
   if (s === "live") return "active";
   if (["scheduled","active","paused","completed","archived"].includes(s)) return s;
   return "completed";
