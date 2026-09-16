@@ -64,7 +64,10 @@ describe("create_pull_source", () => {
 
   it("requires an idempotency key", async () => {
     const d = deps();
-    const out = await createPullSource({ name: "Truck A", host: "203.0.113.10", port: 9000 }, d);
+    const out = await createPullSource(
+      { name: "Truck A", host: "203.0.113.10", port: 9000, idempotency_key: undefined },
+      d,
+    );
     expect(out.status).toBe(400);
     expect(out.body.error).toBe("invalid_idempotency_key");
     expect(d.createUpstream).not.toHaveBeenCalled();
