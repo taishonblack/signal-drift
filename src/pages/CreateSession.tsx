@@ -220,6 +220,17 @@ const CreateSession = () => {
   // manual address flow untouched.
   const { sources: mySources, loading: sourcesLoading } = useMySources(!isGuest);
 
+  /**
+   * Caller-first slot (Phase C): the operator typed an external SRT listener
+   * address and port, so MAKO provisions a caller to it. Guests have no
+   * server-side provisioning and keep the legacy local behaviour.
+   */
+  const callerBacked = useCallback(
+    (line: SrtLine) =>
+      !isGuest && line.enabled && !isSourceBacked(line) && hasManualEndpoint(line),
+    [isGuest],
+  );
+
   /** Sources already claimed by another slot in this session. */
   const claimedElsewhere = useMemo(
     () =>
