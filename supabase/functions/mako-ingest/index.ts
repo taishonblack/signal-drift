@@ -3,7 +3,8 @@
 //
 // Listener actions (unchanged): list_sources, create_source, delete_source.
 // Caller actions (MAKO dials the external SRT Listener):
-//   create_pull_source, get_pull_source, delete_pull_source.
+//   create_pull_source (idempotent by MAKO-supplied UUID key),
+//   get_pull_source, get_pull_source_by_idempotency_key, delete_pull_source.
 // The MAKO_API_TOKEN never leaves this Edge Function.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
