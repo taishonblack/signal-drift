@@ -261,6 +261,16 @@ const CreateSession = () => {
 
   const testConnection = async () => {
     const slot = activeTab;
+    // Phase C: a caller-backed slot has no playback path until MAKO has dialled
+    // the listener, and the legacy camN path is NOT this slot's feed. Probing it
+    // would report on an unrelated stream, so Test Connection is unavailable
+    // until a caller-aware test exists.
+    if (callerBacked(lines.find((l) => l.id === slot)!)) {
+      toast("Test Connection isn't available for this input yet.", {
+        description: "Start Monitoring — MAKO connects to the address and port you entered.",
+      });
+      return;
+    }
     setTestResult((prev) => ({ ...prev, [slot]: { state: "testing" } }));
     // Availability check only: does the MediaMTX path for this slot have a
     // publisher right now? The probe tears its peer connection down
