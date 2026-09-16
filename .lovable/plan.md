@@ -63,7 +63,7 @@ Extends `src/test/mako-ingest-pull-sources.test.ts`, all with fake injected depe
 3. valid UUID forwarded unchanged in the create body alongside name/host/port
 4. create response key must equal the requested key (happy path asserts equality)
 5. mismatched response key rejected as `invalid_upstream_response` (502)
-6. same-key retry returns the existing source normally (200)
+6. same-key retry returns the existing source normally (any 2xx success, e.g. 201)
 7. upstream 409 maps to `409 idempotency_conflict`
 8. upstream 410 maps to `410 idempotency_tombstoned`
 9. lookup rejects a malformed UUID before any upstream call
