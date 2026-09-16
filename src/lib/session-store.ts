@@ -53,7 +53,10 @@ export interface SessionAttachment {
   slot: number;
   label: string | null;
   playbackPath: string | null;
-  ingestSourceId: string;
+  /** Set when the slot is backed by a persistent library source. */
+  ingestSourceId: string | null;
+  /** Set when the slot is backed by a session-scoped caller route (Phase C). */
+  runtimeRouteId?: string | null;
   attachedAt: string;
 }
 
