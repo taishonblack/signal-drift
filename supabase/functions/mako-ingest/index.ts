@@ -101,6 +101,10 @@ Deno.serve(async (req) => {
     ): Promise<UpstreamResult> => {
       try {
         const upstream = await fetch(`${apiBase}${path}`, init);
+        // An already-absent caller route is a successful teardown.
+        if (init.method === "DELETE" && upstream.status === 404) {
+          return { ok: true, raw: { deleted: true } };
+        }
         if (!upstream.ok) {
           console.error(`mako-ingest: ${label} upstream returned ${upstream.status}`);
           return { ok: false, error: "upstream_error", status: 502 };
