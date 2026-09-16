@@ -102,10 +102,18 @@ Deno.serve(async (req) => {
       Accept: "application/json",
     };
 
+    // Typed upstream statuses that must survive sanitization as deterministic
+    // client responses. Raw upstream detail/error bodies are never forwarded.
+    const typedStatus = (
+      status: number,
+      map: Record<number, { error: string; status: number }>,
+    ): { error: string; status: number } | null => map[status] ?? null;
+
     const request = async (
       path: string,
       init: RequestInit,
       label: string,
+      typed: Record<number, { error: string; status: number }> = {},
     ): Promise<UpstreamResult> => {
       try {
         const upstream = await fetch(`${apiBase}${path}`, init);
@@ -115,6 +123,8 @@ Deno.serve(async (req) => {
         }
         if (!upstream.ok) {
           console.error(`mako-ingest: ${label} upstream returned ${upstream.status}`);
+          const mapped = typedStatus(upstream.status, typed);
+          if (mapped) return { ok: false, error: mapped.error, status: mapped.status };
           return { ok: false, error: "upstream_error", status: 502 };
         }
         if (init.method === "DELETE") return { ok: true, raw: { deleted: true } };
@@ -139,9 +149,20 @@ Deno.serve(async (req) => {
             body: JSON.stringify(body),
           },
           "create_pull_source",
+          {
+            409: { error: "idempotency_conflict", status: 409 },
+            410: { error: "idempotency_tombstoned", status: 410 },
+          },
         ),
       getUpstream: (sourceId) =>
         request(`/pull-sources/${sourceId}`, { method: "GET", headers: authHeaders }, "get_pull_source"),
+      lookupUpstream: (key) =>
+        request(
+          `/pull-sources/by-idempotency-key/${key}`,
+          { method: "GET", headers: authHeaders },
+          "get_pull_source_by_idempotency_key",
+          { 404: { error: "not_found", status: 404 } },
+        ),
       deleteUpstream: (sourceId) =>
         request(
           `/pull-sources/${sourceId}`,
@@ -154,12 +175,22 @@ Deno.serve(async (req) => {
     const outcome =
       action === "create_pull_source"
         ? await createPullSource(
-            { name: parsed.data.name, host: parsed.data.host, port: parsed.data.port },
+            {
+              name: parsed.data.name,
+              host: parsed.data.host,
+              port: parsed.data.port,
+              idempotency_key: parsed.data.idempotency_key,
+            },
             pullDeps,
           )
         : action === "get_pull_source"
           ? await getPullSource({ source_id: parsed.data.source_id }, pullDeps)
-          : await deletePullSource({ source_id: parsed.data.source_id }, pullDeps);
+          : action === "get_pull_source_by_idempotency_key"
+            ? await getPullSourceByIdempotencyKey(
+                { idempotency_key: parsed.data.idempotency_key },
+                pullDeps,
+              )
+            : await deletePullSource({ source_id: parsed.data.source_id }, pullDeps);
 
     return json(outcome.body, outcome.status);
   }
