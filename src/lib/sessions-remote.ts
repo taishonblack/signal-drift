@@ -72,7 +72,13 @@ export function fromRemote(row: {
   };
 }
 
-/** Load one session through its normal RLS-protected row access. */
+/**
+ * Load one session through its normal RLS-protected row access.
+ *
+ * A `draft` row is an in-flight provisioning attempt: it is deliberately
+ * invisible to operator-facing loading, so nobody can walk into a session whose
+ * callers are not resolved yet. Server-side provisioning/recovery still reads it.
+ */
 export async function loadAuthorizedSession(sessionId: string): Promise<SessionRecord | null> {
   const { data, error } = await supabase
     .from("sessions")
@@ -80,7 +86,8 @@ export async function loadAuthorizedSession(sessionId: string): Promise<SessionR
     .eq("id", sessionId)
     .maybeSingle();
   if (error) throw error;
-  return data ? fromRemote(data) : null;
+  if (!data || data.status === "draft") return null;
+  return fromRemote(data);
 }
 
 // ─── Edge function wrappers ──────────────────────────────────────────
