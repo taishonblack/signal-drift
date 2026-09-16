@@ -308,9 +308,31 @@ const CreateSession = () => {
     if (enabledLines.length === 0) return;
     const firstLabel = enabledLines[0].label;
     const sessionName = name.trim() || firstLabel || "Untitled Session";
+    // Caller-first slots are marked "runtime": MAKO dials the operator's
+    // external SRT listener, and playback resolves from the provisioned route
+    // rather than the legacy camN mapping.
     const normalized = lines.map((l) =>
-      l.enabled ? { ...l, mode: "caller" as const } : l
+      l.enabled
+        ? {
+            ...l,
+            mode: "caller" as const,
+            ...(callerBacked(l) ? { sourceKind: "runtime" as const } : {}),
+          }
+        : l,
     );
+    const runtimeSlots: RuntimeSlotIntent[] = normalized
+      .filter((l) => l.sourceKind === "runtime")
+      .map((l) => {
+        const { host, port } = parseSrtInput(l.srtAddress);
+        const custom = (l.label ?? "").trim();
+        const isDefaultLabel = /^(line|source)\s*\d+$/i.test(custom);
+        return {
+          slot: l.id,
+          name: custom && !isDefaultLabel ? custom : `Source ${l.id}`,
+          host,
+          port: Number(port),
+        };
+      });
     const createdAtIso = new Date().toISOString();
     // Authoritative scheduled_end_at: for preset durations, rebase to
     // (session_started_at + duration) so slow configuration doesn't eat
