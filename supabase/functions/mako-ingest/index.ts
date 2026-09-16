@@ -1,8 +1,9 @@
 // Secure bridge between the authenticated MAKO web app and the private
 // MAKO ingest API at https://api.makosrt.com.
 //
-// Actions: list_sources, create_source (admin), delete_source (admin).
-// create_source also persists the provisioned source in public.ingest_sources.
+// Listener actions (unchanged): list_sources, create_source, delete_source.
+// Caller actions (MAKO dials the external SRT Listener):
+//   create_pull_source, get_pull_source, delete_pull_source.
 // The MAKO_API_TOKEN never leaves this Edge Function.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -10,12 +11,25 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3";
 import { createSource } from "./create-source.ts";
 import { deleteSource, type RegistrySourceRow } from "./delete-source.ts";
+import {
+  createPullSource,
+  deletePullSource,
+  getPullSource,
+  type PullSourceDeps,
+  type UpstreamResult,
+} from "./pull-sources.ts";
 
 const BodySchema = z.object({
   action: z.string().min(1).max(64),
   name: z.string().max(200).optional(),
   source_id: z.string().max(64).optional(),
+  /** Caller actions only: the external SRT Listener MAKO must connect to. */
+  host: z.string().max(300).optional(),
+  port: z.union([z.number(), z.string().max(10)]).optional(),
 });
+
+const CALLER_ACTIONS = new Set(["create_pull_source", "get_pull_source", "delete_pull_source"]);
+const LISTENER_ACTIONS = new Set(["list_sources", "create_source", "delete_source"]);
 
 const SourceIdSchema = z.string().regex(/^src_[a-f0-9]{6}$/);
 
