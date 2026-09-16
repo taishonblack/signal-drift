@@ -15,6 +15,7 @@ import {
   createPullSource,
   deletePullSource,
   getPullSource,
+  getPullSourceByIdempotencyKey,
   type PullSourceDeps,
   type UpstreamResult,
 } from "./pull-sources.ts";
@@ -26,9 +27,16 @@ const BodySchema = z.object({
   /** Caller actions only: the external SRT Listener MAKO must connect to. */
   host: z.string().max(300).optional(),
   port: z.union([z.number(), z.string().max(10)]).optional(),
+  /** Caller actions only: MAKO-supplied idempotency key (UUID). */
+  idempotency_key: z.string().max(64).optional(),
 });
 
-const CALLER_ACTIONS = new Set(["create_pull_source", "get_pull_source", "delete_pull_source"]);
+const CALLER_ACTIONS = new Set([
+  "create_pull_source",
+  "get_pull_source",
+  "get_pull_source_by_idempotency_key",
+  "delete_pull_source",
+]);
 const LISTENER_ACTIONS = new Set(["list_sources", "create_source", "delete_source"]);
 
 const SourceIdSchema = z.string().regex(/^src_[a-f0-9]{6}$/);
