@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
   }
   const { action } = parsed.data;
 
-  if (action !== "list_sources" && action !== "create_source" && action !== "delete_source") {
+  if (!LISTENER_ACTIONS.has(action) && !CALLER_ACTIONS.has(action)) {
     return json({ error: "Unsupported action" }, 400);
   }
 
@@ -82,6 +82,76 @@ Deno.serve(async (req) => {
     console.error("mako-ingest: MAKO_API_BASE_URL or MAKO_API_TOKEN not configured");
     return json({ error: "service_unavailable" }, 503);
   }
+
+  // ─── Caller routes: MAKO dials the operator's external SRT Listener ───
+  //
+  // No database row is written in this phase. The upstream URL is always the
+  // server-side base plus, for get/delete, a regex-validated source id — no
+  // browser-supplied path or URL is ever forwarded.
+  if (CALLER_ACTIONS.has(action)) {
+    const authHeaders = {
+      Authorization: `Bearer ${apiToken}`,
+      Accept: "application/json",
+    };
+
+    const request = async (
+      path: string,
+      init: RequestInit,
+      label: string,
+    ): Promise<UpstreamResult> => {
+      try {
+        const upstream = await fetch(`${apiBase}${path}`, init);
+        if (!upstream.ok) {
+          console.error(`mako-ingest: ${label} upstream returned ${upstream.status}`);
+          return { ok: false, error: "upstream_error", status: 502 };
+        }
+        if (init.method === "DELETE") return { ok: true, raw: { deleted: true } };
+        const body = await upstream.json().catch(() => null);
+        if (body === null || typeof body !== "object") {
+          return { ok: false, error: "invalid_upstream_response", status: 502 };
+        }
+        return { ok: true, raw: body as Record<string, unknown> };
+      } catch (e) {
+        console.error(`mako-ingest: ${label} fetch failed`, e instanceof Error ? e.message : "unknown");
+        return { ok: false, error: "upstream_unreachable", status: 502 };
+      }
+    };
+
+    const pullDeps: PullSourceDeps = {
+      createUpstream: (body) =>
+        request(
+          "/pull-sources",
+          {
+            method: "POST",
+            headers: { ...authHeaders, "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          },
+          "create_pull_source",
+        ),
+      getUpstream: (sourceId) =>
+        request(`/pull-sources/${sourceId}`, { method: "GET", headers: authHeaders }, "get_pull_source"),
+      deleteUpstream: (sourceId) =>
+        request(
+          `/pull-sources/${sourceId}`,
+          { method: "DELETE", headers: authHeaders },
+          "delete_pull_source",
+        ),
+      logError: (message) => console.error(message),
+    };
+
+    const outcome =
+      action === "create_pull_source"
+        ? await createPullSource(
+            { name: parsed.data.name, host: parsed.data.host, port: parsed.data.port },
+            pullDeps,
+          )
+        : action === "get_pull_source"
+          ? await getPullSource({ source_id: parsed.data.source_id }, pullDeps)
+          : await deletePullSource({ source_id: parsed.data.source_id }, pullDeps);
+
+    return json(outcome.body, outcome.status);
+  }
+
 
   if (action === "create_source") {
     // Normal Operator capability: any authenticated user may create a source
