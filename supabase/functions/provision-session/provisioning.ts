@@ -164,12 +164,12 @@ export async function provisionSession(
         label: slot.name,
         playbackPath: reserved.playback_path,
         createdHere: false,
-        infrastructureSourceId: reserved.infrastructure_source_id ?? "",
+        infrastructureSourceId: reservedInfra ?? "",
       });
       continue;
     }
 
-    const priorInfra = reserved.infrastructure_source_id ?? null;
+    const priorInfra = reservedInfra;
     const created = await deps.createCaller({
       name: slot.name,
       host: slot.host,
