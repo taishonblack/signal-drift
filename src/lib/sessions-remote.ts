@@ -272,7 +272,10 @@ export async function hydrateMemberSessions(): Promise<void> {
 
   const existing = new Map(getSessions().map((s) => [s.id, s]));
   const TERMINAL = new Set(["completed", "archived"]);
-  for (const row of rows) {
+  // Phase C: a `draft` row is a provisioning attempt, not an operator session.
+  // It stays out of the normal list entirely (the server can still resolve it
+  // for retry/recovery) and is never rewritten as completed.
+  for (const row of (rows ?? []).filter((r) => r.status !== "draft")) {
     const record = fromRemote(row);
     const prior = existing.get(row.id);
     if (prior) {
