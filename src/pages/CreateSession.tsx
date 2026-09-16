@@ -973,7 +973,9 @@ const CreateSession = () => {
             <Button
               onClick={handleStart}
               size="lg"
-              disabled={(mode === "create" && !hasValidLine) || isReadOnly || !allowed}
+              disabled={
+                starting || (mode === "create" && !hasValidLine) || isReadOnly || !allowed
+              }
               className="flex-1 gap-2"
             >
               {mode === "create" || !isActiveConfigure ? (
@@ -981,7 +983,7 @@ const CreateSession = () => {
               ) : (
                 <Save className="h-4 w-4" />
               )}{" "}
-              {primaryLabel}
+              {starting ? "Connecting…" : primaryLabel}
             </Button>
             {mode === "create" && (
               <Button
