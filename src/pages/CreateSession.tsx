@@ -151,6 +151,8 @@ const CreateSession = () => {
     Record<number, { state: "testing" | "available" | "no_publisher" | "misconfigured" | "failed"; detail?: string }>
 
   >({});
+  /** True while MAKO is connecting to the operator's external SRT listeners. */
+  const [starting, setStarting] = useState(false);
   const [pendingActiveSession, setPendingActiveSession] = useState<SessionRecord | null>(null);
   const [pendingStart, setPendingStart] = useState<null | (() => void)>(null);
   const sessions = getSessions();
