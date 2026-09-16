@@ -148,6 +148,13 @@ export async function provisionSession(
     }
 
     const routeId = reserved.route_id;
+    if (!routeId) {
+      return await fail(500, "reservation_failed", { slot: slot.slot });
+    }
+    // Reservation may report an already-known infrastructure identity for this
+    // route (a previous attempt that got as far as upstream).
+    const reservedInfra =
+      "infrastructure_source_id" in reserved ? (reserved.infrastructure_source_id ?? null) : null;
 
     // Already ready for this exact endpoint — reuse, never create again.
     if (reserved.status === "ready" && reserved.playback_path) {
