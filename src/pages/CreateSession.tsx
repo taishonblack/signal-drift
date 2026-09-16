@@ -30,7 +30,11 @@ import {
   diffSessionConfig, appendChangeLog,
 } from "@/lib/session-store";
 import { ensureIdentity, useIdentity } from "@/lib/identity";
-import { saveSessionRemote } from "@/lib/sessions-remote";
+import {
+  provisionSessionRemote,
+  saveSessionRemote,
+  type RuntimeSlotIntent,
+} from "@/lib/sessions-remote";
 import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 import { toast } from "@/components/ui/sonner";
 import { probeStream, publishIdForSlot, streamNameForSlot } from "@/lib/stream-paths";
