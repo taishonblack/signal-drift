@@ -49,7 +49,13 @@ return ok -> browser updates local state -> navigate
 
 ## Draft hiding (narrow)
 
-`draft` is not added to the frontend `SessionStatus`. Instead: `hydrateMemberSessions` skips rows with status `draft`, and `loadAuthorizedSession` returns null for them. Nothing else changes.
+Invariant: draft = hidden from normal operator UI, NOT nonexistent to provisioning/recovery.
+
+- `draft` is not added to the frontend `SessionStatus`.
+- `hydrateMemberSessions` skips `draft` rows, so provisioning attempts never appear in the session list.
+- Operator-facing session loading refuses to open an incomplete `draft` session.
+- `migrateStatus()` must never convert `draft` into `completed`; a draft row is simply ignored by the operator UI.
+- The authenticated server side always resolves the owner's existing `draft` session and its `session_runtime_routes` rows, so a retry of `provision-session` for the same session ID reuses the existing route UUIDs instead of creating replacement infrastructure.
 
 ## Playback
 
