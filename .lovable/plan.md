@@ -1,55 +1,60 @@
-# Phase B — Answer: Session Deletion vs. Runtime-Route History
+# Phase B — Runtime Route Persistence Foundation
 
-Approach 2 (`session_runtime_routes`) is settled. This document answers only the deletion/FK conflict. No SQL, no code, no implementation.
+Database and security foundation only. No provisioning, no teardown orchestration, no UI.
 
-You are right, and the original audit was self-contradictory. `ON DELETE RESTRICT` is unconditional: a `torn_down` child row blocks the parent session delete exactly as a `ready` one does. Postgres has no lifecycle-aware RESTRICT. The fix is not a cleverer FK — it is to stop making the FK the safety mechanism, and to stop letting history live in a table that is a child of `sessions`.
+## Scope
 
-## Recommended final model
+In: two new tables, the dual-reference change to `session_sources`, the route-aware `save_session_with_sources`, RLS/grants, and tests.
 
-Two separate concerns, two separate places.
+Out: caller provisioning from Create Session, teardown orchestration, reconciliation worker, UI changes, Test Connection changes, My Sources changes, `camN` removal, Phase C onward.
+
+Explicitly out by amendment: no guarded hard-delete RPC, and no change to the existing `sessions` DELETE grant or policy. The app performs no hard session deletion today; the new `ON DELETE RESTRICT` FK is the database backstop while live infrastructure exists.
+
+`ingest_sources` is untouched — privileges, triggers, quota function, RLS and My Sources queries keep their current meaning.
+
+## Model
 
 ```text
 sessions
-   |
-   |  FK: session_id  ON DELETE RESTRICT   (live routes only)
+   |  session_id NOT NULL, ON DELETE RESTRICT
    v
-session_runtime_routes        <- LIVE routes only. A row here means
-   (provisioning | ready |       "infrastructure may exist". Rows leave
-    tearing_down | error)        this table when definitively torn down.
+session_runtime_routes          live / potentially-live caller infrastructure
+   provisioning | ready | tearing_down | error
    |
-   |  on successful teardown: move the record
+   |  (Phase C) archive + delete, one transaction, after the
+   |            external delete_pull_source has already succeeded
    v
-session_runtime_route_history  <- append-only audit. NO FK to sessions.
-                                  session_id kept as a plain text column.
+session_runtime_route_history   append-only; session_id is plain text, no FK
 ```
 
-1. **Exact FK.** `session_id text NOT NULL REFERENCES public.sessions(id) ON DELETE RESTRICT`. Unchanged from the audit — but it now only ever guards rows whose infrastructure might still be alive, so it never blocks a legitimate delete.
-2. **After successful teardown.** The row is **moved**: insert the full record into `session_runtime_route_history` (same transaction), then delete it from `session_runtime_routes`. No `torn_down` row is ever left in the live table. That single change removes the contradiction.
-3. **Does `session_id` stay populated?** Yes — in history, as a plain `text` column with **no foreign key** and no cascade. It survives the parent session's deletion, so the audit trail still names the session it belonged to. In the live table `session_id` is never nulled; nulling it would be a silent orphan, worse than a block.
-4. **When teardown FAILS.** The row stays in `session_runtime_routes` with `lifecycle_status = 'tearing_down'`, incremented `teardown_attempts` and a sanitized `teardown_error`. It is not moved, not deleted, and the RESTRICT FK therefore correctly continues to block session deletion — which is the desired behavior, because infrastructure may still be running and billable. A reconciliation pass retries it. `get_pull_source` returning not-found counts as success and triggers the move.
-5. **Preventing deletion while a route is alive.** Two layers, and the guard is the primary one:
-   - **Primary — a guarded deletion RPC.** `authenticated` loses its DELETE grant on `sessions`; deletion goes through a `SECURITY DEFINER` RPC (called by a backend function with the caller's verified identity, same identity chain as `save-session`). It verifies ownership, then refuses with a typed error if any row for that session exists in `session_runtime_routes` — regardless of status. It returns a useful reason (`routes_still_provisioning`, `teardown_pending`, `teardown_failed`) so the UI can say "still shutting down a source, try again shortly" instead of surfacing a database error.
-   - **Backstop — the RESTRICT FK.** If any future path deletes a session outside the RPC, the FK still refuses. Defense in depth: the guard gives good errors, the FK guarantees correctness.
-6. **Permitting deletion once everything is torn down.** No special case needed. Every definitively torn-down route has already left `session_runtime_routes`, so the guard finds zero rows and the FK has zero children. The delete proceeds normally. Note this also means the delete order is fixed and explicit: end session → teardown each route → move to history → then, and only then, delete the session.
-7. **History retained after session deletion.** `session_runtime_route_history` keeps `owner_id`, the original `session_id` (as text), slot, name, `infrastructure_source_id`, `playback_path`, lifecycle at time of archival, `teardown_requested_at`, `teardown_completed_at`, `teardown_attempts`, sanitized `teardown_error`, plus original `created_at` and an `archived_at`. Because there is no FK, deleting the session leaves every one of those rows intact. Remote host/port stay owner-only, same privilege posture as the live table: `service_role` writes, `authenticated` SELECT on own rows only, no collaborator or `anon` access.
-8. **Guarded RPC vs. FK alone.** The guard belongs in explicit backend orchestration — exactly as you expected. An FK alone cannot distinguish "shutting down cleanly" from "leaked infrastructure", cannot explain itself to the user, and cannot order the teardown steps. The FK's job is narrower and it is good at it: make the invariant "no session disappears while its infrastructure might be alive" impossible to violate by accident.
+A row in the live table means infrastructure may still exist. `torn_down` is not a live state and is never retained there. History outlives its session.
 
-## Resulting FK / delete behavior, stated plainly
+## Technical detail
 
-| Route state | Lives in | Session delete |
-| --- | --- | --- |
-| provisioning / ready / tearing_down / error | `session_runtime_routes` | Refused by the RPC with a reason; FK would also refuse |
-| teardown failed, awaiting retry | `session_runtime_routes` | Refused — infrastructure may still be running |
-| definitively torn down (incl. upstream not-found) | `session_runtime_route_history` | Allowed; history survives the delete |
+### `session_runtime_routes`
 
-`ON DELETE CASCADE` is explicitly rejected: it would let a session delete silently erase the record of infrastructure that may still be running. Nulling `session_id` on the live table is rejected for the same reason.
+`id`, `owner_id` (→ `auth.users`), `session_id text NOT NULL REFERENCES public.sessions(id) ON DELETE RESTRICT`, `slot smallint` (1–4), `name`, `remote_host`, `remote_port` (1–65535), `infrastructure_source_id` (nullable, globally unique), `playback_path` (nullable, unique when set), `lifecycle_status` default `provisioning` constrained to `provisioning | ready | tearing_down | error`, `connection_status` default `unknown`, `connection_checked_at`, `last_error`, `teardown_requested_at`, `teardown_completed_at`, `teardown_attempts` default 0, `teardown_error`, `created_at`, `updated_at` with the existing `set_updated_at` trigger.
 
-## One thing worth flagging
+Indexes: unique `(session_id, slot)`; unique `infrastructure_source_id`; unique `playback_path` where not null; btree on `owner_id` and `session_id`; partial index on rows awaiting reconciliation (`teardown_requested_at is not null and teardown_completed_at is null`). Invariant trigger: `ready` and `tearing_down` require both `infrastructure_source_id` and `playback_path`.
 
-No hard session deletion exists in the app today — sessions are ended and moved to `completed`/`archived`, and `sessions` has an owner DELETE policy that nothing currently calls. So this model does not break any existing flow, and the guarded-deletion RPC would be new surface introduced alongside it rather than a retrofit of something in use.
+### `session_runtime_route_history`
 
-## Change to the approved Phase B plan
+`id`, `owner_id`, `session_id text` (plain, no FK), `slot`, `name`, `remote_host`, `remote_port`, `infrastructure_source_id`, `playback_path`, `final_lifecycle_status`, `connection_status`, `teardown_requested_at`, `teardown_completed_at`, `teardown_attempts`, `teardown_error`, `route_created_at`, `archived_at` default `now()`. Append-only: no update or delete grant to any browser role.
 
-Section 4 of the approved audit gains a second table (`session_runtime_route_history`), section 7 gains the move-on-success step, and a guarded session-deletion RPC plus the removal of the `authenticated` DELETE grant on `sessions` are added. Everything else — Approach 2, the XOR on `session_sources`, viewer-safe snapshots, RLS posture, no admin bypass, orchestration outside transactions — stands unchanged.
+### `session_sources`
 
-Awaiting your confirmation of this model before any schema is written.
+`ingest_source_id` drops `NOT NULL`; add `runtime_route_id uuid REFERENCES session_runtime_routes(id) ON DELETE RESTRICT`; add `CHECK (num_nonnulls(ingest_source_id, runtime_route_id) = 1)`; add partial unique `(session_id, runtime_route_id) where detached_at is null`, mirroring the existing source one. `slot`, `label`, `playback_path`, `attached_at`, `detached_at` and both existing partial uniques are unchanged. Existing rows satisfy the XOR via their non-null `ingest_source_id` — no backfill.
+
+### `save_session_with_sources`
+
+Adds a runtime-route branch alongside the existing library-source branch. An attachment entry carries exactly one of `ingest_source_id` or `runtime_route_id`; both or neither is rejected. Route validation: the route exists, `owner_id = _owner`, `session_id` equals the session being saved, `lifecycle_status = 'ready'`, `playback_path` non-empty. No admin bypass. `label` and `playback_path` are derived from the route row, never from the request. Existing detach synchronisation, terminal force-detach, `SECURITY DEFINER`, fixed `search_path` and service-role-only execute are preserved; the detach comparison keys on whichever reference the row carries.
+
+### RLS and grants
+
+Both new tables: RLS on. `service_role` ALL. `authenticated` SELECT only, policy `using (owner_id = auth.uid())` — no INSERT, UPDATE or DELETE grant at all, so browser roles cannot write infrastructure fields. `anon` no grants. Collaborators and PIN guests are deliberately absent from these policies and continue reading viewer-safe `slot`/`label`/`playback_path` through the unchanged `session_sources` participants policy. No new role.
+
+## Verification
+
+Migration applied, then: existing library attachment still succeeds; same-owner same-session `ready` route succeeds; cross-owner route rejected; wrong-session route rejected; non-`ready` route rejected; forged playback/infrastructure metadata in the request cannot become authoritative; both-references and neither-reference rejected; duplicate active slot and duplicate active route rejected; collaborator cannot read either runtime table; `anon` cannot read them; `authenticated` cannot write runtime infrastructure; existing Phase 5 rows remain valid; hard-deleting a session that has a live runtime route is rejected by the FK.
+
+Plus the full existing suite and typecheck. Report changes, migration result, test results and any deviations, then stop.
