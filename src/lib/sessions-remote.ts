@@ -109,6 +109,65 @@ export async function saveSessionRemote(session: SessionRecord): Promise<void> {
   if (data?.error) throw new Error(String(data.error));
 }
 
+/** One caller-backed slot: MAKO dials this external SRT listener. */
+export interface RuntimeSlotIntent {
+  slot: number;
+  name: string;
+  host: string;
+  port: number;
+}
+
+export interface ProvisionSessionResult {
+  routes: { slot: number; route_id: string; playback_path: string }[];
+}
+
+const PROVISION_MESSAGES: Record<string, string> = {
+  endpoint_conflict:
+    "This slot is already connected to a different address and port. End the session or use a new session to change it.",
+  route_tearing_down: "This slot is still being released. Try again in a moment.",
+  route_tombstoned:
+    "That connection was permanently removed. Start a new session to monitor this feed.",
+  provisioning_failed: "MAKO could not connect to that SRT listener. Check the address and port.",
+  route_persist_failed: "MAKO could not save the connection. Nothing was left running.",
+  save_failed: "MAKO could not save the session.",
+  unauthorized: "Please sign in again.",
+  service_unavailable: "Monitoring infrastructure is unavailable right now.",
+};
+
+/**
+ * Phase C — caller-first provisioning. AWAITED on purpose: MAKO provisions a
+ * caller to every enabled external listener, persists the trusted runtime
+ * identities, attaches them to the session and activates it. The browser may
+ * only enter the Session Room after this resolves successfully.
+ */
+export async function provisionSessionRemote(
+  session: SessionRecord,
+  slots: RuntimeSlotIntent[],
+): Promise<ProvisionSessionResult> {
+  const { data, error } = await supabase.functions.invoke("provision-session", {
+    body: {
+      session: toRemote(session),
+      slots,
+      library_attachments: attachmentIntents(session.lines ?? []),
+    },
+  });
+
+  let payload: Record<string, unknown> | null =
+    data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+  if (error) {
+    if (error instanceof FunctionsHttpError) {
+      payload = await error.context.json().catch(() => null);
+    }
+    if (!payload?.error) throw new Error(error.message || "provision-session failed");
+  }
+  const code = payload?.error ? String(payload.error) : null;
+  if (code) throw new Error(PROVISION_MESSAGES[code] ?? code);
+
+  return {
+    routes: (payload?.routes as ProvisionSessionResult["routes"]) ?? [],
+  };
+}
+
 /**
  * Mirror a locally-ended session upstream so the server stamps
  * `session_sources.detached_at` for its attachments. Best-effort and silent:
