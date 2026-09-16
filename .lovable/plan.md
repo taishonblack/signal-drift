@@ -46,7 +46,9 @@ Nothing else is touched. `create-source.ts`, `delete-source.ts`, the listener br
 | Upstream `409` on create | `409 { "error": "idempotency_conflict" }` — same key, different host/port |
 | Upstream `410` on create | `410 { "error": "idempotency_tombstoned" }` — deleted key, caller must never be recreated |
 | Lookup of unknown key (upstream `404`) | `404 { "error": "not_found" }`, deterministic and detail-free |
-| Same key + same host/port retry | `200` with the existing caller — the upstream returns it, and the response key must equal the requested key |
+| Same key + same host/port retry | Success with the existing caller — the response key must equal the requested key |
+
+**Create success means any 2xx.** The upstream FastAPI `POST /pull-sources` is `status_code=201`, so an idempotent retry that resolves to an existing caller also returns 201. The Edge Function must not distinguish first-create from retry by status code: any successful 2xx create response is validated (key, source id, output path, host, port) and returned as the normal success outcome. The DigitalOcean API is not changed in this work.
 | Any other upstream / network failure | Unchanged sanitized `502 upstream_error`, `upstream_unreachable`, or `invalid_upstream_response`; status codes logged, bodies never forwarded |
 | `DELETE` + upstream `404` | Unchanged: successful already-gone teardown |
 
