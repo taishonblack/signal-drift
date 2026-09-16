@@ -16,9 +16,18 @@ export interface AttachmentIntent {
   label?: string;
 }
 
-/** True when this slot is backed by a persistent MAKO source. */
+/** True when this slot is backed by a persistent MAKO library source. */
 export function isSourceBacked(line: SrtLine): boolean {
   return line.sourceKind === "mako" && !!line.ingestSourceId;
+}
+
+/**
+ * True when this slot is backed by a session-scoped caller route (Phase C):
+ * MAKO dials the operator's external SRT listener. Its playback identity comes
+ * from the runtime route, never from the legacy camN mapping.
+ */
+export function isRuntimeBacked(line: SrtLine): boolean {
+  return line.sourceKind === "runtime";
 }
 
 /**
