@@ -1,8 +1,9 @@
 // Secure bridge between the authenticated MAKO web app and the private
 // MAKO ingest API at https://api.makosrt.com.
 //
-// Actions: list_sources, create_source (admin), delete_source (admin).
-// create_source also persists the provisioned source in public.ingest_sources.
+// Listener actions (unchanged): list_sources, create_source, delete_source.
+// Caller actions (MAKO dials the external SRT Listener):
+//   create_pull_source, get_pull_source, delete_pull_source.
 // The MAKO_API_TOKEN never leaves this Edge Function.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -10,12 +11,25 @@ import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3";
 import { createSource } from "./create-source.ts";
 import { deleteSource, type RegistrySourceRow } from "./delete-source.ts";
+import {
+  createPullSource,
+  deletePullSource,
+  getPullSource,
+  type PullSourceDeps,
+  type UpstreamResult,
+} from "./pull-sources.ts";
 
 const BodySchema = z.object({
   action: z.string().min(1).max(64),
   name: z.string().max(200).optional(),
   source_id: z.string().max(64).optional(),
+  /** Caller actions only: the external SRT Listener MAKO must connect to. */
+  host: z.string().max(300).optional(),
+  port: z.union([z.number(), z.string().max(10)]).optional(),
 });
+
+const CALLER_ACTIONS = new Set(["create_pull_source", "get_pull_source", "delete_pull_source"]);
+const LISTENER_ACTIONS = new Set(["list_sources", "create_source", "delete_source"]);
 
 const SourceIdSchema = z.string().regex(/^src_[a-f0-9]{6}$/);
 
@@ -57,7 +71,7 @@ Deno.serve(async (req) => {
   }
   const { action } = parsed.data;
 
-  if (action !== "list_sources" && action !== "create_source" && action !== "delete_source") {
+  if (!LISTENER_ACTIONS.has(action) && !CALLER_ACTIONS.has(action)) {
     return json({ error: "Unsupported action" }, 400);
   }
 
@@ -68,6 +82,80 @@ Deno.serve(async (req) => {
     console.error("mako-ingest: MAKO_API_BASE_URL or MAKO_API_TOKEN not configured");
     return json({ error: "service_unavailable" }, 503);
   }
+
+  // ─── Caller routes: MAKO dials the operator's external SRT Listener ───
+  //
+  // No database row is written in this phase. The upstream URL is always the
+  // server-side base plus, for get/delete, a regex-validated source id — no
+  // browser-supplied path or URL is ever forwarded.
+  if (CALLER_ACTIONS.has(action)) {
+    const authHeaders = {
+      Authorization: `Bearer ${apiToken}`,
+      Accept: "application/json",
+    };
+
+    const request = async (
+      path: string,
+      init: RequestInit,
+      label: string,
+    ): Promise<UpstreamResult> => {
+      try {
+        const upstream = await fetch(`${apiBase}${path}`, init);
+        // An already-absent caller route is a successful teardown.
+        if (init.method === "DELETE" && upstream.status === 404) {
+          return { ok: true, raw: { deleted: true } };
+        }
+        if (!upstream.ok) {
+          console.error(`mako-ingest: ${label} upstream returned ${upstream.status}`);
+          return { ok: false, error: "upstream_error", status: 502 };
+        }
+        if (init.method === "DELETE") return { ok: true, raw: { deleted: true } };
+        const body = await upstream.json().catch(() => null);
+        if (body === null || typeof body !== "object") {
+          return { ok: false, error: "invalid_upstream_response", status: 502 };
+        }
+        return { ok: true, raw: body as Record<string, unknown> };
+      } catch (e) {
+        console.error(`mako-ingest: ${label} fetch failed`, e instanceof Error ? e.message : "unknown");
+        return { ok: false, error: "upstream_unreachable", status: 502 };
+      }
+    };
+
+    const pullDeps: PullSourceDeps = {
+      createUpstream: (body) =>
+        request(
+          "/pull-sources",
+          {
+            method: "POST",
+            headers: { ...authHeaders, "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          },
+          "create_pull_source",
+        ),
+      getUpstream: (sourceId) =>
+        request(`/pull-sources/${sourceId}`, { method: "GET", headers: authHeaders }, "get_pull_source"),
+      deleteUpstream: (sourceId) =>
+        request(
+          `/pull-sources/${sourceId}`,
+          { method: "DELETE", headers: authHeaders },
+          "delete_pull_source",
+        ),
+      logError: (message) => console.error(message),
+    };
+
+    const outcome =
+      action === "create_pull_source"
+        ? await createPullSource(
+            { name: parsed.data.name, host: parsed.data.host, port: parsed.data.port },
+            pullDeps,
+          )
+        : action === "get_pull_source"
+          ? await getPullSource({ source_id: parsed.data.source_id }, pullDeps)
+          : await deletePullSource({ source_id: parsed.data.source_id }, pullDeps);
+
+    return json(outcome.body, outcome.status);
+  }
+
 
   if (action === "create_source") {
     // Normal Operator capability: any authenticated user may create a source
