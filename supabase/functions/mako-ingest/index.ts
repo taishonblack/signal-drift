@@ -3,7 +3,8 @@
 //
 // Listener actions (unchanged): list_sources, create_source, delete_source.
 // Caller actions (MAKO dials the external SRT Listener):
-//   create_pull_source, get_pull_source, delete_pull_source.
+//   create_pull_source (idempotent by MAKO-supplied UUID key),
+//   get_pull_source, get_pull_source_by_idempotency_key, delete_pull_source.
 // The MAKO_API_TOKEN never leaves this Edge Function.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -15,6 +16,7 @@ import {
   createPullSource,
   deletePullSource,
   getPullSource,
+  getPullSourceByIdempotencyKey,
   type PullSourceDeps,
   type UpstreamResult,
 } from "./pull-sources.ts";
@@ -26,9 +28,16 @@ const BodySchema = z.object({
   /** Caller actions only: the external SRT Listener MAKO must connect to. */
   host: z.string().max(300).optional(),
   port: z.union([z.number(), z.string().max(10)]).optional(),
+  /** Caller actions only: MAKO-supplied idempotency key (UUID). */
+  idempotency_key: z.string().max(64).optional(),
 });
 
-const CALLER_ACTIONS = new Set(["create_pull_source", "get_pull_source", "delete_pull_source"]);
+const CALLER_ACTIONS = new Set([
+  "create_pull_source",
+  "get_pull_source",
+  "get_pull_source_by_idempotency_key",
+  "delete_pull_source",
+]);
 const LISTENER_ACTIONS = new Set(["list_sources", "create_source", "delete_source"]);
 
 const SourceIdSchema = z.string().regex(/^src_[a-f0-9]{6}$/);
@@ -94,10 +103,18 @@ Deno.serve(async (req) => {
       Accept: "application/json",
     };
 
+    // Typed upstream statuses that must survive sanitization as deterministic
+    // client responses. Raw upstream detail/error bodies are never forwarded.
+    const typedStatus = (
+      status: number,
+      map: Record<number, { error: string; status: number }>,
+    ): { error: string; status: number } | null => map[status] ?? null;
+
     const request = async (
       path: string,
       init: RequestInit,
       label: string,
+      typed: Record<number, { error: string; status: number }> = {},
     ): Promise<UpstreamResult> => {
       try {
         const upstream = await fetch(`${apiBase}${path}`, init);
@@ -107,6 +124,8 @@ Deno.serve(async (req) => {
         }
         if (!upstream.ok) {
           console.error(`mako-ingest: ${label} upstream returned ${upstream.status}`);
+          const mapped = typedStatus(upstream.status, typed);
+          if (mapped) return { ok: false, error: mapped.error, status: mapped.status };
           return { ok: false, error: "upstream_error", status: 502 };
         }
         if (init.method === "DELETE") return { ok: true, raw: { deleted: true } };
@@ -131,9 +150,20 @@ Deno.serve(async (req) => {
             body: JSON.stringify(body),
           },
           "create_pull_source",
+          {
+            409: { error: "idempotency_conflict", status: 409 },
+            410: { error: "idempotency_tombstoned", status: 410 },
+          },
         ),
       getUpstream: (sourceId) =>
         request(`/pull-sources/${sourceId}`, { method: "GET", headers: authHeaders }, "get_pull_source"),
+      lookupUpstream: (key) =>
+        request(
+          `/pull-sources/by-idempotency-key/${key}`,
+          { method: "GET", headers: authHeaders },
+          "get_pull_source_by_idempotency_key",
+          { 404: { error: "not_found", status: 404 } },
+        ),
       deleteUpstream: (sourceId) =>
         request(
           `/pull-sources/${sourceId}`,
@@ -146,12 +176,22 @@ Deno.serve(async (req) => {
     const outcome =
       action === "create_pull_source"
         ? await createPullSource(
-            { name: parsed.data.name, host: parsed.data.host, port: parsed.data.port },
+            {
+              name: parsed.data.name,
+              host: parsed.data.host,
+              port: parsed.data.port,
+              idempotency_key: parsed.data.idempotency_key,
+            },
             pullDeps,
           )
         : action === "get_pull_source"
           ? await getPullSource({ source_id: parsed.data.source_id }, pullDeps)
-          : await deletePullSource({ source_id: parsed.data.source_id }, pullDeps);
+          : action === "get_pull_source_by_idempotency_key"
+            ? await getPullSourceByIdempotencyKey(
+                { idempotency_key: parsed.data.idempotency_key },
+                pullDeps,
+              )
+            : await deletePullSource({ source_id: parsed.data.source_id }, pullDeps);
 
     return json(outcome.body, outcome.status);
   }

@@ -5,6 +5,14 @@
 // initiates the connection to it. The friendly name is a label only — it never
 // influences transport or any URL.
 //
+// Idempotency (Phase A.2): caller creation is keyed by a MAKO-supplied UUID.
+// The upstream guarantees:
+//   - same key + same host/port  → the SAME existing caller (no duplicate)
+//   - same key + different host/port → 409 Conflict
+//   - deleted key                → 410 Gone (permanently tombstoned)
+// A lookup by key recovers a caller after a lost create response. The key is
+// validated strictly before it is ever interpolated into an upstream path.
+//
 // Runtime-agnostic on purpose: every side effect (upstream HTTP, logging) is
 // injected, so all of this is unit-testable without Deno, network access, or
 // touching real infrastructure.
@@ -15,6 +23,10 @@
 // in this Edge Function.
 
 export const SOURCE_ID_PATTERN = /^src_[a-f0-9]{6}$/;
+
+/** RFC 4122 UUID, lowercase-canonical. Validated before URL interpolation. */
+export const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 export const MIN_PORT = 1;
 export const MAX_PORT = 65535;
@@ -29,9 +41,12 @@ export type CallerSource = {
   host: string;
   port: number;
   output_path: string;
+  idempotency_key: string;
   name: string | null;
   service: string | null;
+  /** "active", "tombstoned", or whatever the upstream reports. */
   state: string | null;
+  deleted_at: string | null;
 };
 
 export type UpstreamResult = {
@@ -42,14 +57,17 @@ export type UpstreamResult = {
 };
 
 export type PullSourceDeps = {
-  /** POST /pull-sources with { name, host, port }. */
+  /** POST /pull-sources with { name, host, port, idempotency_key }. */
   createUpstream: (body: {
     name: string;
     host: string;
     port: number;
+    idempotency_key: string;
   }) => Promise<UpstreamResult>;
   /** GET /pull-sources/:source_id. */
   getUpstream: (sourceId: string) => Promise<UpstreamResult>;
+  /** GET /pull-sources/by-idempotency-key/:uuid. */
+  lookupUpstream: (idempotencyKey: string) => Promise<UpstreamResult>;
   /** DELETE /pull-sources/:source_id. */
   deleteUpstream: (sourceId: string) => Promise<UpstreamResult>;
   /** Sanitized operational logging. Never receives secrets or raw bodies. */
@@ -75,6 +93,14 @@ export function validatePort(raw: unknown): number | null {
   const port = typeof raw === "number" ? raw : Number(raw);
   if (!Number.isInteger(port) || port < MIN_PORT || port > MAX_PORT) return null;
   return port;
+}
+
+/** Lowercase-canonical UUID, or null. */
+export function validateIdempotencyKey(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const key = raw.trim().toLowerCase();
+  if (!UUID_PATTERN.test(key)) return null;
+  return key;
 }
 
 function isIpv4(host: string): boolean {
@@ -136,10 +162,14 @@ export function validateHost(raw: unknown): { ok: true; host: string } | { ok: f
 
 /**
  * Validate an upstream caller-route payload. Nothing from the infrastructure
- * API is trusted: identity, playback path, host and port must all be present
- * and consistent, or the whole call is treated as failed.
+ * API is trusted: identity, playback path, host, port and idempotency key must
+ * all be present and consistent, or the whole call is treated as failed.
+ *
+ * When expectedKey is supplied (create / lookup-by-key), the returned
+ * idempotency key must equal it exactly — a mismatch means the upstream
+ * answered for a different caller than the one we asked about.
  */
-export function validateCallerSource(raw: unknown): CallerSource | null {
+export function validateCallerSource(raw: unknown, expectedKey?: string): CallerSource | null {
   const container = (raw ?? {}) as Record<string, unknown>;
   const s = ((container.source ?? container) ?? {}) as Record<string, unknown>;
 
@@ -155,14 +185,20 @@ export function validateCallerSource(raw: unknown): CallerSource | null {
   const port = validatePort(s.port);
   if (port === null) return null;
 
+  const key = validateIdempotencyKey(s.idempotency_key);
+  if (key === null) return null;
+  if (expectedKey !== undefined && key !== expectedKey) return null;
+
   return {
     source_id: sourceId,
     host,
     port,
     output_path: outputPath,
+    idempotency_key: key,
     name: typeof s.name === "string" ? s.name : null,
     service: typeof s.service === "string" ? s.service : null,
     state: typeof s.state === "string" ? s.state : null,
+    deleted_at: typeof s.deleted_at === "string" ? s.deleted_at : null,
   };
 }
 
@@ -179,10 +215,14 @@ function ok(source: CallerSource): PullSourceOutcome {
 
 /**
  * Create a caller route: MAKO will dial the supplied external SRT Listener.
+ * The idempotency key makes retries safe: the upstream returns the same
+ * caller for a repeated key/endpoint, a typed 409 for a changed endpoint,
+ * and a typed 410 for a permanently tombstoned key.
+ *
  * No database row is written in this phase.
  */
 export async function createPullSource(
-  params: { name: unknown; host: unknown; port: unknown },
+  params: { name: unknown; host: unknown; port: unknown; idempotency_key: unknown },
   deps: PullSourceDeps,
 ): Promise<PullSourceOutcome> {
   const name = validateName(params.name);
@@ -194,19 +234,22 @@ export async function createPullSource(
   const port = validatePort(params.port);
   if (port === null) return { status: 400, body: { error: "invalid_port" } };
 
-  const upstream = await deps.createUpstream({ name, host: host.host, port });
+  const key = validateIdempotencyKey(params.idempotency_key);
+  if (key === null) return { status: 400, body: { error: "invalid_idempotency_key" } };
+
+  const upstream = await deps.createUpstream({ name, host: host.host, port, idempotency_key: key });
   if (!upstream.ok) return upstreamFailure(upstream);
 
-  const source = validateCallerSource(upstream.raw ?? {});
+  const source = validateCallerSource(upstream.raw ?? {}, key);
   if (!source) {
-    deps.logError("mako-ingest: create_pull_source rejected — upstream response malformed");
+    deps.logError("mako-ingest: create_pull_source rejected — upstream response malformed or key mismatch");
     return { status: 502, body: { error: "invalid_upstream_response" } };
   }
 
   return ok(source);
 }
 
-/** Read one caller route's live state. */
+/** Read one caller route's live state by infrastructure source id. */
 export async function getPullSource(
   params: { source_id: unknown },
   deps: PullSourceDeps,
@@ -226,6 +269,32 @@ export async function getPullSource(
   }
   if (source.source_id !== sourceId) {
     deps.logError("mako-ingest: get_pull_source rejected — upstream identity mismatch");
+    return { status: 502, body: { error: "invalid_upstream_response" } };
+  }
+
+  return ok(source);
+}
+
+/**
+ * Recover a caller route by its MAKO-supplied idempotency key. Accepts both
+ * active and tombstoned payloads — the state distinguishes "reuse this
+ * caller" from "this key can never be used again". The key is validated
+ * before it is interpolated into the upstream path; the browser never
+ * supplies a URL or path.
+ */
+export async function getPullSourceByIdempotencyKey(
+  params: { idempotency_key: unknown },
+  deps: PullSourceDeps,
+): Promise<PullSourceOutcome> {
+  const key = validateIdempotencyKey(params.idempotency_key);
+  if (key === null) return { status: 400, body: { error: "invalid_idempotency_key" } };
+
+  const upstream = await deps.lookupUpstream(key);
+  if (!upstream.ok) return upstreamFailure(upstream);
+
+  const source = validateCallerSource(upstream.raw ?? {}, key);
+  if (!source) {
+    deps.logError("mako-ingest: get_pull_source_by_idempotency_key rejected — upstream response malformed or key mismatch");
     return { status: 502, body: { error: "invalid_upstream_response" } };
   }
 
