@@ -42,6 +42,12 @@ type LineStatus = "empty" | "configured" | "error";
 const isSourceBacked = (line: SrtLine) =>
   line.sourceKind === "mako" && !!line.ingestSourceId;
 
+/** A manually entered external SRT listener endpoint (host + port). */
+const hasManualEndpoint = (line: SrtLine) => {
+  const { host, port } = parseSrtInput(line.srtAddress);
+  return !!host && !!port;
+};
+
 const isConfigured = (line: SrtLine) => {
   // A persistent source carries its own dedicated port and playback identity,
   // so it is configured by selection alone.
