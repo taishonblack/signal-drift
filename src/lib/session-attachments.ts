@@ -54,7 +54,7 @@ export async function loadSessionAttachments(
 ): Promise<SessionAttachment[]> {
   const { data, error } = await supabase
     .from("session_sources")
-    .select("slot, label, playback_path, ingest_source_id, attached_at")
+    .select("slot, label, playback_path, ingest_source_id, runtime_route_id, attached_at")
     .eq("session_id", sessionId)
     .is("detached_at", null)
     .order("slot", { ascending: true });
@@ -66,6 +66,7 @@ export async function loadSessionAttachments(
     label: row.label,
     playbackPath: row.playback_path,
     ingestSourceId: row.ingest_source_id,
+    runtimeRouteId: row.runtime_route_id,
     attachedAt: row.attached_at,
   }));
 }
