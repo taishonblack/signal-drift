@@ -182,15 +182,153 @@ export type Database = {
         }
         Relationships: []
       }
+      session_runtime_route_history: {
+        Row: {
+          archived_at: string
+          connection_status: string | null
+          created_at: string
+          final_lifecycle_status: string
+          id: string
+          infrastructure_source_id: string | null
+          name: string
+          owner_id: string
+          playback_path: string | null
+          remote_host: string | null
+          remote_port: number | null
+          route_created_at: string | null
+          session_id: string
+          slot: number
+          teardown_attempts: number
+          teardown_completed_at: string | null
+          teardown_error: string | null
+          teardown_requested_at: string | null
+        }
+        Insert: {
+          archived_at?: string
+          connection_status?: string | null
+          created_at?: string
+          final_lifecycle_status: string
+          id?: string
+          infrastructure_source_id?: string | null
+          name: string
+          owner_id: string
+          playback_path?: string | null
+          remote_host?: string | null
+          remote_port?: number | null
+          route_created_at?: string | null
+          session_id: string
+          slot: number
+          teardown_attempts?: number
+          teardown_completed_at?: string | null
+          teardown_error?: string | null
+          teardown_requested_at?: string | null
+        }
+        Update: {
+          archived_at?: string
+          connection_status?: string | null
+          created_at?: string
+          final_lifecycle_status?: string
+          id?: string
+          infrastructure_source_id?: string | null
+          name?: string
+          owner_id?: string
+          playback_path?: string | null
+          remote_host?: string | null
+          remote_port?: number | null
+          route_created_at?: string | null
+          session_id?: string
+          slot?: number
+          teardown_attempts?: number
+          teardown_completed_at?: string | null
+          teardown_error?: string | null
+          teardown_requested_at?: string | null
+        }
+        Relationships: []
+      }
+      session_runtime_routes: {
+        Row: {
+          connection_checked_at: string | null
+          connection_status: string
+          created_at: string
+          id: string
+          infrastructure_source_id: string | null
+          last_error: string | null
+          lifecycle_status: string
+          name: string
+          owner_id: string
+          playback_path: string | null
+          remote_host: string
+          remote_port: number
+          session_id: string
+          slot: number
+          teardown_attempts: number
+          teardown_completed_at: string | null
+          teardown_error: string | null
+          teardown_requested_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          connection_checked_at?: string | null
+          connection_status?: string
+          created_at?: string
+          id?: string
+          infrastructure_source_id?: string | null
+          last_error?: string | null
+          lifecycle_status?: string
+          name: string
+          owner_id: string
+          playback_path?: string | null
+          remote_host: string
+          remote_port: number
+          session_id: string
+          slot: number
+          teardown_attempts?: number
+          teardown_completed_at?: string | null
+          teardown_error?: string | null
+          teardown_requested_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          connection_checked_at?: string | null
+          connection_status?: string
+          created_at?: string
+          id?: string
+          infrastructure_source_id?: string | null
+          last_error?: string | null
+          lifecycle_status?: string
+          name?: string
+          owner_id?: string
+          playback_path?: string | null
+          remote_host?: string
+          remote_port?: number
+          session_id?: string
+          slot?: number
+          teardown_attempts?: number
+          teardown_completed_at?: string | null
+          teardown_error?: string | null
+          teardown_requested_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_runtime_routes_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_sources: {
         Row: {
           attached_at: string
           created_at: string
           detached_at: string | null
           id: string
-          ingest_source_id: string
+          ingest_source_id: string | null
           label: string | null
           playback_path: string | null
+          runtime_route_id: string | null
           session_id: string
           slot: number
         }
@@ -199,9 +337,10 @@ export type Database = {
           created_at?: string
           detached_at?: string | null
           id?: string
-          ingest_source_id: string
+          ingest_source_id?: string | null
           label?: string | null
           playback_path?: string | null
+          runtime_route_id?: string | null
           session_id: string
           slot: number
         }
@@ -210,9 +349,10 @@ export type Database = {
           created_at?: string
           detached_at?: string | null
           id?: string
-          ingest_source_id?: string
+          ingest_source_id?: string | null
           label?: string | null
           playback_path?: string | null
+          runtime_route_id?: string | null
           session_id?: string
           slot?: number
         }
@@ -222,6 +362,13 @@ export type Database = {
             columns: ["ingest_source_id"]
             isOneToOne: false
             referencedRelation: "ingest_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_sources_runtime_route_id_fkey"
+            columns: ["runtime_route_id"]
+            isOneToOne: false
+            referencedRelation: "session_runtime_routes"
             referencedColumns: ["id"]
           },
           {
