@@ -438,7 +438,11 @@ export function getSessions(): SessionRecord[] {
     }
     return [];
   }
-  return stored.map((s) => ({
+  return stored
+    // A provisioning draft is invisible to the operator UI — hidden, never
+    // rewritten into some other status.
+    .filter((s) => (s as any).status !== "draft")
+    .map((s) => ({
     ...s,
     status: migrateStatus((s as any).status),
     ownerUserId: s.ownerUserId ?? s.hostUserId,
