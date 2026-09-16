@@ -368,6 +368,29 @@ const CreateSession = () => {
         },
       ],
     };
+    // Caller-backed session: provisioning is an AWAITED transaction. Nothing is
+    // stored locally and nothing navigates until MAKO has actually connected to
+    // every external listener and attached the resulting feeds.
+    if (!isGuest && runtimeSlots.length > 0) {
+      setStarting(true);
+      try {
+        const result = await provisionSessionRemote(session, runtimeSlots);
+        const routeBySlot = new Map(result.routes.map((r) => [r.slot, r.route_id]));
+        session.lines = session.lines.map((l) =>
+          routeBySlot.has(l.id) ? { ...l, runtimeRouteId: routeBySlot.get(l.id) } : l,
+        );
+        addSession(session);
+        navigate(`/session/${session.id}`);
+      } catch (e) {
+        toast("Could not start monitoring.", {
+          description: e instanceof Error ? e.message : "Unknown error.",
+        });
+      } finally {
+        setStarting(false);
+      }
+      return;
+    }
+
     addSession(session);
     if (!isGuest) {
       saveSessionRemote(session).catch((e) => {
