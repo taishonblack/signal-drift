@@ -458,7 +458,7 @@ const CreateSession = () => {
       setPendingStart(() => createAndNavigate);
       return;
     }
-    createAndNavigate();
+    void createAndNavigate();
   };
 
   const confirmSwitch = () => {
