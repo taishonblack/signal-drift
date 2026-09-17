@@ -160,6 +160,10 @@ export async function provisionSessionRemote(
       session: toRemote(session),
       slots,
       library_attachments: attachmentIntents(session.lines ?? []),
+      // Phase D — the session takes its first presence lease for THIS tab at
+      // provisioning time, so a browser that dies seconds after Start
+      // Monitoring is still cleaned up by lease expiry.
+      client_instance_id: getClientInstanceId(),
     },
   });
 
