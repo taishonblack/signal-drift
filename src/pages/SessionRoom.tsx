@@ -761,8 +761,10 @@ const SessionRoom = () => {
           <div>session {session.id} · {activeInputs.length} source(s) · whep base {whepBase()}</div>
           {activeInputs.map((i) => (
             <div key={i.id}>
-              slot {i.slot} · {i.label} · ingest {i.streamName} · playback{" "}
-              {playbackStreamName(i.streamName!)} · {whepUrlForStream(i.streamName!)}
+              slot {i.slot} · {i.label} · ingest {i.streamName ?? "—"} · playback{" "}
+              {i.streamName
+                ? `${playbackStreamName(i.streamName)} · ${whepUrlForStream(i.streamName)}`
+                : "(resolving)"}
             </div>
           ))}
         </div>
