@@ -10,14 +10,13 @@ import FullscreenOverlay from "@/components/session/FullscreenOverlay";
 import TimelinePanel from "@/components/session/TimelinePanel";
 import { useSessionTimeline } from "@/hooks/use-session-timeline";
 import { useAuth } from "@/hooks/useAuth";
-import { useQuinnTimelineBridge } from "@/hooks/use-quinn-timeline-bridge";
 import EditInputModal from "@/components/session/EditInputModal";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
 import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
 import EndSessionDialog from "@/components/session/EndSessionDialog";
 import ShareSessionDialog from "@/components/session/ShareSessionDialog";
 import SessionEndIndicator from "@/components/session/SessionEndIndicator";
-import { mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
+import { type QCMarker, type StreamInput } from "@/lib/mock-data";
 import { inputsFromRecord, playbackStreamName, whepBase, whepUrlForStream } from "@/lib/stream-paths";
 import { useSessionAttachments } from "@/hooks/use-session-attachments";
 import { syncEndedSessionRemote, endSessionRemote } from "@/lib/sessions-remote";
@@ -50,7 +49,6 @@ import SessionChangeLogPanel from "@/components/session/SessionChangeLogPanel";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { History, Settings } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useLiveMetrics } from "@/hooks/use-live-metrics";
 import { useSessionFocus } from "@/hooks/use-session-focus";
 import { loadTimePrefs, saveTimePrefs, type TimeDisplayPrefs } from "@/lib/time-utils";
 import { toast } from "@/hooks/use-toast";
@@ -240,7 +238,7 @@ const SessionRoom = () => {
   const [showInspector, setShowInspector] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState("");
-  const [markers, setMarkers] = useState<QCMarker[]>(mockMarkers);
+  const [markers, setMarkers] = useState<QCMarker[]>([]);
   const [markerNote, setMarkerNote] = useState("");
   const [selectedInput, setSelectedInput] = useState(session.inputs[0]?.id);
   const [fullscreenId, setFullscreenId] = useState<string | null>(null);
@@ -260,14 +258,6 @@ const SessionRoom = () => {
   // Session Timeline (Phase 1A) — shared comments + realtime.
   const timeline = useSessionTimeline(id, { user: auth.user, loading: auth.loading });
 
-  // Quinn Timeline Bridge (Phase 1B) — Quinn writes structured
-  // warning/critical/information entries with confidence + source.
-  useQuinnTimelineBridge({
-    enabled: timeline.ready && activeInputs.length > 0,
-    sessionId: id,
-    inputs: activeInputs,
-    addQuinnEntry: timeline.addQuinnEntry,
-  });
 
 
 
@@ -392,7 +382,6 @@ const SessionRoom = () => {
 
   // Shared Focus state
   const { focusedId, focusedBy, setFocus } = useSessionFocus(session.id, activeInputs[0]?.id ?? "");
-  const { getMetrics } = useLiveMetrics(session.inputs);
 
   const focusedInput = activeInputs.find((i) => i.id === focusedId);
   const focusedLabel = focusedInput?.label ?? "Unknown";
@@ -631,7 +620,6 @@ const SessionRoom = () => {
         key={slot}
         slotId={slot}
         input={input}
-        liveMetrics={getMetrics(input.id)}
         isFocused={focusedId === input.id}
         onFocusClick={() => selectSourceForViewer(input.id)}
         isAudioSource={audioSource === input.id}
@@ -850,7 +838,6 @@ const SessionRoom = () => {
       {fullscreenInput && (
         <FullscreenOverlay
           input={fullscreenInput}
-          liveMetrics={getMetrics(fullscreenInput.id)}
           isFocused={focusedId === fullscreenInput.id}
           isAudioSource={audioSource === fullscreenInput.id}
           onClose={() => setFullscreenId(null)}
@@ -1124,7 +1111,6 @@ const SessionRoom = () => {
                     <DraggableSignalTile
                       slotId="A"
                       input={input}
-                      liveMetrics={getMetrics(input.id)}
                       isFocused={true}
                       onFocusClick={() => selectSourceForViewer(input.id)}
                       isAudioSource={audioSource === input.id}
@@ -1230,7 +1216,6 @@ const SessionRoom = () => {
                 <div className="opacity-80 rounded-lg overflow-hidden" style={{ width: 320 }}>
                   <SignalTile
                     input={draggedInput}
-                    liveMetrics={getMetrics(draggedInput.id)}
                     isFocused={focusedId === draggedInput.id}
                     isAudioSource={audioSource === draggedInput.id}
                     muteAll={true}
@@ -1256,7 +1241,6 @@ const SessionRoom = () => {
               inputs={session.inputs}
               selectedId={selectedInput}
               onSelect={setSelectedInput}
-              liveMetrics={getMetrics(selectedInput)}
             />
           )}
 
