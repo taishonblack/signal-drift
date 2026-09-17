@@ -407,7 +407,24 @@ export function inputsFromRecord(
         if (!attachment) {
           // Attachments still loading (or the source was detached). Never fall
           // back to the legacy camN path for a source-backed slot.
-          if (loaded) return null;
+          if (loaded) {
+            // Caller-first slot on a live session: the route never attached, so
+            // this is a provisioning failure, not a missing pane. Surface it
+            // instead of silently showing nothing (or someone else's camN).
+            const live = record.status !== "completed" && record.status !== "archived";
+            if (line.sourceKind === "runtime" && live) {
+              return {
+                id: `line-${slot}`,
+                label: labelForSlot(slot, line),
+                enabled: true,
+                srtAddress: "",
+                status: "error" as const,
+                metrics: { ...emptyMetrics },
+                slot,
+              } satisfies StreamInput;
+            }
+            return null;
+          }
           return {
             id: `line-${slot}`,
             label: labelForSlot(slot, line),
