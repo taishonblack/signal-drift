@@ -44,6 +44,7 @@ const statusBadge: Record<string, { label: string; cls: string }> = {
   error: { label: "ERR", cls: "bg-destructive/20 text-destructive" },
   connecting: { label: "CONNECTING", cls: "bg-muted text-muted-foreground" },
   idle: { label: "IDLE", cls: "bg-muted text-muted-foreground" },
+  provisioning_failed: { label: "NOT CONNECTED", cls: "bg-destructive/20 text-destructive" },
 };
 
 /** Vertical audio meter bar */
@@ -349,6 +350,13 @@ const PaneStatus = ({
     error: {
       title: "Connection Failed",
       hint: "MAKO could not reach this source.",
+      Icon: WifiOff,
+      tone: "text-destructive",
+      showRetry: true,
+    },
+    provisioning_failed: {
+      title: "Provisioning Failed",
+      hint: "MAKO never connected to this SRT listener.",
       Icon: WifiOff,
       tone: "text-destructive",
       showRetry: true,

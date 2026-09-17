@@ -418,7 +418,7 @@ export function inputsFromRecord(
                 label: labelForSlot(slot, line),
                 enabled: true,
                 srtAddress: "",
-                status: "error" as const,
+                status: "provisioning_failed" as const,
                 metrics: { ...emptyMetrics },
                 slot,
               } satisfies StreamInput;
