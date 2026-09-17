@@ -3,7 +3,7 @@
 // happens until the awaited Phase D server end request has succeeded.
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { useState } from "react";
 import SessionToolbar from "@/components/session/SessionToolbar";
 import EndSessionDialog from "@/components/session/EndSessionDialog";
