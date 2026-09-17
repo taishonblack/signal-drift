@@ -149,6 +149,12 @@ export async function provisionSession(
     if (reserved.status === "route_tearing_down") {
       return await fail(409, "route_tearing_down", { slot: slot.slot });
     }
+    // Phase D — global endpoint exclusivity. Another live route (any owner)
+    // already holds this host:port, including one whose teardown is not yet
+    // confirmed. Nothing of ours exists for it, so nothing is torn down.
+    if (reserved.status === "endpoint_in_use") {
+      return await fail(409, "endpoint_in_use", { slot: slot.slot });
+    }
 
     const routeId = reserved.route_id;
     if (!routeId) {
