@@ -98,7 +98,10 @@ describe("E.3 pure audio math", () => {
       "src/hooks/use-browser-audio-levels.ts",
       "src/components/InspectorPanel.tsx",
     ]) {
-      expect(read(f)).not.toMatch(/Math\.random|LUFS/);
+      const s = read(f);
+      expect(s).not.toMatch(/Math\.random/);
+      // LUFS may only appear in prose that rules it out, never as a label.
+      expect(s).not.toMatch(/"[^"]*LUFS[^"]*"|'[^']*LUFS[^']*'|>\s*LUFS/);
     }
   });
 });
