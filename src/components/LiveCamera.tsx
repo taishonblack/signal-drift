@@ -111,8 +111,16 @@ const LiveCamera = ({
         if (cancelled || myGen !== generation) return;
         const el = videoRef.current;
         if (!el) return;
-        const stream = event.streams?.[0] ?? new MediaStream([event.track]);
-        el.srcObject = stream;
+        if (!received) received = new MediaStream();
+        const stream = received;
+        const incoming = event.streams?.[0]?.getTracks() ?? [event.track];
+        for (const t of incoming) {
+          if (!stream.getTracks().includes(t)) stream.addTrack(t);
+        }
+        if (el.srcObject !== stream) el.srcObject = stream;
+        // Publish the received stream so passive consumers (E.3 audio metering)
+        // can analyse the same decoded audio without a second WHEP session.
+        publishReceivedStream(streamName, stream);
         // A (re)connecting source must never unmute itself: re-apply the
         // requested mute state against the freshly attached stream.
         el.muted = mutedRef.current;
