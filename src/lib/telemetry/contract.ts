@@ -198,6 +198,7 @@ export function emptySnapshot(identity: RouteIdentity): MediaTelemetrySnapshot {
     playbackPath: identity.playbackPath ?? null,
     observedAt: null,
     source: null,
+    observationPoint: null,
     video: emptyVideo(),
     audioSource: emptySourceAudio(),
     audioOutput: emptyOutputAudio(),

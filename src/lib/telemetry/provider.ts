@@ -154,6 +154,7 @@ export function snapshotFromMetadata(args: {
     playbackPath: identity.playbackPath ?? null,
     observedAt,
     source: "ffmpeg",
+    observationPoint: "ffmpeg_input",
     video: videoFromParsed(parsed, observedAt),
     audioSource: sourceAudioFromParsed(parsed, observedAt),
     audioOutput: outputAudioFromConfig(args.outputConfig, observedAt),
