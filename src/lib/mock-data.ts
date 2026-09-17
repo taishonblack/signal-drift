@@ -1,4 +1,11 @@
-export type StreamStatus = "idle" | "connecting" | "live" | "warning" | "error";
+export type StreamStatus =
+  | "idle"
+  | "connecting"
+  | "live"
+  | "warning"
+  | "error"
+  /** Caller-first slot whose SRT caller was never provisioned/attached. */
+  | "provisioning_failed";
 
 export interface StreamInput {
   id: string;

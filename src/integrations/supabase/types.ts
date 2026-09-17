@@ -709,6 +709,10 @@ export type Database = {
           session_id: string
         }[]
       }
+      transfer_session_ownership: {
+        Args: { _from: string; _session_id: string; _to: string }
+        Returns: Json
+      }
       verify_session_pin: {
         Args: { _pin: string; _session_id: string }
         Returns: boolean

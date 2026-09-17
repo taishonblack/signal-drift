@@ -29,7 +29,7 @@ import {
   canConfigureSession, getCurrentUserRef,
   diffSessionConfig, appendChangeLog,
 } from "@/lib/session-store";
-import { ensureIdentity, useIdentity } from "@/lib/identity";
+import { ensureBackendIdentity, ensureIdentity, useIdentity } from "@/lib/identity";
 import {
   provisionSessionRemote,
   saveSessionRemote,
@@ -245,13 +245,13 @@ const CreateSession = () => {
 
   /**
    * Caller-first slot (Phase C): the operator typed an external SRT listener
-   * address and port, so MAKO provisions a caller to it. Guests have no
-   * server-side provisioning and keep the legacy local behaviour.
+   * address and port, so MAKO provisions a caller to it. This is identical for
+   * a signed-in operator and a Temporary Operator — an account controls
+   * persistence, never whether MAKO can monitor SRT.
    */
   const callerBacked = useCallback(
-    (line: SrtLine) =>
-      !isGuest && line.enabled && !isSourceBacked(line) && hasManualEndpoint(line),
-    [isGuest],
+    (line: SrtLine) => line.enabled && !isSourceBacked(line) && hasManualEndpoint(line),
+    [],
   );
 
   const configureSource = () => {
@@ -319,6 +319,22 @@ const CreateSession = () => {
           port: Number(port),
         };
       });
+    // A caller-backed slot needs a real backend identity. A signed-out operator
+    // gets an anonymous one HERE — at Start Monitoring, never on page load —
+    // and then follows exactly the same provisioning path as a member.
+    let owner = currentUser;
+    if (runtimeSlots.length > 0) {
+      setStarting(true);
+      const backend = await ensureBackendIdentity();
+      if (!backend.ok) {
+        setStarting(false);
+        toast("MAKO couldn't start a temporary session.", {
+          description: "Check your connection and try again.",
+        });
+        return;
+      }
+      owner = getCurrentUserRef();
+    }
     const createdAtIso = new Date().toISOString();
     // Authoritative scheduled_end_at: for preset durations, rebase to
     // (session_started_at + duration) so slow configuration doesn't eat
@@ -333,9 +349,9 @@ const CreateSession = () => {
       purpose,
       scheduledEndAt: resolvedEndAt,
       createdAt: createdAtIso,
-      host: currentUser.name,
-      hostUserId: currentUser.id,
-      ownerUserId: currentUser.id,
+      host: owner.name,
+      hostUserId: owner.id,
+      ownerUserId: owner.id,
       defaultOriginTimeZone,
       lines: normalized,
       pin: generatePin(),
@@ -347,8 +363,8 @@ const CreateSession = () => {
         {
           id: `cl-${Date.now()}`,
           at: new Date().toISOString(),
-          userId: currentUser.id,
-          userName: currentUser.name,
+          userId: owner.id,
+          userName: owner.name,
           kind: "config_saved",
           summary: "Started monitoring session",
         },
@@ -357,7 +373,7 @@ const CreateSession = () => {
     // Caller-backed session: provisioning is an AWAITED transaction. Nothing is
     // stored locally and nothing navigates until MAKO has actually connected to
     // every external listener and attached the resulting feeds.
-    if (!isGuest && runtimeSlots.length > 0) {
+    if (runtimeSlots.length > 0) {
       setStarting(true);
       try {
         const result = await provisionSessionRemote(session, runtimeSlots);

@@ -80,6 +80,57 @@ export function ensureIdentity(): Identity {
   return guest;
 }
 
+/**
+ * Adopt an anonymous backend identity as the local guest identity.
+ *
+ * An anonymous user is a real backend account, so the guest's local id becomes
+ * the backend user id — session ownership, leases and RLS then line up exactly
+ * with an authenticated operator. The display name is kept.
+ */
+export function adoptAnonymousIdentity(userId: string): Identity {
+  const existing = readGuest();
+  const guest: Identity = {
+    kind: "guest",
+    id: userId,
+    name: existing?.name ?? `Operator-${randomSuffix()}`,
+  };
+  writeJSON(GUEST_KEY, guest);
+  notify();
+  return guest;
+}
+
+export interface BackendIdentityResult {
+  ok: boolean;
+  userId?: string;
+  error?: string;
+}
+
+/**
+ * Ensure the browser holds a real backend identity, creating an anonymous one
+ * if needed. Called at Start Monitoring only — never on page load. A guest
+ * therefore provisions callers through exactly the same authenticated path as
+ * a signed-in operator.
+ */
+export async function ensureBackendIdentity(): Promise<BackendIdentityResult> {
+  try {
+    const { data } = await supabase.auth.getUser();
+    if (data?.user) {
+      if ((data.user as { is_anonymous?: boolean }).is_anonymous) {
+        adoptAnonymousIdentity(data.user.id);
+      }
+      return { ok: true, userId: data.user.id };
+    }
+    const { data: created, error } = await supabase.auth.signInAnonymously();
+    if (error || !created?.user) {
+      return { ok: false, error: error?.message ?? "Could not start a temporary session." };
+    }
+    adoptAnonymousIdentity(created.user.id);
+    return { ok: true, userId: created.user.id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not start a temporary session." };
+  }
+}
+
 /** Set the member identity (called after sign-in). */
 export function setMemberIdentity(user: { id: string; email?: string | null; name?: string | null }) {
   const displayName =
@@ -140,17 +191,24 @@ export function useIdentity(): Identity {
  */
 export function useIdentityBootstrap() {
   useEffect(() => {
-    // Initial hydration.
-    supabase.auth.getSession().then(({ data }) => {
-      const u = data.session?.user;
-      if (u) setMemberIdentity({ id: u.id, email: u.email, name: (u.user_metadata as any)?.name });
-      else clearMemberIdentity();
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
-      const u = session?.user;
-      if (u) setMemberIdentity({ id: u.id, email: u.email, name: (u.user_metadata as any)?.name });
-      else clearMemberIdentity();
-    });
+    // An anonymous backend user is NOT a member: it stays a Temporary Operator
+    // in the UI while carrying a real backend id underneath.
+    const apply = (u: { id: string; email?: string | null; user_metadata?: unknown; is_anonymous?: boolean } | undefined) => {
+      if (!u) {
+        clearMemberIdentity();
+        return;
+      }
+      if (u.is_anonymous) {
+        clearMemberIdentity();
+        adoptAnonymousIdentity(u.id);
+        return;
+      }
+      setMemberIdentity({ id: u.id, email: u.email, name: (u.user_metadata as any)?.name });
+    };
+    supabase.auth.getSession().then(({ data }) => apply(data.session?.user as any));
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) =>
+      apply(session?.user as any),
+    );
     return () => sub.subscription.unsubscribe();
   }, []);
 }
