@@ -69,7 +69,16 @@ const LiveCamera = ({
     // Generation guard: a stale attempt must never close a newer connection.
     let generation = 0;
 
+    // The complete received stream for the current connection. Audio and video
+    // may arrive as separate `ontrack` events, so tracks are ADDED to one
+    // long-lived stream instead of replacing srcObject with a one-track stream.
+    let received: MediaStream | null = null;
+
     const teardown = () => {
+      if (received) {
+        clearReceivedStream(streamName, received);
+        received = null;
+      }
       if (resourceRef.current) {
         void fetch(resourceRef.current, { method: "DELETE" }).catch(() => undefined);
         resourceRef.current = null;
