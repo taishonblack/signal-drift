@@ -29,6 +29,11 @@ export interface StreamInput {
   streamName?: string;
   /** 1-based source slot. */
   slot?: number;
+  /**
+   * Canonical caller-first runtime identity. Telemetry is keyed by this and
+   * never by the slot number, the label or a legacy camN path.
+   */
+  runtimeRouteId?: string;
 }
 
 /** Minimal session shape used by the completed-session report dialog. */

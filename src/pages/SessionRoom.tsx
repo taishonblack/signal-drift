@@ -19,6 +19,7 @@ import SessionEndIndicator from "@/components/session/SessionEndIndicator";
 import { type QCMarker, type StreamInput } from "@/lib/mock-data";
 import { inputsFromRecord, playbackStreamName, whepBase, whepUrlForStream } from "@/lib/stream-paths";
 import { useSessionAttachments } from "@/hooks/use-session-attachments";
+import { useMediaTelemetry } from "@/hooks/use-media-telemetry";
 import { syncEndedSessionRemote, endSessionRemote } from "@/lib/sessions-remote";
 import {
   getSessionById,
@@ -126,6 +127,9 @@ const SessionRoom = () => {
     }),
     [record, id, activeInputs],
   );
+  // Media telemetry, keyed by runtime route id (never by slot).
+  const telemetry = useMediaTelemetry(session.id, activeInputs);
+
   // Derive scheduledEndAt directly from the record — single source of
   // truth. Do NOT keep a separate local copy that could drift on remount.
   const scheduledEndAt = record?.scheduledEndAt || null;
@@ -1241,6 +1245,10 @@ const SessionRoom = () => {
               inputs={session.inputs}
               selectedId={selectedInput}
               onSelect={setSelectedInput}
+              telemetry={telemetry.forRoute(
+                (session.inputs.find((i) => i.id === selectedInput) || session.inputs[0])
+                  ?.runtimeRouteId,
+              )}
             />
           )}
 
