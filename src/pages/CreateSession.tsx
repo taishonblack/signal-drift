@@ -349,9 +349,9 @@ const CreateSession = () => {
       purpose,
       scheduledEndAt: resolvedEndAt,
       createdAt: createdAtIso,
-      host: currentUser.name,
-      hostUserId: currentUser.id,
-      ownerUserId: currentUser.id,
+      host: owner.name,
+      hostUserId: owner.id,
+      ownerUserId: owner.id,
       defaultOriginTimeZone,
       lines: normalized,
       pin: generatePin(),
@@ -363,8 +363,8 @@ const CreateSession = () => {
         {
           id: `cl-${Date.now()}`,
           at: new Date().toISOString(),
-          userId: currentUser.id,
-          userName: currentUser.name,
+          userId: owner.id,
+          userName: owner.name,
           kind: "config_saved",
           summary: "Started monitoring session",
         },
@@ -373,7 +373,7 @@ const CreateSession = () => {
     // Caller-backed session: provisioning is an AWAITED transaction. Nothing is
     // stored locally and nothing navigates until MAKO has actually connected to
     // every external listener and attached the resulting feeds.
-    if (!isGuest && runtimeSlots.length > 0) {
+    if (runtimeSlots.length > 0) {
       setStarting(true);
       try {
         const result = await provisionSessionRemote(session, runtimeSlots);
