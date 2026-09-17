@@ -8,6 +8,7 @@
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { attachmentIntents } from "@/lib/session-attachments";
+import { getClientInstanceId, releaseSessionRemote } from "@/lib/session-lease";
 import {
   addSession,
   getSessionById,
