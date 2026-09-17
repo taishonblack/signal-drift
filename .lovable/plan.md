@@ -26,10 +26,14 @@ One gap for the requested UX: `syncEndedSessionRemote` is fire-and-forget and si
 
 4. **Double-submit protection.** The confirm button enters an "Ending…" state, is disabled, and the dialog cannot be dismissed while the request is in flight.
 
-5. **Success and failure.** On success, follow the current completed-session behaviour: end the local record and navigate to the sessions list with the existing confirmation toast. Guest owners continue to get the existing save prompt instead. On failure, keep the dialog open and show a clear error explaining that monitoring could not be ended and the source connection may still be held, with the option to retry.
+5. **Server confirms first, then the UI follows.** Nothing is marked ended locally and no navigation happens until the server end request returns successfully. Only then: update local state via the existing completed-session behaviour, close the dialog, navigate to Sessions, and show the existing completion confirmation. Guest owners continue to get the existing save prompt instead.
+
+6. **Failure keeps the operator in place.** If the request fails, the operator stays in the Session Room with the dialog still visible, explaining that MAKO could not confirm the end request and the source connection may still be held, with a Retry option. The session is never shown as ended locally on failure.
+
+7. **Phase D fail-safe preserved.** If the server accepts the end lifecycle but upstream teardown is uncertain, the runtime route stays retained for reconciliation. No client-side teardown logic is added.
 
 ## Scope guard
 
-Touched: `SessionToolbar.tsx`, `SessionRoom.tsx`, a new `EndSessionDialog.tsx`, and a small awaited addition in `sessions-remote.ts`. Plus a focused test covering owner-only visibility, cancel doing nothing, single submission, and the error path.
+Touched: `SessionToolbar.tsx`, `SessionRoom.tsx`, a new `EndSessionDialog.tsx`, and a small awaited addition in `sessions-remote.ts`. Tests cover owner-only visibility, cancel doing nothing, single submission, the error path, and — explicitly — that no local completion or navigation happens before the awaited server end request succeeds. Full test suite and TypeScript checks run; no publish.
 
 Untouched: provisioning, caller infrastructure, reconciliation, lease renewal/expiry, browser-close behaviour, RLS, sharing, Quinn, Timeline, Ops. No `beforeunload` teardown.
