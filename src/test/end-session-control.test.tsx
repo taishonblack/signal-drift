@@ -3,8 +3,7 @@
 // happens until the awaited Phase D server end request has succeeded.
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { useState } from "react";
 import SessionToolbar from "@/components/session/SessionToolbar";
 import EndSessionDialog from "@/components/session/EndSessionDialog";
@@ -45,7 +44,7 @@ describe("End Session control visibility", () => {
   it("opens the confirmation instead of ending directly", async () => {
     const onEndSession = vi.fn();
     render(<SessionToolbar {...toolbarProps} onEndSession={onEndSession} />);
-    await userEvent.click(screen.getByRole("button", { name: /end session/i }));
+    fireEvent.click(screen.getByRole("button", { name: /end session/i }));
     expect(onEndSession).toHaveBeenCalledTimes(1);
   });
 });
@@ -60,7 +59,7 @@ describe("End Session confirmation dialog", () => {
         onCancel={onCancel} onConfirm={onConfirm}
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onConfirm).not.toHaveBeenCalled();
   });
@@ -75,7 +74,7 @@ describe("End Session confirmation dialog", () => {
     );
     const btn = screen.getByRole("button", { name: /ending/i });
     expect(btn).toBeDisabled();
-    await userEvent.click(btn);
+    fireEvent.click(btn);
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
@@ -137,7 +136,7 @@ describe("server-confirms-first ordering", () => {
     const endRemote = vi.fn(() => new Promise<{ ok: boolean }>((res) => { release = res; }));
     render(<EndFlowHarness endRemote={endRemote} />);
 
-    await userEvent.click(screen.getByRole("button", { name: /^end session$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^end session$/i }));
     // In flight: Ending… shown, nothing local has happened.
     await waitFor(() => expect(screen.getByRole("button", { name: /ending/i })).toBeTruthy());
     expect(endLocal).not.toHaveBeenCalled();
@@ -151,7 +150,7 @@ describe("server-confirms-first ordering", () => {
   it("never ends locally when the server request fails", async () => {
     const endRemote = vi.fn(async () => ({ ok: false }));
     render(<EndFlowHarness endRemote={endRemote} />);
-    await userEvent.click(screen.getByRole("button", { name: /^end session$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^end session$/i }));
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
     expect(endLocal).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
