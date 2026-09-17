@@ -1,4 +1,4 @@
-import { Grid2X2, Square, LayoutDashboard, PanelRightClose, PanelRightOpen, Share2, FileText, Keyboard, Rows2, ScanLine, MoreHorizontal, ExternalLink } from "lucide-react";
+import { Grid2X2, Square, LayoutDashboard, PanelRightClose, PanelRightOpen, Share2, FileText, Keyboard, Rows2, ScanLine, MoreHorizontal, ExternalLink, PowerOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import TimeDisplayPopover from "@/components/session/TimeDisplayPopover";
@@ -89,17 +89,30 @@ const SessionToolbar = ({
           <SessionStatusBadge status={sessionStatus} />
 
         </div>
-        {/* Desktop: Share Session in header row */}
+        {/* Desktop: Share Session + owner-only End Session in header row */}
         {!isMobile && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onShare}
-            className="gap-1.5 text-xs border-border/40 shrink-0"
-            title={`Session ID: ${sessionId}`}
-          >
-            <Share2 className="h-3.5 w-3.5" /> Share Session
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onShare}
+              className="gap-1.5 text-xs border-border/40 shrink-0"
+              title={`Session ID: ${sessionId}`}
+            >
+              <Share2 className="h-3.5 w-3.5" /> Share Session
+            </Button>
+            {onEndSession && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onEndSession}
+                className="gap-1.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
+                title="End this monitoring session for everyone"
+              >
+                <PowerOff className="h-3.5 w-3.5" /> End Session
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
@@ -212,6 +225,14 @@ const SessionToolbar = ({
                   {showInspector ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
                   {showInspector ? "Hide Inspector" : "Show Inspector"}
                 </button>
+                {onEndSession && (
+                  <button
+                    onClick={onEndSession}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-destructive hover:bg-destructive/10 transition-colors"
+                  >
+                    <PowerOff className="h-3.5 w-3.5" /> End Session
+                  </button>
+                )}
               </div>
             </PopoverContent>
           </Popover>
