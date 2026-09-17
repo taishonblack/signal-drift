@@ -15,6 +15,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3";
+import { transferGuestSessions, type TransferDeps } from "../_shared/guest-transfer.ts";
 
 const Body = z
   .object({
@@ -30,59 +31,55 @@ Deno.serve(async (req) => {
   const authz = req.headers.get("Authorization") ?? "";
   if (!authz.startsWith("Bearer ")) return json({ error: "unauthorized" }, 401);
 
+  const parsed = Body.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) return json({ error: "invalid_body" }, 400);
+
   const url = Deno.env.get("SUPABASE_URL")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-
-  // Destination identity — must be a real, non-anonymous account.
   const destClient = createClient(url, anonKey, {
     global: { headers: { Authorization: authz } },
   });
-  const { data: dest, error: destErr } = await destClient.auth.getUser();
-  if (destErr || !dest?.user) return json({ error: "unauthorized" }, 401);
-  if ((dest.user as { is_anonymous?: boolean }).is_anonymous) {
-    return json({ error: "destination_anonymous" }, 400);
-  }
-
-  const parsed = Body.safeParse(await req.json().catch(() => ({})));
-  if (!parsed.success) return json({ error: "invalid_body" }, 400);
-  const { anonymous_access_token, session_ids } = parsed.data;
-
-  // Source identity — must be the anonymous user the browser really held.
-  const srcClient = createClient(url, anonKey);
-  const { data: src, error: srcErr } = await srcClient.auth.getUser(anonymous_access_token);
-  if (srcErr || !src?.user) return json({ error: "invalid_anonymous_token" }, 401);
-  if (!(src.user as { is_anonymous?: boolean }).is_anonymous) {
-    return json({ error: "source_not_anonymous" }, 400);
-  }
-  if (src.user.id === dest.user.id) {
-    return json({ ok: true, transferred: [], skipped: session_ids, same_identity: true });
-  }
-
+  const verifyClient = createClient(url, anonKey);
   const service = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const transferred: string[] = [];
-  const skipped: string[] = [];
-  for (const sessionId of session_ids) {
-    const { data, error } = await service.rpc("transfer_session_ownership", {
-      _session_id: sessionId,
-      _from: src.user.id,
-      _to: dest.user.id,
-    });
-    if (error) {
-      // forbidden / session_not_found are expected for anything this anonymous
-      // identity did not own. Never leak details about another owner's session.
-      console.error(`transfer-guest-session: ${sessionId} — ${error.message}`);
-      skipped.push(sessionId);
-      continue;
-    }
-    const result = data as { transferred?: boolean } | null;
-    if (result?.transferred) transferred.push(sessionId);
-    else skipped.push(sessionId);
-  }
+  const deps: TransferDeps = {
+    getDestinationUser: async () => {
+      const { data, error } = await destClient.auth.getUser();
+      return error || !data?.user ? null : (data.user as unknown as { id: string; is_anonymous?: boolean });
+    },
+    getAnonymousUser: async (token) => {
+      const { data, error } = await verifyClient.auth.getUser(token);
+      return error || !data?.user ? null : (data.user as unknown as { id: string; is_anonymous?: boolean });
+    },
+    transfer: async (sessionId, from, to) => {
+      const { data, error } = await service.rpc("transfer_session_ownership", {
+        _session_id: sessionId,
+        _from: from,
+        _to: to,
+      });
+      if (error) throw new Error(error.message);
+      return data as { transferred: boolean } | null;
+    },
+    logError: (message) => console.error(message),
+  };
 
-  return json({ ok: true, transferred, skipped });
+  const outcome = await transferGuestSessions(
+    {
+      anonymousAccessToken: parsed.data.anonymous_access_token,
+      sessionIds: parsed.data.session_ids,
+    },
+    deps,
+  );
+
+  if (!outcome.ok) return json({ error: outcome.error }, outcome.status);
+  return json({
+    ok: true,
+    transferred: outcome.transferred,
+    skipped: outcome.skipped,
+    ...(outcome.sameIdentity ? { same_identity: true } : {}),
+  });
 });
 
 function json(body: unknown, status = 200) {
