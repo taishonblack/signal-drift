@@ -1,20 +1,21 @@
-import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
-import { generateMetricHistory, type StreamInput } from "@/lib/mock-data";
-import type { LiveMetrics } from "@/hooks/use-live-metrics";
+import type { StreamInput } from "@/lib/mock-data";
 
 interface InspectorPanelProps {
   input: StreamInput;
   inputs: StreamInput[];
   selectedId: string;
   onSelect: (id: string) => void;
-  liveMetrics?: LiveMetrics;
 }
 
-const metricHistory = generateMetricHistory();
-
-const InspectorPanel = ({ input, inputs, selectedId, onSelect, liveMetrics }: InspectorPanelProps) => {
-  const m = liveMetrics ?? input.metrics;
-
+/**
+ * Signal Inspector.
+ *
+ * Phase E.1A (Truth Pass): MAKO does not measure any of these values yet, so
+ * every field reads as unavailable instead of showing a fabricated number.
+ * The structure is intentionally preserved — real telemetry will populate it
+ * in later Phase E work.
+ */
+const InspectorPanel = ({ input, inputs, selectedId, onSelect }: InspectorPanelProps) => {
   return (
     <div className="w-72 shrink-0 mako-glass-solid rounded-lg p-4 space-y-4 overflow-auto hidden lg:block">
       {/* Stream selector */}
@@ -34,46 +35,34 @@ const InspectorPanel = ({ input, inputs, selectedId, onSelect, liveMetrics }: In
 
       <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Signal Inspector</div>
 
-      {/* Codec / format */}
-      <div className="grid grid-cols-2 gap-3 text-xs">
-        <MetricItem label="Codec" value={input.metrics.codec} />
-        <MetricItem label="Resolution" value={input.metrics.resolution} />
-        <MetricItem label="Frame Rate" value={`${input.metrics.fps} fps`} />
-        <MetricItem label="Bitrate" value={`${m.bitrate.toFixed(1)} Mbps`} />
-        <MetricItem label="Packet Loss" value={`${m.packetLoss.toFixed(2)}%`} warn={m.packetLoss > 1} />
-        <MetricItem label="RTT" value={`${m.rtt.toFixed(0)} ms`} warn={m.rtt > 60} />
-        <MetricItem label="Audio" value={`${input.metrics.audioChannels}ch ${input.metrics.audioSampleRate / 1000}kHz`} />
-        <MetricItem label="Loudness" value={`${m.lufs.toFixed(1)} LUFS`} />
-      </div>
+      <Section title="Video" fields={["Codec", "Resolution", "Frame Rate", "Bitrate"]} />
+      <Section title="Transport" fields={["Packet Loss", "RTT"]} />
+      <Section title="Audio" fields={["Channels", "Sample Rate", "Loudness"]} />
 
-      {/* Mini charts */}
-      <div className="space-y-3">
-        <MiniChart data={metricHistory} dataKey="bitrate" label="Bitrate" color="hsl(195, 100%, 50%)" />
-        <MiniChart data={metricHistory} dataKey="loss" label="Packet Loss" color="hsl(37, 91%, 55%)" />
-        <MiniChart data={metricHistory} dataKey="rtt" label="RTT" color="hsl(200, 40%, 60%)" />
+      <div>
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">History</div>
+        <div className="text-[10px] text-muted-foreground/60">No telemetry history available.</div>
       </div>
     </div>
   );
 };
 
-const MetricItem = ({ label, value, warn }: { label: string; value: string; warn?: boolean }) => (
-  <div>
-    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</div>
-    <div className={`font-medium font-mono ${warn ? "text-warning" : "text-foreground"}`}>{value}</div>
+const Section = ({ title, fields }: { title: string; fields: string[] }) => (
+  <div className="space-y-2">
+    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{title}</div>
+    <div className="grid grid-cols-2 gap-3 text-xs">
+      {fields.map((label) => (
+        <MetricItem key={label} label={label} />
+      ))}
+    </div>
+    <div className="text-[10px] text-muted-foreground/60">Not measured</div>
   </div>
 );
 
-const MiniChart = ({ data, dataKey, label, color }: { data: any[]; dataKey: string; label: string; color: string }) => (
+const MetricItem = ({ label }: { label: string }) => (
   <div>
-    <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{label}</div>
-    <div className="h-10">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data}>
-          <YAxis hide domain={["auto", "auto"]} />
-          <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={1} dot={false} />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
+    <div className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</div>
+    <div className="font-medium font-mono text-muted-foreground/70">—</div>
   </div>
 );
 

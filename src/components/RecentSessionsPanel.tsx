@@ -17,7 +17,7 @@ import SessionCard from "@/components/session/SessionCard";
 import JoinActiveSessionDialog from "@/components/session/JoinActiveSessionDialog";
 import SwitchMonitoringSessionDialog from "@/components/session/SwitchMonitoringSessionDialog";
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
-import { mockSessions, type Session } from "@/lib/mock-data";
+import { type Session } from "@/lib/mock-data";
 import { DEMO_DATA_ENABLED } from "@/lib/demo-flag";
 
 
@@ -108,7 +108,7 @@ const RecentSessionsPanel = ({ sidebarCollapsed }: Props) => {
   };
 
   const handleCompletedClick = (s: SessionRecord) => {
-    const legacy = mockSessions.find((m) => m.id === s.id) ?? {
+    const legacy = {
       id: s.id, name: s.name, status: "ended" as const,
       createdAt: s.createdAt, inputCount: s.lines.filter((l) => l.enabled).length,
       pin: s.pin, inputs: [],

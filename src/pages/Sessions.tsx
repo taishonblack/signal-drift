@@ -24,7 +24,7 @@ import SwitchMonitoringSessionDialog from "@/components/session/SwitchMonitoring
 import ExpiredSessionDialog from "@/components/ExpiredSessionDialog";
 import ShareSessionDialog from "@/components/session/ShareSessionDialog";
 import GatedEmptyState from "@/components/GatedEmptyState";
-import { mockSessions, type Session } from "@/lib/mock-data";
+import { type Session } from "@/lib/mock-data";
 
 
 interface SectionHeaderProps {
@@ -141,7 +141,7 @@ const Sessions = () => {
   const [expiredIsOwner, setExpiredIsOwner] = useState(false);
 
   const handleCompletedClick = useCallback((s: SessionRecord) => {
-    const legacy = mockSessions.find((m) => m.id === s.id) ?? {
+    const legacy = {
       id: s.id,
       name: s.name,
       status: "ended" as const,

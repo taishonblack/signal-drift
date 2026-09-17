@@ -2,11 +2,9 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import SignalTile from "@/components/SignalTile";
 import type { StreamInput } from "@/lib/mock-data";
-import type { LiveMetrics } from "@/hooks/use-live-metrics";
 
 interface FullscreenOverlayProps {
   input: StreamInput;
-  liveMetrics?: LiveMetrics;
   isFocused: boolean;
   isAudioSource: boolean;
   onClose: () => void;
@@ -15,11 +13,7 @@ interface FullscreenOverlayProps {
   onEdit: () => void;
 }
 
-const FullscreenOverlay = ({ input, liveMetrics, isFocused, isAudioSource, onClose, onFocusClick, onSelectAudio, onEdit }: FullscreenOverlayProps) => {
-  const bitrate = liveMetrics?.bitrate ?? input.metrics.bitrate;
-  const loss = liveMetrics?.packetLoss ?? input.metrics.packetLoss;
-  const rtt = liveMetrics?.rtt ?? input.metrics.rtt;
-
+const FullscreenOverlay = ({ input, isFocused, isAudioSource, onClose, onFocusClick, onSelectAudio, onEdit }: FullscreenOverlayProps) => {
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
       <div className="absolute top-4 right-4 z-10">
@@ -30,7 +24,6 @@ const FullscreenOverlay = ({ input, liveMetrics, isFocused, isAudioSource, onClo
       <div className="flex-1 p-4">
         <SignalTile
           input={input}
-          liveMetrics={liveMetrics}
           isFocused={isFocused}
           onFocusClick={onFocusClick}
           isAudioSource={isAudioSource}
@@ -40,9 +33,7 @@ const FullscreenOverlay = ({ input, liveMetrics, isFocused, isAudioSource, onClo
         />
       </div>
       <div className="px-4 pb-4 flex items-center justify-between">
-        <span className="text-xs text-muted-foreground font-mono">
-          {input.label} · {bitrate.toFixed(1)} Mbps · {loss.toFixed(2)}% loss · RTT {rtt.toFixed(0)}ms
-        </span>
+        <span className="text-xs text-muted-foreground font-mono">{input.label}</span>
         <span className="text-[10px] text-muted-foreground/50">Press ESC to exit</span>
       </div>
     </div>

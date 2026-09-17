@@ -352,18 +352,6 @@ function lineHasEndpoint(line: SrtLine, parse: (v: string) => { host: string; po
   return !!host && !!port;
 }
 
-const emptyMetrics = {
-  bitrate: 0,
-  packetLoss: 0,
-  rtt: 0,
-  codec: "—",
-  resolution: "—",
-  fps: 0,
-  audioChannels: 0,
-  audioSampleRate: 0,
-  lufs: 0,
-};
-
 /** Session-specific display label for a slot, in preference order. */
 function labelForSlot(slot: number, line: SrtLine, snapshot?: string | null): string {
   const attached = (snapshot ?? "").trim();
@@ -419,7 +407,6 @@ export function inputsFromRecord(
                 enabled: true,
                 srtAddress: "",
                 status: "provisioning_failed" as const,
-                metrics: { ...emptyMetrics },
                 slot,
               } satisfies StreamInput;
             }
@@ -431,7 +418,6 @@ export function inputsFromRecord(
             enabled: true,
             srtAddress: "",
             status: "connecting" as const,
-            metrics: { ...emptyMetrics },
             slot,
           } satisfies StreamInput;
         }
@@ -441,7 +427,6 @@ export function inputsFromRecord(
           enabled: true,
           srtAddress: "",
           status: "connecting" as const,
-          metrics: { ...emptyMetrics },
           // Already the browser playback identity (`src_xxxxxx-opus`);
           // playbackStreamName() is a no-op on it, so nothing is suffixed twice.
           streamName: attachment.playbackPath as string,
@@ -459,7 +444,6 @@ export function inputsFromRecord(
         srtAddress: `srt://${host}:${port}`,
         passphrase: line.passphrase || undefined,
         status: "connecting" as const,
-        metrics: { ...emptyMetrics },
         streamName: streamNameForSlot(slot),
         slot,
       } satisfies StreamInput;

@@ -4,14 +4,12 @@ import { Maximize2, Edit3, Volume2, VolumeX, VideoOff, WifiOff, Loader2, PlugZap
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { StreamInput } from "@/lib/mock-data";
-import type { LiveMetrics } from "@/hooks/use-live-metrics";
 import TimeOverlay from "@/components/session/TimeOverlay";
 import SafeAreaOverlay from "@/components/session/SafeAreaOverlay";
 import type { TimeDisplayPrefs } from "@/lib/time-utils";
 
 interface SignalTileProps {
   input: StreamInput;
-  liveMetrics?: LiveMetrics;
   isFocused?: boolean;
   isAudioSource?: boolean;
   /** Global mute-all — overrides isAudioSource and mutes every pane. */
@@ -47,30 +45,8 @@ const statusBadge: Record<string, { label: string; cls: string }> = {
   provisioning_failed: { label: "NOT CONNECTED", cls: "bg-destructive/20 text-destructive" },
 };
 
-/** Vertical audio meter bar */
-const AudioMeter = ({ peakL, peakR }: { peakL: number; peakR: number }) => {
-  const barColor = (level: number) => {
-    if (level > 0.85) return "bg-destructive/80";
-    if (level > 0.65) return "bg-warning/70";
-    return "bg-primary/60";
-  };
-
-  return (
-    <div className="absolute right-2 top-2 bottom-2 flex gap-px items-end">
-      {[peakL, peakR].map((peak, i) => (
-        <div key={i} className="w-1 h-full bg-muted/10 rounded-full overflow-hidden flex flex-col-reverse">
-          <div
-            className={`w-full rounded-full transition-all duration-150 ${barColor(peak)}`}
-            style={{ height: `${Math.min(peak * 100, 100)}%` }}
-          />
-        </div>
-      ))}
-    </div>
-  );
-};
-
 const SignalTile = ({
-  input, liveMetrics, isFocused = false, isAudioSource, muteAll = false, isFullscreen,
+  input, isFocused = false, isAudioSource, muteAll = false, isFullscreen,
   onFocusClick, onFullscreen, onEdit, onSelectAudio,
   onPopOut, isPoppedOut = false, onBringBack, onFocusPopout,
   timePrefs, tileOriginTZ = "UTC", focusedOriginTZ = "UTC", sessionStartedAt = "",
@@ -88,10 +64,6 @@ const SignalTile = ({
   };
   const badge =
     input.streamName && liveState ? liveBadge[liveState] : statusBadge[input.status];
-  const bitrate = liveMetrics?.bitrate ?? input.metrics.bitrate;
-  const loss = liveMetrics?.packetLoss ?? input.metrics.packetLoss;
-  const peakL = liveMetrics?.audioPeakL ?? 0;
-  const peakR = liveMetrics?.audioPeakR ?? 0;
   const isActive = input.status !== "idle";
 
   // Personal audio state — this pane is the audio source for this viewer,
@@ -219,9 +191,6 @@ const SignalTile = ({
         {/* Safe area overlay */}
         {isActive && showSafeArea && <SafeAreaOverlay />}
 
-        {/* Audio meters */}
-        {isActive && <AudioMeter peakL={peakL} peakR={peakR} />}
-
         {/* Per-source audio monitor — persistent in every real source view. */}
         {isActive && !isPoppedOut && onSelectAudio && (
           <Button
@@ -270,9 +239,6 @@ const SignalTile = ({
                 </Button>
               )}
             </div>
-            <div className="text-[10px] text-foreground/70 bg-background/60 px-1.5 py-0.5 rounded font-mono">
-              {bitrate.toFixed(1)} Mbps · {loss.toFixed(2)}% loss
-            </div>
           </div>
         )}
       </div>
@@ -283,11 +249,6 @@ const SignalTile = ({
         <div className="flex items-center justify-between px-3 py-2">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-xs text-muted-foreground truncate">{input.label}</span>
-            {isActive && (
-              <span className="text-[9px] text-muted-foreground/60 font-mono shrink-0">
-                {bitrate.toFixed(1)}M
-              </span>
-            )}
           </div>
           <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${badge.cls}`}>
             {badge.label}
