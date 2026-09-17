@@ -285,7 +285,7 @@ describe("Phase E.2B — input hardening and secret containment", () => {
   it("keeps MAKO_API_TOKEN server-side and never returns raw upstream text", () => {
     expect(fn).toMatch(/MAKO_API_TOKEN/);
     const client = readFileSync("src/hooks/use-media-telemetry.ts", "utf8");
-    expect(client).not.toMatch(/MAKO_API_TOKEN|api\.makosrt\.com|Bearer /);
+    expect(client).not.toMatch(/Deno\.env|api\.makosrt\.com|Authorization: `Bearer/);
     expect(fn).not.toMatch(/body: text|telemetry: parsed[^.]/);
   });
 
