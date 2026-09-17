@@ -1,118 +1,50 @@
-# Phase E.1 — Telemetry Audit & Truth Pass (findings only)
+# Phase E.1A — Truth Pass: Remove All Mock Telemetry
 
-Read-only audit. No code, migrations, deployments, infrastructure or UI changes were made.
+Removal only. No replacement telemetry, no infrastructure work, no publish.
 
-## 1. Executive summary
+## Outcome
 
-Almost none of the technical numbers in the Session Room are measurements.
+After this pass, every technical value MAKO shows an operator is something it actually knows. Anything it does not measure reads `—` with a quiet "Not measured", and the simulation machinery is deleted from the codebase rather than left dormant.
 
-Exactly two things are real today:
+## What gets deleted
 
-- **Connection/pane state** — genuinely derived from the WebRTC peer connection and the WHEP negotiation result (`LiveCamera`): connecting, live, no video, reconnecting, endpoint misconfigured, failed.
-- **Provisioning/lifecycle state** — whether a caller route exists, is ready, or failed (session runtime routes).
+**Simulated metric engine**
+- `src/hooks/use-live-metrics.ts` — deleted outright. This is the 800 ms random tick behind bitrate, packet loss, RTT, loudness and both audio-meter values. Remove its use in `SessionRoom.tsx`, `SourcePopoutPage.tsx`, `LayoutPopoutPage.tsx`, and the `liveMetrics` prop from `SignalTile`, `InspectorPanel`, `FullscreenOverlay`.
 
-Everything else operators read as engineering data — bitrate, packet loss, RTT, codec, resolution, frame rate, audio channels, sample rate, loudness, the audio meters, all three sparklines, and every automatic Quinn signal alert — is generated in the browser from static seed values plus randomness. The pipeline (SRT caller → FFmpeg → MediaMTX → WHEP) currently reports nothing back to MAKO except "the route exists" and "the upstream says the service state is active".
+**Hardcoded engineering seeds**
+- `src/lib/mock-data.ts` — delete `makeMetrics`, `generateMetricHistory`, `mockInputs`, `mockMarkers`, and the mock feed video imports. `StreamMetrics` becomes an all-optional shape (or is removed from `StreamInput` entirely) so no code path can hand back H.264 High / 1920×1080 / 29.97 / 8.5 Mbps / 0.02% / 24 ms / 2ch / 48 kHz / −23 LUFS.
+- `src/pages/SessionRoom.tsx` — QC markers no longer seed from `mockMarkers`; the list starts empty.
+- `mockSessions` is retained only as the expired-session name/PIN fallback in `Sessions.tsx` and `RecentSessionsPanel.tsx`, stripped of its fabricated per-input metrics. It is session metadata, not telemetry.
 
-The player is honest. The instrumentation around it is not.
+**Synthetic Quinn signal generators**
+- `src/hooks/use-quinn-simulator.ts` — deleted. Randomised incident/event/alert bank writing to browser storage, hardcoded to `line-1..3` and fictional `sess-001/002`. Currently unreferenced, so it must not survive as dormant machinery.
+- `src/hooks/use-quinn-timeline-bridge.ts` — deleted, along with its call in `SessionRoom.tsx`. This is the live path that produced "PTS discontinuity … jumped 173ms" and every other fabricated packet-loss / bitrate / freeze / black-frame / clipping / resolution-change entry.
 
-## 2. Metric provenance and trust table
+**Fake history**
+- The three sparklines in `InspectorPanel.tsx` (one shared random 60-point array, generated once at module load) are removed together with the `recharts` usage in that panel.
 
-| Metric | Current display | Actual source | Classification | Trustworthy today | Recommended phase |
-|---|---|---|---|---|---|
-| Video codec | "H.264 High" | hardcoded seed in `makeMetrics()` | HARDCODED | No | E.2 |
-| Resolution | "1920×1080" | same hardcoded seed | HARDCODED | No | E.2 |
-| Frame rate | "29.97 fps" | same hardcoded seed | HARDCODED | No | E.2 |
-| Bitrate (inspector, tile overlay, tile footer, fullscreen bar) | e.g. "8.5 Mbps" | seed 8.5 ± random jitter, retimed every 800 ms | MOCKED | No | E.2 / E.4 |
-| Packet loss | e.g. "0.02%" | seed + random jitter | MOCKED | No | E.4 |
-| RTT | e.g. "24 ms" | seed + random jitter | MOCKED | No | E.4 |
-| Audio channels | "2ch" | hardcoded seed | HARDCODED | No | E.2 |
-| Audio sample rate | "48kHz" | hardcoded seed | HARDCODED | No | E.2 |
-| Loudness (LUFS) | e.g. "-23.0 LUFS" | seed -23 + random jitter; not a loudness algorithm | MOCKED | No | E.3 |
-| Audio meters (L/R bars) | bars moving continuously | two independent random values per 800 ms tick | MOCKED | No | E.3 |
-| Bitrate sparkline | 60-point moving line | random array generated **once at module load**, shared by every source | MOCKED | No | E.5 |
-| Packet-loss sparkline | same | same shared random array | MOCKED | No | E.5 |
-| RTT sparkline | same | same shared random array | MOCKED | No | E.5 |
-| Latency | not displayed | no measurement exists | UNAVAILABLE | — | E.4 |
-| Retransmits / dropped packets | not displayed | no measurement exists | UNAVAILABLE | — | E.4 |
-| Connection / pane state | LIVE, CONNECTING, NO VIDEO, RECONNECTING, FAILED, ENDPOINT MISCONFIGURED | WebRTC `connectionState` + WHEP negotiation outcome | REAL (browser transport) | Yes | keep |
-| Route/provisioning state | NOT CONNECTED / Provisioning Failed pane | runtime route rows and attachment resolution | REAL (control plane) | Yes | keep |
-| Source connection status (library rows) | connected / offline / unknown | written by create/delete code paths, never probed continuously | DERIVED from lifecycle events, not live | Partly | E.4 |
-| Quinn signal alerts (all types) | precise messages with numbers | random templates on a 35–75 s timer | SIMULATED | No | E.7 |
+## What the UI shows instead
 
-## 3. Audio metering findings
+**Signal Inspector** — structure preserved for later phases. Video (codec, resolution, frame rate, bitrate), Transport (packet loss, RTT), Audio (channels, sample rate, loudness) each render `—` with "Not measured" as a single quiet caption per section. No zeros, no "Unknown", no invented values. In place of the three charts, one honest line: "No telemetry history available." The existing source selector and panel layout stay as they are.
 
-The vertical meter beside each video is decorative. It reads two numbers produced by the same random tick that feeds the inspector; there is no Web Audio API graph, no `AnalyserNode`, no access to audio samples, no peak/RMS/LUFS computation, and no dB value underneath the bars. Left and right are two separate random values, not two measured channels, so apparent stereo behaviour is coincidental. Muting a source, muting all, or changing browser volume has no effect on the meter — it keeps moving on a source that is silent, and moves identically on a source with no audio track at all. Interval is 800 ms.
+**Video tiles** — the animated L/R meter is removed entirely; that yields the cleanest layout and frees the pane corner. No static meter, no replacement animation. The per-source Listen/mute control is unaffected. The bitrate/loss overlay strip and the `8.5M` footer figure are removed. The fullscreen bar drops its metrics line and keeps the source label.
 
-The inspector's loudness figure is the same fiction expressed in LUFS, which is the most misleading value in the product because LUFS implies a standardised measurement.
+**What stays exactly as-is** — WebRTC/WHEP pane states (LIVE, CONNECTING, NO VIDEO, RECONNECTING, FAILED, ENDPOINT MISCONFIGURED), Provisioning Failed / NOT CONNECTED, runtime-route lifecycle, session status, and all caller/session lifecycle information. These were proven real in E.1.
 
-## 4. Quinn alert provenance
+## Quinn
 
-Every automatic technical alert Quinn produces comes from one of two randomised template banks (one writing into the shared Timeline, one into browser-local incident storage). Each template invents its own numbers at emit time and picks a random source. No template reads a measurement; there are no thresholds, no windows, no durations, no hysteresis, and no recovery detection.
+`supabase/functions/quinn-chat/index.ts` — remove the rule requiring exact loss/bitrate/timestamp citation and replace it with an instruction to state plainly that a measurement is not currently available when asked, and never to estimate one. Quinn keeps discussing genuine session and lifecycle information. No other Quinn redesign. Function is redeployed since its prompt changed.
 
-The specific observed alert — *"PTS discontinuity on Source 1 — Phase Test — timestamp jumped 173 ms"* — is fully synthetic: the template generates a random integer between 80 and 500 ms and formats it into the sentence. MAKO has no access to media timestamps at any layer today, so no PTS value of any kind exists in the system. The precision of the number is what makes it dangerous.
+Operator-authored Timeline notes, incident review UI and the PDF/report paths are untouched; they simply have no synthetic entries to display.
 
-Quinn's chat prompt instructs it to always cite exact loss/bitrate figures, which means it will confidently narrate mock telemetry as fact.
+## Source identity
 
-## 5. Media pipeline telemetry availability
+Deleting the simulation removes the `line-N` / slot-keyed telemetry identity assumptions along with it. No replacement identity system is built here. Legacy `camN` playback compatibility for manual/legacy slots is deliberately left intact — this is not a legacy-retirement pass.
 
-| Stage | What MAKO extracts today | What is being ignored |
-|---|---|---|
-| External SRT listener | nothing | its own stats |
-| MAKO caller / FFmpeg on DigitalOcean | only whether the service exists and a coarse `state` string returned by the caller API | codecs, resolution, frame rate, bitrate, audio format, timestamps, errors, and all SRT transport counters |
-| RTSP publication → MediaMTX | nothing | publish state, track descriptions |
-| MediaMTX | nothing | its metrics/API surface, per-path reader and publisher stats |
-| WHEP negotiation | negotiation outcome only (this is used, and is real) | — |
-| Browser player | connection state only | `RTCPeerConnection.getStats()` is never called, so real browser-side bitrate, jitter, packet loss, frames decoded, freeze count, resolution and frame rate are all available but unused |
+## Tests
 
-The largest immediately available win is `getStats()` in the browser: it would give genuine BROWSER-ONLY delivery metrics with no server work at all. It must be labelled as playback measurement, not contribution.
+New/updated tests covering: inspector renders no fabricated codec/resolution/bitrate/loss/RTT/LUFS and shows unavailable states instead of zeros; no audio meter element renders; no sparkline data renders; the Quinn timeline bridge and simulator no longer exist as importable emitters; a dedicated regression test proving no code path can produce a PTS-discontinuity entry without a real telemetry input; and unchanged behaviour for pane states, Provisioning Failed, caller-first dynamic playback, guest monitoring, and Phase D End Session. Full suite plus TypeScript run at the end.
 
-## 6. Runtime-route identity findings
+## Out of scope
 
-Playback identity is correct for caller-first sessions: session → runtime route → `src_xxxxxx` → `src_xxxxxx-opus`, with no legacy fallback for runtime slots, and unresolved runtime slots now surface a failure pane instead of borrowing `cam1`.
-
-Telemetry identity is wrong everywhere. Simulated metrics are keyed by UI input id (`line-N` / slot), not by runtime route or infrastructure source. The legacy slot→`camN` mapping still exists for manual/legacy slots (intentionally retained). The simulated Quinn incident bank is hardcoded to `line-1`…`line-3` and to two fictional session ids, so its alerts are not attributable to any real route.
-
-## 7. Telemetry persistence findings
-
-There is no telemetry storage of any kind. No database table holds samples (the schema has sessions, routes, attachments, timeline, leases, roles — nothing time-series). No Edge Function ingests or serves samples. Nothing polls the caller service or MediaMTX for stats. Graph data is regenerated at module load, so it is identical for every source and resets on refresh; nothing survives a reload, and there is no server-side history at all. Quinn's simulated incidents persist only in browser local storage.
-
-## 8. Misleading production displays (for the Truth Pass)
-
-These currently read as engineering measurements and are not:
-
-1. Bitrate on the tile overlay, the tile footer, the fullscreen bar and the inspector.
-2. Packet loss on the tile overlay and the inspector — a steady "0.02%" reads as a verified clean line.
-3. RTT in the inspector.
-4. Codec, resolution and frame rate in the inspector — all identical for every source regardless of the actual feed.
-5. Audio channels and sample rate in the inspector.
-6. Loudness in LUFS.
-7. The vertical audio meters — moving on muted and audio-less sources.
-8. All three sparklines — visually convincing history that is one shared random array.
-9. Every automatic Quinn signal alert, especially PTS discontinuity, freeze, black frames, audio clipping and bitrate drop.
-
-The Truth Pass should replace each with an honest unavailable state (`—` / "Not measured") until real telemetry exists, keep the genuinely real connection/pane state as-is, and stop Quinn from emitting synthetic technical alerts in production sessions.
-
-## 9. Recommended Phase E sequence
-
-The proposed order holds, with one ordering note.
-
-- **E.1 Truth Pass** — remove/neutralise mock telemetry and simulated alerts; show honest unavailable states. Independent of infrastructure, so it can ship immediately and stops the product asserting false engineering data.
-- **E.2 Media telemetry foundation** — server-side collection (codec, resolution, frame rate, bitrate, audio format) plus the transport/collection contract and the telemetry identity keyed on runtime route + infrastructure source. Because E.2 defines that contract, it must precede E.3–E.5.
-- **E.3 Real audio metering** — real audio measurement. This is largely browser-side (Web Audio on the playback stream) and therefore only loosely depends on E.2; it can run in parallel if convenient, but must be labelled as playback-side.
-- **E.4 SRT transport telemetry** — RTT, loss, retransmits, latency from the caller. This is the item most exposed to unknowns on the server (see below).
-- **E.5 Historical graphs & inspector** — needs a persistence layer, so it depends on E.2/E.4.
-- **E.6 Right-rail UX**, **E.7 monitoring intelligence and real alerts** — last; real alerts require real thresholds over real series.
-
-Optional insertion worth considering: a small **E.2a browser playback stats** step using `getStats()`. It delivers genuine (if playback-side) numbers quickly and gives the UI a real data shape to build against while server telemetry is designed.
-
-## 10. What cannot be verified from this repository
-
-I can prove the frontend and the backend code behaviour. I cannot prove anything about the server, and I am not going to guess:
-
-- What the FFmpeg/caller service on DigitalOcean actually logs or exposes (codecs, resolution, frame rate, bitrate, audio format, timestamps, errors).
-- Whether the caller uses a build/flags that expose SRT transport statistics at all, and in what form (stderr text, `-stats`, `-progress`, JSON, none).
-- What the caller API on the server can return beyond the coarse `state` string MAKO already reads.
-- Whether MediaMTX has its API/metrics endpoint enabled, and what per-path stats it would report.
-- Whether the servers retain any logs or metrics history today.
-
-E.2 and E.4 depend entirely on those answers, so a small read-only inspection of the caller service, the FFmpeg command line and the MediaMTX configuration should come before designing either. Any telemetry architecture written before that inspection would be invention, not engineering.
+FFmpeg/SRT/MediaMTX telemetry, `getStats()`, real bitrate/loss/RTT, real audio metering, LUFS, telemetry persistence or tables, new graphs, new alerts or thresholds, right-rail redesign. Untouched: provisioning, caller infrastructure, Phase D leases, teardown/reconciliation, anonymous guest architecture, auth/RLS, sharing, Ops, Friendly Name punctuation, My Sources. The sealed `/explore` demo keeps its clearly-labelled demo data. No publish.
