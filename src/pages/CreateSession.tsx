@@ -29,7 +29,7 @@ import {
   canConfigureSession, getCurrentUserRef,
   diffSessionConfig, appendChangeLog,
 } from "@/lib/session-store";
-import { ensureIdentity, useIdentity } from "@/lib/identity";
+import { ensureBackendIdentity, ensureIdentity, useIdentity } from "@/lib/identity";
 import {
   provisionSessionRemote,
   saveSessionRemote,
