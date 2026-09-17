@@ -34,6 +34,8 @@ const InspectorPanel = ({ input, inputs, selectedId, onSelect, telemetry }: Insp
     { label: "Codec", text: codecText(t?.video.codec, t?.video.codecProfile) },
     { label: "Resolution", text: resolution },
     { label: "Frame Rate", text: hasValue(t?.video.frameRate) ? `${t!.video.frameRate.value} fps` : null },
+    { label: "Scan", text: hasValue(t?.video.scanType) ? String(t!.video.scanType.value) : null },
+    { label: "Color Space", text: hasValue(t?.video.colorSpace) ? String(t!.video.colorSpace.value) : null },
   ];
 
   const transportFields: Field[] = [
@@ -58,6 +60,7 @@ const InspectorPanel = ({ input, inputs, selectedId, onSelect, telemetry }: Insp
         ? `${(t!.audioOutput.outputAudioSampleRate.value as number) / 1000} kHz`
         : null,
     },
+    { label: "Output Channels", text: numberText(t?.audioOutput.outputAudioChannels) },
     {
       label: "Output Bitrate",
       text: hasValue(t?.audioOutput.configuredOutputAudioBitrate)
