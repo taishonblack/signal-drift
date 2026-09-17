@@ -1245,6 +1245,10 @@ const SessionRoom = () => {
               inputs={session.inputs}
               selectedId={selectedInput}
               onSelect={setSelectedInput}
+              telemetry={telemetry.forRoute(
+                (session.inputs.find((i) => i.id === selectedInput) || session.inputs[0])
+                  ?.runtimeRouteId,
+              )}
             />
           )}
 
