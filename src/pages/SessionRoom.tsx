@@ -698,6 +698,54 @@ const SessionRoom = () => {
     navigate("/sessions");
   }, [id, navigate, identity.kind, currentUserRef.id]);
 
+  /** Owner clicked End Session in the toolbar — confirmation only, no side effects. */
+  const openEndDialog = useCallback(() => {
+    setEndError(null);
+    setEnding(false);
+    setEndOpen(true);
+  }, []);
+
+  const cancelEndDialog = useCallback(() => {
+    if (ending) return;
+    setEndOpen(false);
+    setEndError(null);
+  }, [ending]);
+
+  /**
+   * Confirm. The server owns termination: nothing local changes and no
+   * navigation happens until the Phase D end request returns successfully.
+   * If upstream teardown is uncertain the server retains the route as
+   * tearing_down for reconciliation — the browser never resolves it.
+   */
+  const confirmEndSession = useCallback(async () => {
+    if (ending) return; // double-submit guard
+    // Guest owner → existing save-prompt path (purely local session).
+    const cur = id ? getSessionById(id) : undefined;
+    const iAmOwner = cur && (cur.ownerUserId ?? cur.hostUserId) === currentUserRef.id;
+    if (identity.kind !== "member" && iAmOwner) {
+      setEndOpen(false);
+      setSaveOpen(true);
+      return;
+    }
+    if (!id) return;
+    setEnding(true);
+    setEndError(null);
+    const outcome = await endSessionRemote(id, "owner_ended");
+    if (!outcome.ok) {
+      setEnding(false);
+      setEndError(
+        "MAKO could not confirm the end request. The session is still running and the source connection may still be held. Check your connection and retry.",
+      );
+      return;
+    }
+    // Server accepted — now mirror locally and leave the room.
+    endSessionRecord(id);
+    setEnding(false);
+    setEndOpen(false);
+    toast({ title: "Session ended" });
+    navigate("/sessions");
+  }, [ending, id, identity.kind, currentUserRef.id, navigate]);
+
   const finalizeEnd = useCallback(
     (mode: "keep" | "discard") => {
       setSaveOpen(false);
