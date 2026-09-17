@@ -280,6 +280,17 @@ Deno.serve(async (req) => {
       { slots, libraryAttachments: library_attachments },
       deps,
     );
+    // Phase D — take the first presence lease for the provisioning client the
+    // instant the session becomes active, so a browser that dies immediately
+    // after Start Monitoring is still cleaned up by lease expiry.
+    if (outcome.status === 200 && client_instance_id) {
+      const { error: leaseErr } = await service.rpc("renew_session_lease", {
+        _owner: ownerId,
+        _session_id: session.id,
+        _client_instance_id: client_instance_id,
+      });
+      if (leaseErr) console.error(`provision-session: initial lease failed — ${leaseErr.message}`);
+    }
     return json(outcome.body, outcome.status);
   } catch (e) {
     console.error(
