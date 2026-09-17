@@ -1,0 +1,35 @@
+# Audit — Missing End Session control in the Session Room
+
+## Was it removed, or never exposed?
+
+Never exposed. The Phase D explicit end lifecycle exists and is reachable from other places, but the Session Room has no button for it:
+
+- `SessionRoom.tsx` already contains a working `handleEndSession` handler, but it is only reachable two ways: the automatic scheduled-end countdown dialog, and the guest "save your session" prompt. No control in the room's toolbar or header calls it.
+- The Sessions list page (`Sessions.tsx`) and the recent-sessions panel do have an End Session button, so the ability exists elsewhere in the app — just not while you are inside the room.
+- The idle warning dialog also offers End Session, but only after an inactivity prompt.
+
+So this is a missing surface, not a removed one. Nothing about the backend lifecycle needs to change.
+
+## How ending currently works (unchanged by this plan)
+
+Ending calls the local session record end plus `syncEndedSessionRemote`, which invokes the Phase D `session-lease` "end" action: it completes the session, invalidates every tab's lease, detaches sources and tears down each runtime caller. Browser-close and lease-expiry behaviour is separate and stays untouched.
+
+One gap for the requested UX: `syncEndedSessionRemote` is fire-and-forget and silent, so today there is nothing to wait on and nothing to report if teardown fails.
+
+## Proposed change (smallest viable)
+
+1. **Owner-only control in the existing toolbar.** Add a small End Session action to `SessionToolbar` — inline on desktop next to Share Session, and as an entry in the existing mobile overflow menu. Rendered only when the viewer is the session owner (the room already computes `isOwner`). No layout redesign.
+
+2. **New confirmation dialog** (`EndSessionDialog`) using the existing MAKO glass dialog style: explains that all active source connections will be disconnected and monitoring ends for everyone in the session. Cancel closes and does nothing.
+
+3. **Confirm reuses the existing Phase D end path.** Add an awaited wrapper alongside `syncEndedSessionRemote` that calls the same `session-lease` end action and returns its result; the existing fire-and-forget function delegates to it so there is exactly one teardown mechanism.
+
+4. **Double-submit protection.** The confirm button enters an "Ending…" state, is disabled, and the dialog cannot be dismissed while the request is in flight.
+
+5. **Success and failure.** On success, follow the current completed-session behaviour: end the local record and navigate to the sessions list with the existing confirmation toast. Guest owners continue to get the existing save prompt instead. On failure, keep the dialog open and show a clear error explaining that monitoring could not be ended and the source connection may still be held, with the option to retry.
+
+## Scope guard
+
+Touched: `SessionToolbar.tsx`, `SessionRoom.tsx`, a new `EndSessionDialog.tsx`, and a small awaited addition in `sessions-remote.ts`. Plus a focused test covering owner-only visibility, cancel doing nothing, single submission, and the error path.
+
+Untouched: provisioning, caller infrastructure, reconciliation, lease renewal/expiry, browser-close behaviour, RLS, sharing, Quinn, Timeline, Ops. No `beforeunload` teardown.
