@@ -2,6 +2,7 @@ import { Grid2X2, Square, LayoutDashboard, PanelRightClose, PanelRightOpen, Shar
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import TimeDisplayPopover from "@/components/session/TimeDisplayPopover";
+import SessionStatusBadge, { type AnySessionStatus } from "@/components/session/SessionStatusBadge";
 import type { TimeDisplayPrefs } from "@/lib/time-utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -25,7 +26,8 @@ const layoutMinSources: Record<Layout, number> = {
 
 interface SessionToolbarProps {
   sessionName: string;
-  sessionStatus: string;
+  sessionStatus: AnySessionStatus;
+
   sessionId: string;
   layout: Layout;
   onLayoutChange: (l: Layout) => void;
@@ -81,9 +83,8 @@ const SessionToolbar = ({
       <div className="flex items-center justify-between gap-2 min-w-0">
         <div className="flex items-center gap-2 min-w-0 overflow-hidden">
           <h1 className="text-sm font-medium text-foreground truncate min-w-0">{sessionName}</h1>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/20 text-primary font-medium shrink-0">
-            {sessionStatus === "live" ? "LIVE" : "ENDED"}
-          </span>
+          <SessionStatusBadge status={sessionStatus} />
+
         </div>
         {/* Desktop: Share Session in header row */}
         {!isMobile && (
