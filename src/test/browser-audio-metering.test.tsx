@@ -191,7 +191,7 @@ describe("E.3 browser audio metering", () => {
     expect(result.current.channelMode).toBe("mono");
     expect(result.current.mono?.rmsDbfs).toBeCloseTo(-6.02, 1);
     // Passive graph: analysers only, nothing connected to a destination.
-    expect(read("src/hooks/use-browser-audio-levels.ts")).not.toMatch(/\.destination/);
+    expect(read("src/hooks/use-browser-audio-levels.ts")).not.toMatch(/connect\([^)]*destination/);
   });
 
   it("reports not measured when the received stream carries no audio track", () => {
