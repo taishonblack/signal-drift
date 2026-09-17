@@ -88,7 +88,7 @@ describe("Phase E.2 — telemetry contract identity and provenance", () => {
       },
     });
     expect(snap.audioSource.codec.value).toBe("aac (LC)");
-    expect(snap.audioSource.source ?? snap.audioSource.codec.source).toBe("ffmpeg");
+    expect(snap.audioSource.codec.source).toBe("ffmpeg");
     expect(snap.audioOutput.outputAudioCodec.value).toBe("opus");
     expect(snap.audioOutput.outputAudioCodec.source).toBe("mako_config");
     expect(snap.audioOutput.configuredOutputAudioBitrate.source).toBe("mako_config");
