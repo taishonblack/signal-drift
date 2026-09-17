@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return json({ error: "invalid_body" }, 400);
-  const { session, slots, library_attachments } = parsed.data;
+  const { session, slots, library_attachments, client_instance_id } = parsed.data;
 
   const usedSlots = new Set(slots.map((s) => s.slot));
   if (usedSlots.size !== slots.length) return json({ error: "duplicate_slot" }, 400);
