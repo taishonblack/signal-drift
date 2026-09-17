@@ -245,13 +245,13 @@ const CreateSession = () => {
 
   /**
    * Caller-first slot (Phase C): the operator typed an external SRT listener
-   * address and port, so MAKO provisions a caller to it. Guests have no
-   * server-side provisioning and keep the legacy local behaviour.
+   * address and port, so MAKO provisions a caller to it. This is identical for
+   * a signed-in operator and a Temporary Operator — an account controls
+   * persistence, never whether MAKO can monitor SRT.
    */
   const callerBacked = useCallback(
-    (line: SrtLine) =>
-      !isGuest && line.enabled && !isSourceBacked(line) && hasManualEndpoint(line),
-    [isGuest],
+    (line: SrtLine) => line.enabled && !isSourceBacked(line) && hasManualEndpoint(line),
+    [],
   );
 
   const configureSource = () => {
