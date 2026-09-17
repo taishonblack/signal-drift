@@ -6,6 +6,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import SessionToolbar from "@/components/session/SessionToolbar";
+import { DEFAULT_TIME_PREFS } from "@/lib/time-utils";
 
 vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
@@ -15,7 +16,7 @@ const baseProps = {
   sessionId: "sess-test",
   layout: "1" as const,
   onLayoutChange: () => {},
-  timePrefs: { mode: "event" as const, timeZone: "UTC", showElapsed: true },
+  timePrefs: DEFAULT_TIME_PREFS,
   onTimePrefsChange: () => {},
   showNotes: false,
   onToggleNotes: () => {},
