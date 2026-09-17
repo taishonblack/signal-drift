@@ -8,6 +8,7 @@
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { attachmentIntents } from "@/lib/session-attachments";
+import { getClientInstanceId, releaseSessionRemote } from "@/lib/session-lease";
 import {
   addSession,
   getSessionById,
@@ -132,6 +133,10 @@ const PROVISION_MESSAGES: Record<string, string> = {
   endpoint_conflict:
     "This slot is already connected to a different address and port. End the session or use a new session to change it.",
   route_tearing_down: "This slot is still being released. Try again in a moment.",
+  // Phase D — privacy-safe by design: the operator learns the endpoint is busy,
+  // never who is using it.
+  endpoint_in_use:
+    "In use — this SRT listener is currently connected to another MAKO session.",
   route_tombstoned:
     "That connection was permanently removed. Start a new session to monitor this feed.",
   provisioning_failed: "MAKO could not connect to that SRT listener. Check the address and port.",
@@ -156,6 +161,10 @@ export async function provisionSessionRemote(
       session: toRemote(session),
       slots,
       library_attachments: attachmentIntents(session.lines ?? []),
+      // Phase D — the session takes its first presence lease for THIS tab at
+      // provisioning time, so a browser that dies seconds after Start
+      // Monitoring is still cleaned up by lease expiry.
+      client_instance_id: getClientInstanceId(),
     },
   });
 
@@ -176,21 +185,34 @@ export async function provisionSessionRemote(
 }
 
 /**
- * Mirror a locally-ended session upstream so the server stamps
- * `session_sources.detached_at` for its attachments. Best-effort and silent:
- * the local end is authoritative for the UI. The persistent sources themselves
- * are never touched — only the attachment rows are released.
+ * Mirror a locally-ended session upstream.
+ *
+ * Phase D: ending a session is a RELEASE, not just a status write. The server
+ * ends the session, invalidates every tab's lease, detaches attachments and
+ * tears down each runtime caller — so the external SRT listener actually
+ * returns to idle instead of staying at "1 Session" forever.
+ *
+ * Best-effort and silent: the local end is authoritative for this tab's UI, and
+ * any caller whose teardown could not be confirmed is retained (endpoint still
+ * occupied) and picked up by reconciliation. The persistent library sources
+ * themselves are never touched — only attachments and runtime callers.
  */
-export function syncEndedSessionRemote(sessionId: string): void {
+export function syncEndedSessionRemote(
+  sessionId: string,
+  reason: "owner_ended" | "scheduled_end" = "owner_ended",
+): void {
   void (async () => {
     try {
       const { data } = await supabase.auth.getUser();
       if (!data?.user) return; // guest sessions are purely local
+      const released = await releaseSessionRemote(sessionId, reason);
+      if (released.ok) return;
+      // Release unavailable: fall back to the status/attachment mirror so the
+      // session at least reads as ended. Reconciliation handles the caller.
       const record = getSessionById(sessionId);
-      if (!record) return;
-      await saveSessionRemote(record);
+      if (record) await saveSessionRemote(record);
     } catch {
-      // Non-fatal: reconciliation happens on the next successful save.
+      // Non-fatal: reconciliation happens on the next successful pass.
     }
   })();
 }

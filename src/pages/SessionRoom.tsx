@@ -29,7 +29,7 @@ import {
   leaveSession,
 
   claimOwnership,
-  orphanSweep,
+  
   updateViewerFocus,
   getCurrentUserRef,
   canConfigureSession,
@@ -156,7 +156,8 @@ const SessionRoom = () => {
   useEffect(() => {
     if (!id) return;
     const t = window.setInterval(() => {
-      orphanSweep();
+      // Phase D: no local orphan sweep here. Whether a session is abandoned is
+      // decided server-side by presence-lease expiry, never by this tab.
       const next = getSessionById(id);
       setRecord(next);
       const iAmParticipant = (next?.viewers ?? []).some((v) => v.userId === currentUserRef.id);

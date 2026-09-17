@@ -35,6 +35,7 @@ import {
   saveSessionRemote,
   type RuntimeSlotIntent,
 } from "@/lib/sessions-remote";
+import { checkEndpointAvailability } from "@/lib/session-lease";
 import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 import { toast } from "@/components/ui/sonner";
 import { probeStream, streamNameForSlot } from "@/lib/stream-paths";
@@ -174,6 +175,27 @@ const CreateSession = () => {
   useEffect(() => {
     setTested((prev) => ({ ...prev, [activeTab]: false }));
   }, [activeLine.srtAddress, activeTab]);
+
+  /**
+   * Phase D — advisory endpoint-occupancy hint. Deliberately says only that the
+   * listener is busy: never the other session's name, owner or identity. The
+   * real guarantee is server-side, so two operators cannot both win a race.
+   */
+  const [endpointBusy, setEndpointBusy] = useState(false);
+  useEffect(() => {
+    setEndpointBusy(false);
+    const portNum = Number(activePort);
+    if (!activeHost.trim() || !Number.isFinite(portNum) || portNum < 1 || portNum > 65535) return;
+    let cancelled = false;
+    const t = window.setTimeout(async () => {
+      const result = await checkEndpointAvailability(activeHost.trim(), portNum);
+      if (!cancelled) setEndpointBusy(result.reason === "in_use");
+    }, 500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [activeHost, activePort]);
 
   const setHostPort = (host: string, port: string) => {
     updateLine({ srtAddress: composeSrt(host, port) });
@@ -754,9 +776,16 @@ const CreateSession = () => {
                         <Plus className="h-3.5 w-3.5" /> Save Source
                       </Button>
                     </div>
-                    <p className="text-[10px] text-muted-foreground/50 -mt-2">
-                      MAKO will connect to this SRT listener.
-                    </p>
+                    {endpointBusy ? (
+                      <p className="text-[10px] text-[hsl(var(--warning))] -mt-2">
+                        In use — this SRT listener is currently connected to another MAKO
+                        session.
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground/50 -mt-2">
+                        MAKO will connect to this SRT listener.
+                      </p>
+                    )}
                   </>
                 )}
 

@@ -57,6 +57,9 @@ const Body = z.object({
   session: SessionSchema,
   slots: z.array(SlotSchema).min(1).max(4),
   library_attachments: z.array(LibraryAttachmentSchema).max(4).optional(),
+  /** Phase D — the provisioning client's own instance id, so the session takes
+   *  its first presence lease the moment it becomes active. */
+  client_instance_id: z.string().uuid().optional(),
 });
 
 Deno.serve(async (req) => {
@@ -77,7 +80,7 @@ Deno.serve(async (req) => {
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return json({ error: "invalid_body" }, 400);
-  const { session, slots, library_attachments } = parsed.data;
+  const { session, slots, library_attachments, client_instance_id } = parsed.data;
 
   const usedSlots = new Set(slots.map((s) => s.slot));
   if (usedSlots.size !== slots.length) return json({ error: "duplicate_slot" }, 400);
@@ -277,6 +280,17 @@ Deno.serve(async (req) => {
       { slots, libraryAttachments: library_attachments },
       deps,
     );
+    // Phase D — take the first presence lease for the provisioning client the
+    // instant the session becomes active, so a browser that dies immediately
+    // after Start Monitoring is still cleaned up by lease expiry.
+    if (outcome.status === 200 && client_instance_id) {
+      const { error: leaseErr } = await service.rpc("renew_session_lease", {
+        _owner: ownerId,
+        _session_id: session.id,
+        _client_instance_id: client_instance_id,
+      });
+      if (leaseErr) console.error(`provision-session: initial lease failed — ${leaseErr.message}`);
+    }
     return json(outcome.body, outcome.status);
   } catch (e) {
     console.error(

@@ -182,6 +182,44 @@ export type Database = {
         }
         Relationships: []
       }
+      session_lease_holders: {
+        Row: {
+          client_instance_id: string
+          created_at: string
+          expires_at: string
+          holder_user_id: string
+          renewed_at: string
+          session_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_instance_id: string
+          created_at?: string
+          expires_at: string
+          holder_user_id: string
+          renewed_at?: string
+          session_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_instance_id?: string
+          created_at?: string
+          expires_at?: string
+          holder_user_id?: string
+          renewed_at?: string
+          session_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_lease_holders_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_runtime_route_history: {
         Row: {
           archived_at: string
@@ -589,8 +627,16 @@ export type Database = {
         Args: { _final_status: string; _owner: string; _route_id: string }
         Returns: Json
       }
+      begin_session_release: {
+        Args: { _reason?: string; _session_id: string }
+        Returns: Json
+      }
       can_use_ingest_source: {
         Args: { _source_id: string; _user_id: string }
+        Returns: boolean
+      }
+      check_endpoint_availability: {
+        Args: { _host: string; _port: number }
         Returns: boolean
       }
       fail_session_runtime_route: {
@@ -622,8 +668,18 @@ export type Database = {
         Args: { _session_id: string; _user_id: string }
         Returns: boolean
       }
+      normalize_endpoint_host: { Args: { _host: string }; Returns: string }
       record_runtime_route_teardown_failure: {
         Args: { _error: string; _owner: string; _route_id: string }
+        Returns: Json
+      }
+      renew_session_lease: {
+        Args: {
+          _client_instance_id: string
+          _owner: string
+          _session_id: string
+          _ttl_seconds?: number
+        }
         Returns: Json
       }
       reserve_ingest_source_slot: {
@@ -644,6 +700,14 @@ export type Database = {
       save_session_with_sources: {
         Args: { _attachments: Json; _owner: string; _session: Json }
         Returns: Json
+      }
+      sessions_with_expired_leases: {
+        Args: { _limit?: number }
+        Returns: {
+          last_seen_at: string
+          owner_id: string
+          session_id: string
+        }[]
       }
       verify_session_pin: {
         Args: { _pin: string; _session_id: string }
