@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { negotiateWhep, whepEndpointForStream, MISSING_WHEP_BASE_MESSAGE } from "@/lib/stream-paths";
+import {
+  clearReceivedStream,
+  publishReceivedStream,
+} from "@/lib/telemetry/browser-audio-registry";
 
 export type LiveCameraState =
   | "connecting"
@@ -65,7 +69,16 @@ const LiveCamera = ({
     // Generation guard: a stale attempt must never close a newer connection.
     let generation = 0;
 
+    // The complete received stream for the current connection. Audio and video
+    // may arrive as separate `ontrack` events, so tracks are ADDED to one
+    // long-lived stream instead of replacing srcObject with a one-track stream.
+    let received: MediaStream | null = null;
+
     const teardown = () => {
+      if (received) {
+        clearReceivedStream(streamName, received);
+        received = null;
+      }
       if (resourceRef.current) {
         void fetch(resourceRef.current, { method: "DELETE" }).catch(() => undefined);
         resourceRef.current = null;
@@ -98,8 +111,16 @@ const LiveCamera = ({
         if (cancelled || myGen !== generation) return;
         const el = videoRef.current;
         if (!el) return;
-        const stream = event.streams?.[0] ?? new MediaStream([event.track]);
-        el.srcObject = stream;
+        if (!received) received = new MediaStream();
+        const stream = received;
+        const incoming = event.streams?.[0]?.getTracks() ?? [event.track];
+        for (const t of incoming) {
+          if (!stream.getTracks().includes(t)) stream.addTrack(t);
+        }
+        if (el.srcObject !== stream) el.srcObject = stream;
+        // Publish the received stream so passive consumers (E.3 audio metering)
+        // can analyse the same decoded audio without a second WHEP session.
+        publishReceivedStream(streamName, stream);
         // A (re)connecting source must never unmute itself: re-apply the
         // requested mute state against the freshly attached stream.
         el.muted = mutedRef.current;

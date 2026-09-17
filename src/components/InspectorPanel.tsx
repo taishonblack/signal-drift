@@ -4,6 +4,18 @@ import {
   type MediaTelemetrySnapshot,
   type Observed,
 } from "@/lib/telemetry/contract";
+import {
+  hasAudioMeasurement,
+  isStereo,
+  type BrowserAudioChannelLevel,
+  type BrowserAudioLevelSnapshot,
+} from "@/lib/telemetry/browser-audio-contract";
+import {
+  dbfsToMeterFraction,
+  isEffectivelySilent,
+  METER_SCALE_TICKS,
+} from "@/lib/telemetry/browser-audio-levels";
+import { useBrowserAudioLevels } from "@/hooks/use-browser-audio-levels";
 
 interface InspectorPanelProps {
   input: StreamInput;
@@ -12,6 +24,11 @@ interface InspectorPanelProps {
   onSelect: (id: string) => void;
   /** Telemetry for the selected source, resolved by runtime route id. */
   telemetry?: MediaTelemetrySnapshot | null;
+  /**
+   * Phase E.3 browser audio measurement. Normally measured internally from the
+   * stream LiveCamera already received; injectable for tests.
+   */
+  audioLevel?: BrowserAudioLevelSnapshot | null;
 }
 
 /**
@@ -22,8 +39,17 @@ interface InspectorPanelProps {
  * caption. Transport carries no measurements in this phase, and MAKO's own
  * output audio is shown separately from the source's audio.
  */
-const InspectorPanel = ({ input, inputs, selectedId, onSelect, telemetry }: InspectorPanelProps) => {
+const InspectorPanel = ({
+  input,
+  inputs,
+  selectedId,
+  onSelect,
+  telemetry,
+  audioLevel,
+}: InspectorPanelProps) => {
   const t = telemetry ?? null;
+  const measured = useBrowserAudioLevels(input?.streamName ?? null);
+  const levels = audioLevel !== undefined ? audioLevel : measured;
 
   const resolution =
     t && hasValue(t.video.width) && hasValue(t.video.height)
@@ -92,6 +118,9 @@ const InspectorPanel = ({ input, inputs, selectedId, onSelect, telemetry }: Insp
       <Section title="Transport" fields={transportFields} />
       <Section title="Audio" fields={audioFields} />
 
+      <BrowserAudioLevelSection levels={levels} />
+
+
       <div>
         <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">History</div>
         <div className="text-[10px] text-muted-foreground/60">No telemetry history available.</div>
@@ -126,6 +155,92 @@ const Section = ({ title, fields }: { title: string; fields: Field[] }) => {
         ))}
       </div>
       {!anyObserved && <div className="text-[10px] text-muted-foreground/60">Not measured</div>}
+    </div>
+  );
+};
+
+/**
+ * Phase E.3 — Browser audio level.
+ *
+ * Measured from the decoded PCM of the WebRTC audio MAKO already receives.
+ * These are NOT source/SRT levels and NOT loudness (LUFS). With no measurement
+ * available the section says plainly that nothing is measured; it never shows
+ * animated activity without real samples.
+ */
+const BrowserAudioLevelSection = ({
+  levels,
+}: {
+  levels: BrowserAudioLevelSnapshot | null | undefined;
+}) => {
+  const observed = hasAudioMeasurement(levels);
+  const stereo = isStereo(levels);
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+        Browser Audio Level
+      </div>
+
+      {!observed || !levels ? (
+        <div className="text-[10px] text-muted-foreground/60">— Not measured</div>
+      ) : (
+        <div className="space-y-1.5">
+          {stereo ? (
+            <>
+              <MeterRow label="L" level={levels.left as BrowserAudioChannelLevel} />
+              <MeterRow label="R" level={levels.right as BrowserAudioChannelLevel} />
+            </>
+          ) : (
+            <MeterRow label="M" level={levels.mono as BrowserAudioChannelLevel} />
+          )}
+
+          <div className="flex justify-between text-[8px] text-muted-foreground/50 font-mono pl-4">
+            {METER_SCALE_TICKS.map((tick) => (
+              <span key={tick}>{tick}</span>
+            ))}
+          </div>
+
+          {allSilent(levels) && (
+            <div className="text-[10px] text-muted-foreground/60">Silence</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+function allSilent(levels: BrowserAudioLevelSnapshot): boolean {
+  const chans = [levels.mono, levels.left, levels.right].filter(Boolean) as BrowserAudioChannelLevel[];
+  return chans.length > 0 && chans.every((c) => isEffectivelySilent(c.rmsDbfs));
+}
+
+const MeterRow = ({ label, level }: { label: string; level: BrowserAudioChannelLevel }) => {
+  const rms = Math.round(level.rmsDbfs * 10) / 10;
+  const peak = Math.round(level.peakDbfs * 10) / 10;
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="w-3 text-[10px] font-mono text-muted-foreground">{label}</span>
+      <div
+        className="relative h-2 flex-1 min-w-0 rounded-sm overflow-hidden bg-muted/30"
+        role="meter"
+        aria-label={`${label} level`}
+        aria-valuenow={rms}
+      >
+        <div
+          className="absolute inset-y-0 left-0 bg-primary/70"
+          style={{ width: `${dbfsToMeterFraction(level.rmsDbfs) * 100}%` }}
+        />
+        <div
+          className="absolute inset-y-0 w-0.5 bg-primary"
+          style={{ left: `calc(${dbfsToMeterFraction(level.peakDbfs) * 100}% - 1px)` }}
+        />
+      </div>
+      <span className="w-[62px] text-right text-[10px] font-mono text-foreground">
+        {rms.toFixed(1)} dBFS
+      </span>
+      <span className="w-[46px] text-right text-[9px] font-mono text-muted-foreground/70">
+        pk {peak.toFixed(1)}
+      </span>
     </div>
   );
 };
