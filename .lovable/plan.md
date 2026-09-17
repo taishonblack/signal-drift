@@ -34,6 +34,6 @@ One gap for the requested UX: `syncEndedSessionRemote` is fire-and-forget and si
 
 ## Scope guard
 
-Touched: `SessionToolbar.tsx`, `SessionRoom.tsx`, a new `EndSessionDialog.tsx`, and a small awaited addition in `sessions-remote.ts`. Plus a focused test covering owner-only visibility, cancel doing nothing, single submission, and the error path.
+Touched: `SessionToolbar.tsx`, `SessionRoom.tsx`, a new `EndSessionDialog.tsx`, and a small awaited addition in `sessions-remote.ts`. Tests cover owner-only visibility, cancel doing nothing, single submission, the error path, and — explicitly — that no local completion or navigation happens before the awaited server end request succeeds. Full test suite and TypeScript checks run; no publish.
 
 Untouched: provisioning, caller infrastructure, reconciliation, lease renewal/expiry, browser-close behaviour, RLS, sharing, Quinn, Timeline, Ops. No `beforeunload` teardown.
