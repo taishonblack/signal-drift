@@ -24,6 +24,7 @@ import {
   unavailable,
 } from "./contract";
 import type { ParsedFfmpegMetadata } from "./ffmpeg-metadata-types";
+import { snapshotFromProbe, type MediaProbePayload } from "./media-metadata";
 
 export interface MediaMetadataResult {
   video: VideoTelemetry;
@@ -180,4 +181,72 @@ export function snapshotFromMetadata(args: {
     },
     receiver: emptyReceiver(),
   };
+}
+
+/* ============================================================================
+ * Phase E.2B — bridge to MAKO's own server-side ffprobe observation of the
+ * local RTSP publication. The browser never talks to the caller API and never
+ * holds MAKO_API_TOKEN: it asks the authenticated `media-telemetry` Edge
+ * Function for one runtime route, by route id.
+ * ==========================================================================*/
+
+export type MediaProbeFailureCode =
+  | "unauthorized"
+  | "not_found"
+  | "telemetry_unavailable"
+  | "upstream_error";
+
+export type MediaProbeResult =
+  | { ok: true; payload: MediaProbePayload }
+  | { ok: false; code: MediaProbeFailureCode; reason?: string | null };
+
+/** Injected so tests never touch the network. */
+export type MediaProbeFetcher = (runtimeRouteId: string) => Promise<MediaProbeResult>;
+
+/**
+ * Only a not-yet-published RTSP output is worth retrying, and only a bounded
+ * number of times. There is no interval and no continuous polling anywhere.
+ */
+export const MEDIA_PROBE_RETRY_DELAYS_MS = [2_000, 4_000] as const;
+
+export class MediaTelemetryBridgeProvider implements TelemetryProvider {
+  constructor(private readonly fetchProbe: MediaProbeFetcher) {}
+
+  async getMediaMetadata(route: RouteIdentity): Promise<MediaMetadataResult> {
+    const empty: MediaMetadataResult = {
+      video: emptyVideo(),
+      audioSource: emptySourceAudio(),
+      audioOutput: emptyOutputAudio(),
+    };
+
+    let result: MediaProbeResult;
+    try {
+      result = await this.fetchProbe(route.runtimeRouteId);
+    } catch {
+      return { ...empty, failure: "upstream_error" };
+    }
+
+    if (!result.ok) return { ...empty, failure: result.code };
+
+    const snapshot = snapshotFromProbe({ identity: route, payload: result.payload });
+    return {
+      video: snapshot.video,
+      // Source audio stays unavailable: the RTSP publication carries MAKO's
+      // Opus output, which says nothing about the incoming AAC-LC audio.
+      audioSource: emptySourceAudio(),
+      audioOutput: snapshot.audioOutput,
+      observedAt: snapshot.observedAt,
+      source: "ffmpeg",
+      observationPoint: "rtsp_publication",
+      failure: null,
+    };
+  }
+
+  async getTransportTelemetry() {
+    return emptyTransport();
+  }
+
+  async getReceiverTelemetry() {
+    return emptyReceiver();
+  }
 }
