@@ -202,11 +202,9 @@ export function syncEndedSessionRemote(
   reason: "owner_ended" | "scheduled_end" = "owner_ended",
 ): void {
   void (async () => {
+    const outcome = await endSessionRemote(sessionId, reason);
+    if (outcome.ok) return;
     try {
-      const { data } = await supabase.auth.getUser();
-      if (!data?.user) return; // guest sessions are purely local
-      const released = await releaseSessionRemote(sessionId, reason);
-      if (released.ok) return;
       // Release unavailable: fall back to the status/attachment mirror so the
       // session at least reads as ended. Reconciliation handles the caller.
       const record = getSessionById(sessionId);
@@ -215,6 +213,37 @@ export function syncEndedSessionRemote(
       // Non-fatal: reconciliation happens on the next successful pass.
     }
   })();
+}
+
+export type EndSessionOutcome = {
+  /** True when the server accepted and completed the end lifecycle. */
+  ok: boolean;
+  /** Guest session — purely local, there is no server lifecycle to await. */
+  guest: boolean;
+  /**
+   * Callers whose upstream teardown could not be confirmed. Phase D retains
+   * them as tearing_down for reconciliation; the browser never resolves them.
+   */
+  retained: number;
+};
+
+/**
+ * Awaited form of the SAME Phase D explicit end action used above. This is the
+ * only teardown mechanism — `syncEndedSessionRemote` delegates to it. Callers
+ * that must gate local state on server confirmation await this directly.
+ */
+export async function endSessionRemote(
+  sessionId: string,
+  reason: "owner_ended" | "scheduled_end" = "owner_ended",
+): Promise<EndSessionOutcome> {
+  try {
+    const { data } = await supabase.auth.getUser();
+    if (!data?.user) return { ok: true, guest: true, retained: 0 };
+    const released = await releaseSessionRemote(sessionId, reason);
+    return { ok: released.ok, guest: false, retained: released.retained ?? 0 };
+  } catch {
+    return { ok: false, guest: false, retained: 0 };
+  }
 }
 
 /**
