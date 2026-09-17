@@ -219,14 +219,12 @@ export class MediaTelemetryBridgeProvider implements TelemetryProvider {
       audioOutput: emptyOutputAudio(),
     };
 
-    let result: MediaProbeResult;
-    try {
-      result = await this.fetchProbe(route.runtimeRouteId);
-    } catch {
-      return { ...empty, failure: "upstream_error" };
-    }
+    const result: MediaProbeResult | null = await this.fetchProbe(route.runtimeRouteId).catch(
+      () => null,
+    );
 
-    if (!result.ok) return { ...empty, failure: result.code };
+    if (!result) return { ...empty, failure: "upstream_error" };
+    if (result.ok !== true) return { ...empty, failure: result.code };
 
     const snapshot = snapshotFromProbe({ identity: route, payload: result.payload });
     return {
