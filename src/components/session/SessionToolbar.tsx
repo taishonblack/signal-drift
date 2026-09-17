@@ -46,6 +46,8 @@ interface SessionToolbarProps {
   onPopOutView: () => void;
   /** True when the layout popout window is already open. */
   isLayoutPoppedOut?: boolean;
+  /** Owner-only explicit End Session. Omitted for viewers. */
+  onEndSession?: () => void;
 }
 
 const SHORTCUTS = [
@@ -74,6 +76,7 @@ const SessionToolbar = ({
   configuredCount,
   onPopOutView,
   isLayoutPoppedOut = false,
+  onEndSession,
 }: SessionToolbarProps) => {
   const isMobile = useIsMobile();
 
