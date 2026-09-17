@@ -33,6 +33,12 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  // Scheduler-only. This endpoint can tear infrastructure down, so it accepts
+  // nothing but the service role credential — never a user JWT.
+  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!bearer || bearer !== serviceKey) return json({ error: "unauthorized" }, 401);
+
   const apiBase = Deno.env.get("MAKO_API_BASE_URL");
   const apiToken = Deno.env.get("MAKO_API_TOKEN");
   if (!apiBase || !apiToken) {
