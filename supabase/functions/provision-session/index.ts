@@ -57,6 +57,9 @@ const Body = z.object({
   session: SessionSchema,
   slots: z.array(SlotSchema).min(1).max(4),
   library_attachments: z.array(LibraryAttachmentSchema).max(4).optional(),
+  /** Phase D — the provisioning client's own instance id, so the session takes
+   *  its first presence lease the moment it becomes active. */
+  client_instance_id: z.string().uuid().optional(),
 });
 
 Deno.serve(async (req) => {
