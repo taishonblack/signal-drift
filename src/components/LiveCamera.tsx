@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { negotiateWhep, whepEndpointForStream, MISSING_WHEP_BASE_MESSAGE } from "@/lib/stream-paths";
+import {
+  clearReceivedStream,
+  publishReceivedStream,
+} from "@/lib/telemetry/browser-audio-registry";
 
 export type LiveCameraState =
   | "connecting"
