@@ -132,6 +132,10 @@ const PROVISION_MESSAGES: Record<string, string> = {
   endpoint_conflict:
     "This slot is already connected to a different address and port. End the session or use a new session to change it.",
   route_tearing_down: "This slot is still being released. Try again in a moment.",
+  // Phase D — privacy-safe by design: the operator learns the endpoint is busy,
+  // never who is using it.
+  endpoint_in_use:
+    "In use — this SRT listener is currently connected to another MAKO session.",
   route_tombstoned:
     "That connection was permanently removed. Start a new session to monitor this feed.",
   provisioning_failed: "MAKO could not connect to that SRT listener. Check the address and port.",
