@@ -431,6 +431,8 @@ export function inputsFromRecord(
           // playbackStreamName() is a no-op on it, so nothing is suffixed twice.
           streamName: attachment.playbackPath as string,
           slot,
+          // Canonical telemetry identity for caller-first routes.
+          runtimeRouteId: attachment.runtimeRouteId ?? undefined,
         } satisfies StreamInput;
       }
 
