@@ -25,11 +25,24 @@ import {
 } from "./contract";
 import type { ParsedFfmpegMetadata } from "./ffmpeg-metadata-types";
 
+export interface MediaMetadataResult {
+  video: VideoTelemetry;
+  audioSource: SourceAudioTelemetry;
+  audioOutput: OutputAudioTelemetry;
+  /** Set only for a genuine observation. */
+  observedAt?: string | null;
+  source?: MediaTelemetrySnapshot["source"];
+  observationPoint?: MediaTelemetrySnapshot["observationPoint"];
+  /**
+   * Typed, sanitized failure code when nothing could be observed. Never shown
+   * as a stream fault: a telemetry failure is not a signal failure.
+   */
+  failure?: MediaProbeFailureCode | null;
+}
+
 export interface TelemetryProvider {
   /** Genuine source format metadata, when the server has captured it. */
-  getMediaMetadata(
-    route: RouteIdentity,
-  ): Promise<{ video: VideoTelemetry; audioSource: SourceAudioTelemetry; audioOutput: OutputAudioTelemetry }>;
+  getMediaMetadata(route: RouteIdentity): Promise<MediaMetadataResult>;
   /** SRT transport statistics — not measured in E.2 (E.4). */
   getTransportTelemetry(route: RouteIdentity): Promise<TransportTelemetry>;
   /** Browser receive statistics — not measured in E.2. */
