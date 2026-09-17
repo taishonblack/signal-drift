@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 vi.mock("@/lib/identity", async () => {
@@ -28,6 +28,7 @@ vi.mock("@/hooks/useAuth", () => ({
 import CreateSession from "@/pages/CreateSession";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import SourcesRedirect from "@/pages/SourcesRedirect";
 
 describe("caller-only operator workflow", () => {
   it("shows the listener fields and Address Book without legacy source instructions", () => {
@@ -45,6 +46,12 @@ describe("caller-only operator workflow", () => {
     expect(screen.queryByText(/My Sources/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Stream ID/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/MAKO Receive/i)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("134.209.119.136"), {
+      target: { value: "174.166.29.128" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("8890"), { target: { value: "8000" } });
+    expect(screen.getByRole("button", { name: "Test Connection" })).toBeDisabled();
   });
 
   it("does not include Sources in desktop navigation", () => {
@@ -63,12 +70,12 @@ describe("caller-only operator workflow", () => {
     render(
       <MemoryRouter initialEntries={["/sources"]}>
         <Routes>
-          <Route path="/sources" element={<Routes><Route path="*" element={null} /></Routes>} />
+          <Route path="/sources" element={<SourcesRedirect />} />
           <Route path="/create" element={<div>Create destination</div>} />
         </Routes>
       </MemoryRouter>,
     );
 
-    expect(screen.queryByText("My Sources")).not.toBeInTheDocument();
+    expect(screen.getByText("Create destination")).toBeInTheDocument();
   });
 });

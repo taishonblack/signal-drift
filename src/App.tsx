@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Landing from "./pages/Landing";
 import Sessions from "./pages/Sessions";
 import CreateSession from "./pages/CreateSession";
@@ -20,6 +20,7 @@ import ExploreLanding from "./pages/explore/ExploreLanding";
 import ExploreCreate from "./pages/explore/ExploreCreate";
 import ExploreSession from "./pages/explore/ExploreSession";
 import ExploreOps from "./pages/explore/ExploreOps";
+import SourcesRedirect from "./pages/SourcesRedirect";
 
 const queryClient = new QueryClient();
 
@@ -55,7 +56,7 @@ const App = () => (
           <Route path="/create" element={<AppLayout><CreateSession /></AppLayout>} />
           <Route path="/session/:id/configure" element={<AppLayout><CreateSession /></AppLayout>} />
           <Route path="/session/:id" element={<AppLayout><SessionRoom /></AppLayout>} />
-          <Route path="/sources" element={<Navigate to="/create" replace />} />
+          <Route path="/sources" element={<SourcesRedirect />} />
           <Route path="/join" element={<AppLayout><JoinSession /></AppLayout>} />
           <Route path="/join/:sessionId" element={<AppLayout><JoinSession /></AppLayout>} />
           <Route path="/account" element={<AppLayout><AccountPage /></AppLayout>} />

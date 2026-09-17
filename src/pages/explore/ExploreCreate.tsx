@@ -185,7 +185,7 @@ export default function ExploreCreate() {
                   <AccordionItem value="advanced" className="border-border/20">
                     <AccordionTrigger className="text-xs">Advanced settings</AccordionTrigger>
                     <AccordionContent className="space-y-1 text-[11px] text-muted-foreground">
-                      <p>Latency: 800 ms · Passphrase: demo · Stream ID: {s.address.replace("demo://", "")}</p>
+                      <p>Latency: 800 ms · Passphrase: demo · Reconnect: automatic</p>
                       <p>Encryption: AES-128 (simulated) · Reconnect: automatic</p>
                     </AccordionContent>
                   </AccordionItem>
