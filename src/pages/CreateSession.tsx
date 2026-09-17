@@ -776,9 +776,16 @@ const CreateSession = () => {
                         <Plus className="h-3.5 w-3.5" /> Save Source
                       </Button>
                     </div>
-                    <p className="text-[10px] text-muted-foreground/50 -mt-2">
-                      MAKO will connect to this SRT listener.
-                    </p>
+                    {endpointBusy ? (
+                      <p className="text-[10px] text-[hsl(var(--warning))] -mt-2">
+                        In use — this SRT listener is currently connected to another MAKO
+                        session.
+                      </p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground/50 -mt-2">
+                        MAKO will connect to this SRT listener.
+                      </p>
+                    )}
                   </>
                 )}
 
