@@ -88,8 +88,9 @@ export async function checkEndpointAvailability(
       _port: port,
     });
     if (error) return { available: true, reason: "unknown" };
-    const row = (data ?? {}) as { available?: boolean };
-    return row.available === false
+    // The RPC returns a plain boolean and deliberately reveals nothing about
+    // the occupying session.
+    return data === false
       ? { available: false, reason: "in_use" }
       : { available: true, reason: "available" };
   } catch {
