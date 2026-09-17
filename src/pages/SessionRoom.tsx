@@ -14,6 +14,7 @@ import { useQuinnTimelineBridge } from "@/hooks/use-quinn-timeline-bridge";
 import EditInputModal from "@/components/session/EditInputModal";
 import QuinnPanel from "@/components/quinn/QuinnPanel";
 import ScheduledEndDialog from "@/components/session/ScheduledEndDialog";
+import EndSessionDialog from "@/components/session/EndSessionDialog";
 import ShareSessionDialog from "@/components/session/ShareSessionDialog";
 import SessionEndIndicator from "@/components/session/SessionEndIndicator";
 import { mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
@@ -897,6 +898,16 @@ const SessionRoom = () => {
           configuredCount={activeInputs.length}
           onPopOutView={openLayoutPopout}
           isLayoutPoppedOut={isLayoutPoppedOut}
+          onEndSession={isOwner && session.status !== "completed" ? openEndDialog : undefined}
+        />
+
+        <EndSessionDialog
+          open={endOpen}
+          sessionName={session.name}
+          ending={ending}
+          error={endError}
+          onCancel={cancelEndDialog}
+          onConfirm={confirmEndSession}
         />
 
 
