@@ -19,7 +19,7 @@ import SessionEndIndicator from "@/components/session/SessionEndIndicator";
 import { mockMarkers, type QCMarker, type StreamInput } from "@/lib/mock-data";
 import { inputsFromRecord, playbackStreamName, whepBase, whepUrlForStream } from "@/lib/stream-paths";
 import { useSessionAttachments } from "@/hooks/use-session-attachments";
-import { syncEndedSessionRemote } from "@/lib/sessions-remote";
+import { syncEndedSessionRemote, endSessionRemote } from "@/lib/sessions-remote";
 import {
   getSessionById,
   updateSession,
@@ -133,6 +133,10 @@ const SessionRoom = () => {
   const [ownerLeftOpen, setOwnerLeftOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  // Explicit End Session: the browser requests termination, the server owns it.
+  const [endOpen, setEndOpen] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const [endError, setEndError] = useState<string | null>(null);
 
 
   // Join on mount. Presence heartbeat continues via AppLayout's
