@@ -4,6 +4,18 @@ import {
   type MediaTelemetrySnapshot,
   type Observed,
 } from "@/lib/telemetry/contract";
+import {
+  hasAudioMeasurement,
+  isStereo,
+  type BrowserAudioChannelLevel,
+  type BrowserAudioLevelSnapshot,
+} from "@/lib/telemetry/browser-audio-contract";
+import {
+  dbfsToMeterFraction,
+  isEffectivelySilent,
+  METER_SCALE_TICKS,
+} from "@/lib/telemetry/browser-audio-levels";
+import { useBrowserAudioLevels } from "@/hooks/use-browser-audio-levels";
 
 interface InspectorPanelProps {
   input: StreamInput;
@@ -12,6 +24,11 @@ interface InspectorPanelProps {
   onSelect: (id: string) => void;
   /** Telemetry for the selected source, resolved by runtime route id. */
   telemetry?: MediaTelemetrySnapshot | null;
+  /**
+   * Phase E.3 browser audio measurement. Normally measured internally from the
+   * stream LiveCamera already received; injectable for tests.
+   */
+  audioLevel?: BrowserAudioLevelSnapshot | null;
 }
 
 /**
