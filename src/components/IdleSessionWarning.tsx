@@ -16,7 +16,7 @@ import {
   resumeSession,
   getSessionById,
 } from "@/lib/session-store";
-import { saveSessionRemote } from "@/lib/sessions-remote";
+import { syncEndedSessionRemote } from "@/lib/sessions-remote";
 import { useIdentity } from "@/lib/identity";
 import { toast } from "@/hooks/use-toast";
 
@@ -148,11 +148,11 @@ const IdleSessionWarning = () => {
     clearTimer();
     setShowIdle(false);
     endSession(sid, new Date().toISOString(), "owner_ended");
-    // Persist to remote so hydrate can't resurrect it.
+    // This button — and only this button — is an explicit End Session. Idleness
+    // alone never reaches here, and never tears infrastructure down.
     if (identity.kind === "member") {
       try {
-        const updated = getSessionById(sid);
-        if (updated) await saveSessionRemote(updated);
+        syncEndedSessionRemote(sid, "owner_ended");
       } catch {
         /* soft-fail: local end is authoritative for this tab */
       }
