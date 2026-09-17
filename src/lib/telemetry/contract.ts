@@ -18,6 +18,13 @@ export type TelemetrySource = "ffmpeg" | "srt" | "webrtc" | "mediamtx" | "mako_c
 /** Deliberately no "estimated": MAKO does not estimate engineering values. */
 export type TelemetryStatus = "observed" | "unavailable" | "stale" | "not_measured";
 
+/**
+ * WHERE an observation was taken. `ffmpeg_input` is what FFmpeg reported about
+ * the incoming SRT source; `rtsp_publication` is MAKO's own local RTSP output,
+ * i.e. AFTER FFmpeg — its audio describes MAKO's Opus output, never the source.
+ */
+export type TelemetryObservationPoint = "ffmpeg_input" | "rtsp_publication";
+
 export interface Observed<T> {
   value: T | null;
   observedAt: string | null;
@@ -114,6 +121,8 @@ export interface MediaTelemetrySnapshot {
 
   observedAt: string | null;
   source: TelemetrySource | null;
+  /** Where the observation was taken. Null when nothing was observed. */
+  observationPoint: TelemetryObservationPoint | null;
 
   video: VideoTelemetry;
   audioSource: SourceAudioTelemetry;
@@ -189,6 +198,7 @@ export function emptySnapshot(identity: RouteIdentity): MediaTelemetrySnapshot {
     playbackPath: identity.playbackPath ?? null,
     observedAt: null,
     source: null,
+    observationPoint: null,
     video: emptyVideo(),
     audioSource: emptySourceAudio(),
     audioOutput: emptyOutputAudio(),
