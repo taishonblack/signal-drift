@@ -38,7 +38,10 @@ export type ReserveResult =
       infrastructure_source_id?: string | null;
       playback_path?: string | null;
     }
-  | { status: "endpoint_conflict" | "route_tearing_down"; route_id?: string };
+  | {
+      status: "endpoint_conflict" | "route_tearing_down" | "endpoint_in_use";
+      route_id?: string;
+    };
 
 export type CallerSourceLike = {
   source_id: string;
