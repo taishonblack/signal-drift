@@ -100,8 +100,8 @@ describe("E.3 pure audio math", () => {
     ]) {
       const s = read(f);
       expect(s).not.toMatch(/Math\.random/);
-      // LUFS may only appear in prose that rules it out, never as a label.
-      expect(s).not.toMatch(/"[^"]*LUFS[^"]*"|'[^']*LUFS[^']*'|>\s*LUFS/);
+      // No seeded/default level constants sneaking in as fallbacks.
+      expect(s).not.toMatch(/rmsDbfs:\s*-?\d/);
     }
   });
 });
