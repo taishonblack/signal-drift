@@ -121,6 +121,8 @@ export interface MediaTelemetrySnapshot {
 
   observedAt: string | null;
   source: TelemetrySource | null;
+  /** Where the observation was taken. Null when nothing was observed. */
+  observationPoint: TelemetryObservationPoint | null;
 
   video: VideoTelemetry;
   audioSource: SourceAudioTelemetry;
