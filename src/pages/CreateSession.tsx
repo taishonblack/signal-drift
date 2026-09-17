@@ -175,6 +175,27 @@ const CreateSession = () => {
     setTested((prev) => ({ ...prev, [activeTab]: false }));
   }, [activeLine.srtAddress, activeTab]);
 
+  /**
+   * Phase D — advisory endpoint-occupancy hint. Deliberately says only that the
+   * listener is busy: never the other session's name, owner or identity. The
+   * real guarantee is server-side, so two operators cannot both win a race.
+   */
+  const [endpointBusy, setEndpointBusy] = useState(false);
+  useEffect(() => {
+    setEndpointBusy(false);
+    const portNum = Number(activePort);
+    if (!activeHost.trim() || !Number.isFinite(portNum) || portNum < 1 || portNum > 65535) return;
+    let cancelled = false;
+    const t = window.setTimeout(async () => {
+      const result = await checkEndpointAvailability(activeHost.trim(), portNum);
+      if (!cancelled) setEndpointBusy(result.reason === "in_use");
+    }, 500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [activeHost, activePort]);
+
   const setHostPort = (host: string, port: string) => {
     updateLine({ srtAddress: composeSrt(host, port) });
   };
