@@ -29,7 +29,7 @@ import {
   leaveSession,
 
   claimOwnership,
-  orphanSweep,
+  
   updateViewerFocus,
   getCurrentUserRef,
   canConfigureSession,
