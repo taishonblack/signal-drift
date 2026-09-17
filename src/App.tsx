@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Landing from "./pages/Landing";
 import Sessions from "./pages/Sessions";
-import Sources from "./pages/Sources";
 import CreateSession from "./pages/CreateSession";
 import SessionRoom from "./pages/SessionRoom";
 import JoinSession from "./pages/JoinSession";
@@ -21,6 +20,7 @@ import ExploreLanding from "./pages/explore/ExploreLanding";
 import ExploreCreate from "./pages/explore/ExploreCreate";
 import ExploreSession from "./pages/explore/ExploreSession";
 import ExploreOps from "./pages/explore/ExploreOps";
+import SourcesRedirect from "./pages/SourcesRedirect";
 
 const queryClient = new QueryClient();
 
@@ -56,7 +56,7 @@ const App = () => (
           <Route path="/create" element={<AppLayout><CreateSession /></AppLayout>} />
           <Route path="/session/:id/configure" element={<AppLayout><CreateSession /></AppLayout>} />
           <Route path="/session/:id" element={<AppLayout><SessionRoom /></AppLayout>} />
-          <Route path="/sources" element={<AppLayout><Sources /></AppLayout>} />
+          <Route path="/sources" element={<SourcesRedirect />} />
           <Route path="/join" element={<AppLayout><JoinSession /></AppLayout>} />
           <Route path="/join/:sessionId" element={<AppLayout><JoinSession /></AppLayout>} />
           <Route path="/account" element={<AppLayout><AccountPage /></AppLayout>} />
