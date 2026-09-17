@@ -126,6 +126,9 @@ const SessionRoom = () => {
     }),
     [record, id, activeInputs],
   );
+  // Media telemetry, keyed by runtime route id (never by slot).
+  const telemetry = useMediaTelemetry(session.id, activeInputs);
+
   // Derive scheduledEndAt directly from the record — single source of
   // truth. Do NOT keep a separate local copy that could drift on remount.
   const scheduledEndAt = record?.scheduledEndAt || null;
