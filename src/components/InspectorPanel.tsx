@@ -118,6 +118,9 @@ const InspectorPanel = ({
       <Section title="Transport" fields={transportFields} />
       <Section title="Audio" fields={audioFields} />
 
+      <BrowserAudioLevelSection levels={levels} />
+
+
       <div>
         <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">History</div>
         <div className="text-[10px] text-muted-foreground/60">No telemetry history available.</div>
