@@ -319,6 +319,22 @@ const CreateSession = () => {
           port: Number(port),
         };
       });
+    // A caller-backed slot needs a real backend identity. A signed-out operator
+    // gets an anonymous one HERE — at Start Monitoring, never on page load —
+    // and then follows exactly the same provisioning path as a member.
+    let owner = currentUser;
+    if (runtimeSlots.length > 0) {
+      setStarting(true);
+      const backend = await ensureBackendIdentity();
+      if (!backend.ok) {
+        setStarting(false);
+        toast("MAKO couldn't start a temporary session.", {
+          description: "Check your connection and try again.",
+        });
+        return;
+      }
+      owner = getCurrentUserRef();
+    }
     const createdAtIso = new Date().toISOString();
     // Authoritative scheduled_end_at: for preset durations, rebase to
     // (session_started_at + duration) so slow configuration doesn't eat
