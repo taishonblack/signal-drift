@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import SignalTile from "@/components/SignalTile";
 import { getSessionById, parseSrtInput } from "@/lib/session-store";
 import { inputsFromRecord } from "@/lib/stream-paths";
-import { useLiveMetrics } from "@/hooks/use-live-metrics";
 import { useSessionAttachments } from "@/hooks/use-session-attachments";
 import { loadTimePrefs } from "@/lib/time-utils";
 import { loadSlotMap, type SlotId, type SlotMap } from "@/lib/slot-map";
@@ -44,7 +43,6 @@ const LayoutPopoutPage = () => {
     [record, sessionId, withAttachments],
   );
   const activeInputs = session.inputs;
-  const { getMetrics } = useLiveMetrics(session.inputs);
   const { prefs, ready: prefsReady } = useWorkspacePrefs();
 
   // Query-string driven ephemeral state (initial values only; user can
@@ -105,7 +103,6 @@ const LayoutPopoutPage = () => {
     return (
       <SignalTile
         input={input}
-        liveMetrics={getMetrics(input.id)}
         isFocused={focusedId === input.id}
         onFocusClick={() => selectPane(input.id)}
         isAudioSource={audioId === input.id}
@@ -190,7 +187,6 @@ const LayoutPopoutPage = () => {
           <div className={`h-full grid ${grid.cls} gap-3`} style={grid.style}>
             <SignalTile
               input={focusedInput}
-              liveMetrics={getMetrics(focusedInput.id)}
               isFocused
               isAudioSource={audioId === focusedInput.id}
               muteAll={muteAll}

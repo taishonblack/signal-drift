@@ -3,13 +3,11 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import SignalTile from "@/components/SignalTile";
 import type { StreamInput } from "@/lib/mock-data";
-import type { LiveMetrics } from "@/hooks/use-live-metrics";
 import type { TimeDisplayPrefs } from "@/lib/time-utils";
 
 interface DraggableSignalTileProps {
   slotId: string;
   input: StreamInput;
-  liveMetrics?: LiveMetrics;
   isFocused?: boolean;
   isAudioSource?: boolean;
   muteAll?: boolean;

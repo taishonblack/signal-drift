@@ -83,12 +83,7 @@ export function generateSessionReportPDF(session: Session): void {
     y += 4.5;
     doc.setFont("helvetica", "normal");
     doc.setTextColor(50, 50, 50);
-    const m = input.metrics;
-    doc.text(`Codec: ${m.codec} · Resolution: ${m.resolution} · FPS: ${m.fps}`, margin + 3, y);
-    y += 4;
-    doc.text(`Bitrate: ${m.bitrate} Mbps · Packet Loss: ${m.packetLoss}% · RTT: ${m.rtt}ms`, margin + 3, y);
-    y += 4;
-    doc.text(`Audio: ${m.audioChannels}ch @ ${m.audioSampleRate}Hz · LUFS: ${m.lufs}`, margin + 3, y);
+    doc.text("Signal telemetry: not measured", margin + 3, y);
     y += 6;
   });
 
