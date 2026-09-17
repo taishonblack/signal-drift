@@ -34,10 +34,11 @@ Deno.serve(async (req) => {
 
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  // Scheduler-only. This endpoint can tear infrastructure down, so it accepts
-  // nothing but the service role credential — never a user JWT.
-  const bearer = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!bearer || bearer !== serviceKey) return json({ error: "unauthorized" }, 401);
+  // Scheduler-only. This endpoint can tear infrastructure down, so it accepts a
+  // single dedicated scheduler token and never a user JWT.
+  const cronSecret = Deno.env.get("LIFECYCLE_CRON_SECRET");
+  const presented = req.headers.get("x-lifecycle-cron-secret") ?? "";
+  if (!cronSecret || presented !== cronSecret) return json({ error: "unauthorized" }, 401);
 
   const apiBase = Deno.env.get("MAKO_API_BASE_URL");
   const apiToken = Deno.env.get("MAKO_API_TOKEN");
