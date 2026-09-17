@@ -39,8 +39,17 @@ interface InspectorPanelProps {
  * caption. Transport carries no measurements in this phase, and MAKO's own
  * output audio is shown separately from the source's audio.
  */
-const InspectorPanel = ({ input, inputs, selectedId, onSelect, telemetry }: InspectorPanelProps) => {
+const InspectorPanel = ({
+  input,
+  inputs,
+  selectedId,
+  onSelect,
+  telemetry,
+  audioLevel,
+}: InspectorPanelProps) => {
   const t = telemetry ?? null;
+  const measured = useBrowserAudioLevels(input?.streamName ?? null);
+  const levels = audioLevel !== undefined ? audioLevel : measured;
 
   const resolution =
     t && hasValue(t.video.width) && hasValue(t.video.height)
