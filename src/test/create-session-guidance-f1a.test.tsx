@@ -86,7 +86,7 @@ describe("Phase F.1A Create Session guidance", () => {
 
     openGuidance("About the SRT address");
     const addressBody = await screen.findByText(/MAKO operates as the SRT Caller/i);
-    expect(addressBody).toHaveTextContent(/private LAN addresses/i);
+    expect(addressBody).toHaveTextContent(/private LAN address/i);
     expect(addressBody).toHaveTextContent(/does not prove reachability/i);
     await closeGuidance();
 
