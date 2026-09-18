@@ -576,6 +576,142 @@ export type Database = {
           },
         ]
       }
+      signal_incident_evidence: {
+        Row: {
+          captured_at: string
+          created_at: string
+          id: string
+          incident_id: string
+          observation_point: string
+          payload: Json
+          phase: string
+          still_image_path: string | null
+        }
+        Insert: {
+          captured_at: string
+          created_at?: string
+          id?: string
+          incident_id: string
+          observation_point: string
+          payload: Json
+          phase: string
+          still_image_path?: string | null
+        }
+        Update: {
+          captured_at?: string
+          created_at?: string
+          id?: string
+          incident_id?: string
+          observation_point?: string
+          payload?: Json
+          phase?: string
+          still_image_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_incident_evidence_incident_id_fkey"
+            columns: ["incident_id"]
+            isOneToOne: false
+            referencedRelation: "signal_incidents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signal_incidents: {
+        Row: {
+          acked_at: string | null
+          acked_by: string | null
+          assigned_to: string | null
+          corroboration_count: number
+          created_at: string
+          detected_at: string
+          detector_id: string
+          detector_version: string
+          duration_ms: number | null
+          id: string
+          incident_type: string
+          observation_point: string
+          observed_ended_at: string | null
+          observed_started_at: string
+          recovery_note: string | null
+          resolution_note: string | null
+          runtime_route_id: string | null
+          server_persisted_at: string
+          server_received_at: string
+          session_id: string
+          slot: number | null
+          source_name: string
+          state: string
+          threshold: Json
+          updated_at: string
+          workflow_status: string
+        }
+        Insert: {
+          acked_at?: string | null
+          acked_by?: string | null
+          assigned_to?: string | null
+          corroboration_count?: number
+          created_at?: string
+          detected_at: string
+          detector_id: string
+          detector_version: string
+          duration_ms?: number | null
+          id?: string
+          incident_type: string
+          observation_point: string
+          observed_ended_at?: string | null
+          observed_started_at: string
+          recovery_note?: string | null
+          resolution_note?: string | null
+          runtime_route_id?: string | null
+          server_persisted_at?: string
+          server_received_at?: string
+          session_id: string
+          slot?: number | null
+          source_name: string
+          state?: string
+          threshold?: Json
+          updated_at?: string
+          workflow_status?: string
+        }
+        Update: {
+          acked_at?: string | null
+          acked_by?: string | null
+          assigned_to?: string | null
+          corroboration_count?: number
+          created_at?: string
+          detected_at?: string
+          detector_id?: string
+          detector_version?: string
+          duration_ms?: number | null
+          id?: string
+          incident_type?: string
+          observation_point?: string
+          observed_ended_at?: string | null
+          observed_started_at?: string
+          recovery_note?: string | null
+          resolution_note?: string | null
+          runtime_route_id?: string | null
+          server_persisted_at?: string
+          server_received_at?: string
+          session_id?: string
+          slot?: number | null
+          source_name?: string
+          state?: string
+          threshold?: Json
+          updated_at?: string
+          workflow_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signal_incidents_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ui_preferences: {
         Row: {
           created_at: string
@@ -673,6 +809,15 @@ export type Database = {
         Args: { _error: string; _owner: string; _route_id: string }
         Returns: Json
       }
+      recover_signal_incident: {
+        Args: {
+          _evidence?: Json
+          _incident_id: string
+          _observed_ended_at: string
+          _recovery_note?: string
+        }
+        Returns: Json
+      }
       renew_session_lease: {
         Args: {
           _client_instance_id: string
@@ -708,6 +853,24 @@ export type Database = {
           owner_id: string
           session_id: string
         }[]
+      }
+      signal_incident_correlation_window: { Args: never; Returns: string }
+      submit_signal_incident: {
+        Args: {
+          _detected_at: string
+          _detector_id: string
+          _detector_version: string
+          _evidence?: Json
+          _incident_type: string
+          _observation_point: string
+          _observed_started_at: string
+          _runtime_route_id: string
+          _session_id: string
+          _slot: number
+          _source_name: string
+          _threshold: Json
+        }
+        Returns: Json
       }
       transfer_session_ownership: {
         Args: { _from: string; _session_id: string; _to: string }
