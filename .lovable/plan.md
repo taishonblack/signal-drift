@@ -71,7 +71,7 @@ Not currently defensible. Browser pixels cannot distinguish compression artifact
 
 ## 11. Timestamps
 
-Persist server-authoritative UTC (`now()` at write time) as the record's canonical time. Detectors also record browser-observed `performance.now()`-derived start/end offsets, and the client sends a clock offset so server time can be reconciled. Precision claim: tens of milliseconds for audio, sampling-interval bounded (~250–500 ms) for video detectors. Explicitly not frame-accurate. UI shows UTC plus operator-local time.
+Persist server-authoritative UTC (`now()` at write time) as the record's canonical persistence time — but server write time is NOT the incident time. Detection happens in the browser and may be submitted only after the sustained threshold is met, so the record keeps both, each with provenance: `observed_started_at` / `observed_ended_at` (browser-measured wall-clock UTC, anchored with `performance.now()` and a client/server clock offset), and `server_received_at` / `server_persisted_at` (server UTC). A 1.2-second black incident therefore shows its true observed start, not a submission-delayed one. Precision claim: tens of milliseconds for audio, sampling-interval bounded (~250–500 ms) for video detectors. Explicitly not frame-accurate. UI shows UTC plus operator-local time.
 
 ## 12. Persistence lifecycle
 
@@ -91,13 +91,14 @@ Quinn reads persisted incidents and evidence only, and may summarize, correlate,
 
 ## 16. Sequence
 
-- E.5A: incident + evidence tables, RLS/GRANTs, typed contracts, no detectors.
-- E.5B: audio silence detector (E.3) end to end, first real incident.
+- E.5-Truth (this build, first): remove all synthetic Quinn incident/event/alert seed data and fabrication paths from `quinn-store.ts`; IncidentList/DetailDrawer kept and repointable; honest empty state "No signal incidents observed."; incident PDFs / session reports produce truthful zero-incident output; Quinn receives empty incident data, not mock events; any demo data stays isolated in `/explore` and clearly labelled. New truth-cleanup tests proving zero synthetic incidents, no fabricated packet loss/bitrate/freeze values, honest empty state, and demo isolation. Full suite + TypeScript. No publish, deploy, or schema change.
+- E.5A: incident + evidence tables (with dedupe identity, dual observed/server timestamps, no detector severity), RLS/GRANTs, typed contracts, no detectors.
+- E.5B: audio silence detector (E.3) end to end, first real incident (proves the full lifecycle before video analysis).
 - E.5C: black video detector + frame sampler.
 - E.5D: freeze detector + false-positive safeguards + per-source exemption.
 - E.5E: E.2 re-observation + format-change detector.
 - E.5F: workflow (ack, notes, assign, resolve) + Timeline cross-reference.
-- E.5G: export/report, retire `quinn-store` mock incidents.
+- E.5G: export/report against real incidents.
 - E.5H: Quinn consumption, read-only.
 - Deferred: corruption detection, evidence clips, E.4 transport.
 
