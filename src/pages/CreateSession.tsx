@@ -38,6 +38,7 @@ import {
 import { useEndpointReservation } from "@/hooks/use-endpoint-availability";
 import ConfigurationStatus from "@/components/session/ConfigurationStatus";
 import SignalDiagnosticCard from "@/components/diagnostics/SignalDiagnosticCard";
+import FieldGuidance from "@/components/session/FieldGuidance";
 import {
   endpointSyntaxValid,
   validateAddress,
@@ -159,6 +160,7 @@ const CreateSession = () => {
   const [lines, setLines] = useState<SrtLine[]>(() => seedLines());
   const [activeTab, setActiveTab] = useState(1);
   const [advancedOpen, setAdvancedOpen] = useState<Record<number, boolean>>({});
+  const [guidanceOpen, setGuidanceOpen] = useState<string | null>(null);
   const [tested, setTested] = useState<Record<number, boolean>>({});
   const [testResult, setTestResult] = useState<
     Record<number, { state: "testing" | "available" | "no_publisher" | "misconfigured" | "failed"; detail?: string }>
@@ -574,6 +576,14 @@ const CreateSession = () => {
   const activeAdvancedOpen = !!advancedOpen[activeTab] || !!activeLine.passphrase;
   const activeTestState = testResult[activeTab]?.state;
   const activeIsTested = !!tested[activeTab] && isConfigured(activeLine) && activeLine.enabled;
+  const guidance = (key: string, title: string, body: string) => (
+    <FieldGuidance
+      title={title}
+      body={body}
+      open={guidanceOpen === key}
+      onOpenChange={(open) => setGuidanceOpen(open ? key : null)}
+    />
+  );
 
   const pageTitle =
     mode === "create"
@@ -655,31 +665,36 @@ const CreateSession = () => {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                Name <span className="normal-case tracking-normal font-normal">(optional)</span>
-              </label>
+              <div className="flex items-center gap-1">
+                <label htmlFor="session-name" className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                  Name <span className="normal-case tracking-normal font-normal">(optional)</span>
+                </label>
+                {guidance("name", "About session names", "Use a name that helps you and other operators recognize this monitoring session. Signed-in operators can return to saved sessions from Recent Sessions. If the name is left blank, MAKO creates a session name from the first configured source.")}
+              </div>
               <Input
+                id="session-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Super Bowl LIX — Main Feed Review"
                 className="bg-muted/20 border-border/20 text-foreground placeholder:text-muted-foreground/40"
               />
-              <p className="text-[10px] text-muted-foreground/60">
-                If left blank, MAKO names it after the first source.
-              </p>
+              <p className="text-[10px] text-muted-foreground/60">Give this monitoring session a recognizable name.</p>
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                Purpose
-              </label>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Purpose</span>
+                {guidance("purpose", "About session purpose", "Purpose provides operational context for the monitoring session — for example QC, troubleshooting, replay review, or engineering work. It helps operators understand why the session was created. Purpose does not change the incoming signal, SRT connection, or media processing.")}
+              </div>
               <PurposeSelect value={purpose} onChange={setPurpose} />
+              <p className="text-[10px] text-muted-foreground/60">Describe how this session will be used.</p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                Default Event Time Zone
-              </label>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Default Event Time Zone</span>
+                {guidance("timezone", "About event time", "MAKO records event timestamps using UTC as the consistent underlying time reference. This setting controls how those timestamps are displayed to operators during the session. Choose the time zone that best matches the production, venue, control room, or team you are working with. Changing the display time zone does not change the underlying recorded event time.")}
+              </div>
               <Select value={defaultOriginTimeZone} onValueChange={setDefaultOriginTimeZone}>
                 <SelectTrigger className="bg-muted/20 border-border/20 text-foreground">
                   <SelectValue />
@@ -691,14 +706,15 @@ const CreateSession = () => {
                 </SelectContent>
               </Select>
               <p className="text-[10px] text-muted-foreground/60">
-                Master clock — every timestamp, note, and marker references this.
+                Controls how event timestamps are displayed.
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                Session Duration
-              </label>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Session Duration</span>
+                {guidance("duration", "About session duration", "Choose how long this monitoring workspace should remain active. MAKO uses this setting to determine the planned session end time. Session duration does not change the incoming SRT signal or media encoding.")}
+              </div>
               <DurationPicker
                 value={scheduledEndAt}
                 onChange={(iso, mins) => {
@@ -706,7 +722,7 @@ const CreateSession = () => {
                   setPresetMinutes(mins);
                 }}
               />
-
+              <p className="text-[10px] text-muted-foreground/60">Sets the planned duration of this monitoring session.</p>
             </div>
           </div>
         </div>
@@ -716,7 +732,7 @@ const CreateSession = () => {
           <SectionHeader
             eyebrow="Feeds"
             title="Sources"
-            hint="Tell MAKO where each feed lives — it discovers codec, resolution, bitrate, and latency automatically."
+            hint="Tell MAKO where to connect to each feed. Signal details that MAKO can directly observe will appear automatically once monitoring begins."
           />
 
           {/* Tabs */}
@@ -808,22 +824,26 @@ const CreateSession = () => {
                 )}
               </div>
             </div>
+            <p className="text-[10px] text-muted-foreground/60">Address Book: Reuse previously saved endpoint information.</p>
 
             {activeLine.enabled && (
               <>
                 {/* Friendly Name */}
                 <div className="space-y-1">
-                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Friendly Name
-                  </label>
+                  <div className="flex items-center gap-1">
+                    <label htmlFor={`source-name-${activeTab}`} className="text-[10px] uppercase tracking-wider text-muted-foreground">Friendly Name</label>
+                    {guidance("friendly-name", "About source names", "This is the human-readable name for the feed. Use the terminology your engineering or production team already uses, such as Program, Clean Feed, Truck A, Camera ISO, or Venue Return. MAKO uses this label throughout the Session Room and related diagnostics and collaboration workflows. The friendly name does not affect the SRT connection.")}
+                  </div>
                   <Input
+                    id={`source-name-${activeTab}`}
                     value={/^Line \d+$/.test(activeLine.label) ? "" : activeLine.label}
                     onChange={(e) =>
                       updateLine({ label: e.target.value || `Line ${activeTab}` })
                     }
-                    placeholder="e.g. NBC Program, Truck A, Camera ISO"
+                    placeholder="e.g. Program Feed, Truck A, Camera ISO"
                     className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40"
                   />
+                  <p className="text-[10px] text-muted-foreground/60">Name this source the way your engineering team identifies it.</p>
                 </div>
 
                 {/* Existing legacy attachments remain loadable but are not
@@ -832,27 +852,33 @@ const CreateSession = () => {
                   <>
                     <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] items-end">
                       <div className="space-y-1 min-w-0">
-                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                          SRT Address / IP
-                        </label>
+                        <div className="flex items-center gap-1">
+                          <label htmlFor={`srt-address-${activeTab}`} className="text-[10px] uppercase tracking-wider text-muted-foreground">SRT Address / IP</label>
+                          {guidance("address", "About the SRT address", "MAKO operates as the SRT Caller. Enter the IP address or hostname that MAKO can use to reach the remote SRT Listener. For equipment behind a router or firewall, this will normally be the externally reachable address supplied by the remote engineering team — not the device's private LAN address such as 10.x.x.x or 192.168.x.x. The remote network may need NAT or port-forwarding configured so traffic reaches the intended SRT device. Configuration validation does not prove that the remote listener is reachable.")}
+                        </div>
                         <Input
+                          id={`srt-address-${activeTab}`}
                           value={activeHost}
                           onChange={(e) => handleHostChange(e.target.value)}
                           placeholder="134.209.119.136"
                           className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
                         />
+                        <p className="text-[10px] text-muted-foreground/60">The public address or hostname of the remote SRT Listener MAKO should call.</p>
                       </div>
                       <div className="space-y-1 sm:w-28">
-                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                          Port
-                        </label>
+                        <div className="flex items-center gap-1">
+                          <label htmlFor={`srt-port-${activeTab}`} className="text-[10px] uppercase tracking-wider text-muted-foreground">Port</label>
+                          {guidance("port", "About the SRT port", "Enter the UDP port assigned to the remote SRT Listener. The address and port together identify the endpoint MAKO will attempt to call when monitoring starts. If the remote device is behind NAT or a firewall, the remote engineering team may need to confirm that this UDP port is routed to the correct device.")}
+                        </div>
                         <Input
+                          id={`srt-port-${activeTab}`}
                           value={activePort}
                           onChange={(e) => handlePortChange(e.target.value)}
                           placeholder="8890"
                           inputMode="numeric"
                           className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
                         />
+                        <p className="text-[10px] text-muted-foreground/60">The UDP port configured for the remote SRT Listener.</p>
                       </div>
                       <Button
                         variant="outline"
@@ -864,11 +890,11 @@ const CreateSession = () => {
                       >
                         <Plus className="h-3.5 w-3.5" /> Save Source
                       </Button>
+                      <p className="text-[10px] text-muted-foreground/60 sm:col-start-3">Save this source configuration for future sessions.</p>
                     </div>
                     {endpointBusy ? (
                       <p className="text-[10px] text-[hsl(var(--warning))] -mt-2">
-                        In use — this SRT listener is currently connected to another MAKO
-                        session.
+                        In use — this endpoint is reserved by another MAKO session.
                       </p>
                     ) : (
                       <p className="text-[10px] text-muted-foreground/50 -mt-2">
@@ -921,6 +947,9 @@ const CreateSession = () => {
                     )}
                     Advanced
                   </button>
+                  <p className="mt-1 text-[10px] text-muted-foreground/60">
+                    Optional connection settings for workflows that require them. Most sessions should use the defaults.
+                  </p>
                   {activeAdvancedOpen && (
                     <div className="mt-3 space-y-1">
                       <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -959,6 +988,11 @@ const CreateSession = () => {
                           ? "Re-test Connection"
                           : "Test Connection"}
                   </Button>
+                  {callerBacked(activeLine) && (
+                    <p className="text-[10px] text-muted-foreground/60">
+                      Checks address format, port and MAKO session reservation. Network reachability is not tested.
+                    </p>
+                  )}
 
                   {configDiagnostic[activeTab] && callerBacked(activeLine) && (
                     <SignalDiagnosticCard diagnostic={configDiagnostic[activeTab]} />
@@ -1050,6 +1084,11 @@ const CreateSession = () => {
               <Eraser className="h-4 w-4" /> Clear Source
             </Button>
           </div>
+          {(mode === "create" || !isActiveConfigure) && (
+            <p className="text-[10px] leading-relaxed text-muted-foreground/60">
+              When you start monitoring, MAKO creates the runtime route for this source and attempts to call the configured SRT Listener. Signal information and diagnostics become available as MAKO begins observing the resulting media path. A valid configuration does not guarantee that the remote SRT Listener is reachable.
+            </p>
+          )}
         </div>
 
         <p className="text-[10px] text-muted-foreground/50 text-center">

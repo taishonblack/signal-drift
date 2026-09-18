@@ -172,6 +172,9 @@ const AddressBookModal = ({ onSelect }: Props) => {
           <p className="text-xs text-muted-foreground">
             Sign in to save SRT addresses privately to your account. Only you will be able to see them.
           </p>
+          <p className="text-[11px] text-muted-foreground">
+            Address Book is optional. You can enter endpoint information directly without saving it.
+          </p>
           <Button asChild size="sm" className="mt-2 w-full" onClick={() => setOpen(false)}>
             <Link to="/account">Sign In</Link>
           </Button>
@@ -191,6 +194,9 @@ const AddressBookModal = ({ onSelect }: Props) => {
         <DialogHeader>
           <DialogTitle className="text-foreground text-sm">Address Book</DialogTitle>
         </DialogHeader>
+        <p className="text-[11px] text-muted-foreground">
+          Reuse previously saved endpoint information. Saving a source is optional.
+        </p>
 
         <div className="flex gap-2">
           <div className="relative flex-1">
