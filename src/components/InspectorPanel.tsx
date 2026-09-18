@@ -64,10 +64,32 @@ const InspectorPanel = ({
   onSelect,
   telemetry,
   audioLevel,
+  playbackState,
+  onConfigureSource,
 }: InspectorPanelProps) => {
   const t = telemetry ?? null;
   const measured = useBrowserAudioLevels(input?.streamName ?? null);
   const levels = audioLevel !== undefined ? audioLevel : measured;
+
+  // Phase F.1 — passive read of the state LiveCamera already observed.
+  const [registryState, setRegistryState] = useState<LiveCameraState | null>(null);
+  const streamName = input?.streamName ?? null;
+  useEffect(() => {
+    if (!streamName) {
+      setRegistryState(null);
+      return;
+    }
+    return subscribePlaybackState(streamName, setRegistryState);
+  }, [streamName]);
+
+  const observedPlayback = playbackState !== undefined ? playbackState : registryState;
+  const routeCreated = Boolean(input?.runtimeRouteId);
+  const diagnostic = buildPlaybackDiagnostic({
+    observation: observationFromPlaybackState(observedPlayback),
+    routeCreated,
+    endpoint: input?.srtAddress || null,
+    sourceLabel: input?.label ?? null,
+  });
 
   const resolution =
     t && hasValue(t.video.width) && hasValue(t.video.height)
