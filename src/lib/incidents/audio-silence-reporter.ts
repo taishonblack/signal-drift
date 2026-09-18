@@ -182,15 +182,15 @@ export class AudioSilenceReporter {
     task.attempts += 1;
     this.submitCalls += 1;
 
-    let result: IncidentSubmissionResult;
-    try {
-      result = await this.deps.submit(this.submission(task));
-    } catch (e) {
-      result = { ok: false, error: e instanceof Error ? e.message : "submit_failed" };
-    }
+    const result: IncidentSubmissionResult = await this.deps
+      .submit(this.submission(task))
+      .catch((e: unknown) => ({
+        ok: false as const,
+        error: e instanceof Error ? e.message : "submit_failed",
+      }));
     if (this.disposed) return;
 
-    if (result.ok) {
+    if (result.ok === true) {
       task.state = "persisted";
       this.incidentId = result.incidentId;
       // A recovery observed while the open write was in flight runs now.
