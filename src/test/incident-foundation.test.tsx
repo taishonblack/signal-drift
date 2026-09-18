@@ -18,7 +18,10 @@ const select = vi.fn(() => ({ eq }));
 const from = vi.fn(() => ({ select }));
 
 vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { rpc: (...a: unknown[]) => rpc(...a), from: (...a: unknown[]) => from(...a) },
+  supabase: {
+    rpc: (fn: string, args: Record<string, unknown>) => rpc(fn, args),
+    from: (table: string) => from(table),
+  },
 }));
 
 const {
