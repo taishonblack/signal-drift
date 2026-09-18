@@ -24,7 +24,9 @@ LiveCamera WHEP negotiation/reconnect logic (read-only additions only via the re
 
 Timeline entries cannot carry detector version, thresholds, start/end/duration, evidence snapshots or investigation state without abusing `metadata`. Recommend two new tables (created in a later phase, not now):
 
-- `signal_incidents` — id, session_id, runtime_route_id, slot, source_name, incident_type, detector_id, detector_version, threshold jsonb, observation_point, severity, state (`open|recovered`), workflow_status (`new|acknowledged|investigating|resolved`), detected_at, started_at, ended_at, duration_ms, recovery_note, acked_by/at, assigned_to, resolution_note, created_at.
+- `signal_incidents` — id, session_id, runtime_route_id, slot, source_name, incident_type, detector_id, detector_version, threshold jsonb, observation_point, state (`open|recovered`), workflow_status (`new|acknowledged|investigating|resolved`), observed_started_at / observed_ended_at (browser-measured), detected_at, server_received_at / server_persisted_at, duration_ms, recovery_note, acked_by/at, assigned_to, resolution_note, created_at.
+- No detector-chosen severity. Detectors record objective classification and duration only; severity becomes workflow/configuration logic in a later phase, never inferred inside the detector.
+- Deduplication identity: `(session_id, runtime_route_id, incident_type, observed_started_at window)`. The first detector client to satisfy the threshold establishes the incident via an idempotent server write (e.g. an upsert keyed on that identity); other engineers' clients corroborate the same incident (corroboration count) rather than creating duplicates.
 - `signal_incident_evidence` — id, incident_id, phase (`pre|event|post`), captured_at, observation_point, payload jsonb (telemetry snapshot only), optional still_image_path.
 
 One Timeline entry is written per incident as a cross-reference so engineers see incidents in the collaboration stream; the incident row stays the source of truth. Types: `black_video`, `frozen_video`, `audio_silence`, `signal_loss`, `format_change`. `video_corruption` deferred.
@@ -69,7 +71,7 @@ Not currently defensible. Browser pixels cannot distinguish compression artifact
 
 ## 11. Timestamps
 
-Persist server-authoritative UTC (`now()` at write time) as the record's canonical time. Detectors also record browser-observed `performance.now()`-derived start/end offsets, and the client sends a clock offset so server time can be reconciled. Precision claim: tens of milliseconds for audio, sampling-interval bounded (~250–500 ms) for video detectors. Explicitly not frame-accurate. UI shows UTC plus operator-local time.
+Persist server-authoritative UTC (`now()` at write time) as the record's canonical persistence time — but server write time is NOT the incident time. Detection happens in the browser and may be submitted only after the sustained threshold is met, so the record keeps both, each with provenance: `observed_started_at` / `observed_ended_at` (browser-measured wall-clock UTC, anchored with `performance.now()` and a client/server clock offset), and `server_received_at` / `server_persisted_at` (server UTC). A 1.2-second black incident therefore shows its true observed start, not a submission-delayed one. Precision claim: tens of milliseconds for audio, sampling-interval bounded (~250–500 ms) for video detectors. Explicitly not frame-accurate. UI shows UTC plus operator-local time.
 
 ## 12. Persistence lifecycle
 
@@ -89,13 +91,14 @@ Quinn reads persisted incidents and evidence only, and may summarize, correlate,
 
 ## 16. Sequence
 
-- E.5A: incident + evidence tables, RLS/GRANTs, typed contracts, no detectors.
-- E.5B: audio silence detector (E.3) end to end, first real incident.
+- E.5-Truth (this build, first): remove all synthetic Quinn incident/event/alert seed data and fabrication paths from `quinn-store.ts`; IncidentList/DetailDrawer kept and repointable; honest empty state "No signal incidents observed."; incident PDFs / session reports produce truthful zero-incident output; Quinn receives empty incident data, not mock events; any demo data stays isolated in `/explore` and clearly labelled. New truth-cleanup tests proving zero synthetic incidents, no fabricated packet loss/bitrate/freeze values, honest empty state, and demo isolation. Full suite + TypeScript. No publish, deploy, or schema change.
+- E.5A: incident + evidence tables (with dedupe identity, dual observed/server timestamps, no detector severity), RLS/GRANTs, typed contracts, no detectors.
+- E.5B: audio silence detector (E.3) end to end, first real incident (proves the full lifecycle before video analysis).
 - E.5C: black video detector + frame sampler.
 - E.5D: freeze detector + false-positive safeguards + per-source exemption.
 - E.5E: E.2 re-observation + format-change detector.
 - E.5F: workflow (ack, notes, assign, resolve) + Timeline cross-reference.
-- E.5G: export/report, retire `quinn-store` mock incidents.
+- E.5G: export/report against real incidents.
 - E.5H: Quinn consumption, read-only.
 - Deferred: corruption detection, evidence clips, E.4 transport.
 
