@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { checkEndpointAvailability } from "@/lib/session-lease";
+import type { ReservationState } from "@/lib/diagnostics/signal-diagnostic";
 
 /**
  * Configuration-UX cadence, not telemetry: the server-authoritative endpoint
@@ -32,8 +33,9 @@ export function isValidEndpoint(host: string, port: string): boolean {
  *   each in-flight check captures the current request id and endpoint, and
  *   its result is applied only if both still match.
  */
-export function useEndpointAvailability(host: string, port: string): boolean {
-  const [busy, setBusy] = useState(false);
+export function useEndpointReservation(host: string, port: string): ReservationState {
+  const [state, setState] = useState<ReservationState>("not_checked");
+  const setBusy = (busy: boolean) => setState(busy ? "in_use" : "available");
   const requestSeq = useRef(0);
   const endpointRef = useRef({ host, port });
   endpointRef.current = { host, port };
