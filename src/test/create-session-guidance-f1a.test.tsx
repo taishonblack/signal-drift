@@ -49,30 +49,29 @@ describe("Phase F.1A Create Session guidance", () => {
     expect(screen.getByText("Controls how event timestamps are displayed.")).toBeInTheDocument();
     expect(screen.getByText("Sets the planned duration of this monitoring session.")).toBeInTheDocument();
     expect(screen.getByText(/Signal details that MAKO can directly observe/)).toBeInTheDocument();
-    expect(screen.getByText("Name this source so operators can identify it quickly.")).toBeInTheDocument();
-    expect(screen.getByText("Remote SRT Listener address. MAKO connects as Caller.")).toBeInTheDocument();
-    expect(screen.getByText("UDP port exposed by the remote SRT Listener.")).toBeInTheDocument();
+    expect(screen.getByText("Name this source the way your engineering team identifies it.")).toBeInTheDocument();
+    expect(screen.getByText("The public address or hostname of the remote SRT Listener MAKO should call.")).toBeInTheDocument();
+    expect(screen.getByText("The UDP port configured for the remote SRT Listener.")).toBeInTheDocument();
     expect(screen.getByText("Address Book: Reuse previously saved endpoint information.")).toBeInTheDocument();
     expect(screen.getByText("Save this source configuration for future sessions.")).toBeInTheDocument();
     expect(screen.getByText(/Optional connection settings/)).toBeInTheDocument();
     expect(screen.getByText(/Configuration checks validate the information MAKO can confirm/)).toBeInTheDocument();
-    expect(screen.getByText(/Start Monitoring validates the configuration/)).toBeInTheDocument();
+    expect(screen.getByText(/When you start monitoring, MAKO creates the runtime route/)).toBeInTheDocument();
     expect(screen.queryByText(/discovers codec|discovers.*bitrate|discovers.*latency/i)).not.toBeInTheDocument();
   });
 
   it("defines session naming, Purpose and UTC without changing transport meaning", async () => {
     renderPage();
 
-    openGuidance("About session name");
-    expect(await screen.findByText(/signed-in operators find this workspace in Recent Sessions/i)).toBeVisible();
-    expect(screen.getByText(/Temporary sessions remain in this browser tab/i)).toBeVisible();
+    openGuidance("About about session names");
+    expect(await screen.findByText(/Signed-in operators can return to saved sessions from Recent Sessions/i)).toBeVisible();
     await closeGuidance();
 
-    openGuidance("About purpose");
+    openGuidance("About about session purpose");
     expect(await screen.findByText(/does not change the incoming signal, SRT connection, or media processing/i)).toBeVisible();
     await closeGuidance();
 
-    openGuidance("About default event time zone");
+    openGuidance("About about event time");
     expect(await screen.findByText(/UTC remains the underlying recorded reference/i)).toBeVisible();
     expect(screen.getByText(/does not alter recorded event time/i)).toBeVisible();
   });
@@ -80,20 +79,20 @@ describe("Phase F.1A Create Session guidance", () => {
   it("defines caller addressing and UDP without claiming network evidence", async () => {
     renderPage();
 
-    openGuidance("About friendly name");
+    openGuidance("About about source names");
     expect(await screen.findByText(/human-readable label/i)).toBeVisible();
     expect(screen.getByText(/does not affect SRT transport/i)).toBeVisible();
     await closeGuidance();
 
-    openGuidance("About srt address or ip");
-    const addressBody = await screen.findByText(/MAKO is always the Caller/i);
+    openGuidance("About about the srt address");
+    const addressBody = await screen.findByText(/MAKO operates as the SRT Caller/i);
     expect(addressBody).toHaveTextContent(/private LAN addresses/i);
     expect(addressBody).toHaveTextContent(/does not prove reachability/i);
     await closeGuidance();
 
-    openGuidance("About port");
-    const portBody = await screen.findByText(/UDP port used by the remote SRT Listener/i);
-    expect(portBody).toHaveTextContent(/does not verify firewall state/i);
+    openGuidance("About about the srt port");
+    const portBody = await screen.findByText(/UDP port assigned to the remote SRT Listener/i);
+    expect(portBody).toHaveTextContent(/remote engineering team may need to confirm/i);
 
     const page = within(document.body);
     expect(page.getByText(/do not test SRT network reachability/i)).toBeInTheDocument();
