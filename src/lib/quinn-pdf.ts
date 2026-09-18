@@ -24,52 +24,32 @@ function fmtTsShort(utc: string): string {
   return new Date(utc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+// Investigation suggestions only. These are never presented as MAKO's own
+// findings and never imply a cause MAKO has established.
 const recommendedChecks: Record<string, string[]> = {
-  packet_loss_spike: [
-    "Verify network path stability (traceroute / MTR)",
-    "Check SRT sender buffer and latency settings",
-    "Confirm no bandwidth contention on shared links",
-    "Review encoder bitrate vs. available headroom",
-  ],
-  bitrate_drop: [
-    "Check encoder health and CPU/GPU utilization",
-    "Verify CBR/VBR mode and min-bitrate settings",
-    "Look for upstream congestion or rate limiting",
-    "Confirm source signal is stable (no black/freeze at input)",
-  ],
-  freeze_detected: [
-    "Inspect decoder buffer underrun counters",
-    "Check for PTS discontinuities around freeze window",
-    "Verify source encoder is not dropping frames",
-    "Review SRT too-late-to-play packet stats",
-  ],
-  pts_jump: [
-    "Check encoder clock source stability",
-    "Verify no signal interruption at source",
-    "Review SRT stats for retransmit spikes around event",
-    "Inspect GOP structure for irregularities",
-  ],
-  audio_clipping: [
-    "Review audio input levels at source",
-    "Check limiter/compressor settings in the chain",
-    "Verify audio reference level alignment (-20 dBFS = 0 VU)",
-    "Monitor LUFS loudness over sliding window",
-  ],
-  black_frames: [
+  black_video: [
     "Check physical cable / SDI connection at source",
     "Verify encoder input signal presence",
     "Review upstream switcher / router configuration",
-    "Check for HDCP or format mismatch issues",
   ],
-  resolution_change: [
-    "Confirm intentional format change with production",
-    "Verify downstream decoders handle resolution switch",
-    "Check auto-scaling / ABR ladder configuration",
+  frozen_video: [
+    "Verify the source encoder is still advancing frames",
+    "Confirm the content was not legitimately static",
+    "Correlate the observed window against upstream logs",
   ],
-  codec_change: [
-    "Confirm intentional codec switch with engineering",
-    "Verify decoder compatibility with new codec profile",
-    "Check for encoder failover or redundancy switch",
+  audio_silence: [
+    "Review audio levels at the source",
+    "Confirm the correct audio channels are embedded",
+    "Verify no upstream mute or breakaway is applied",
+  ],
+  signal_loss: [
+    "Confirm the source device is still sending",
+    "Verify network reachability to MAKO's receiver",
+    "Correlate the observed window against network logs",
+  ],
+  format_change: [
+    "Confirm the format change was intentional with production",
+    "Verify downstream decoders handle the new format",
   ],
 };
 
