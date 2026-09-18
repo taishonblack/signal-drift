@@ -12,7 +12,7 @@ Create a small Create Session guidance component built on the existing Radix/sha
 
 - Render a quiet information icon beside supported labels or actions.
 - Give every trigger a specific accessible name such as `About session name`.
-- Open by click/tap and keyboard activation; retain Radix focus management and Escape-to-close behavior.
+- Open on desktop hover or click, and on touch tap; support keyboard focus/activation and Escape-to-close through a controlled Radix Popover.
 - Use a compact title and body, matching the existing MAKO glass/token styling.
 - Keep only one explanation open at a time by controlling the open item from Create Session.
 - Do not add a UI framework or redesign the page.
@@ -54,6 +54,7 @@ The existing Purpose selector, timezone selector, duration picker, defaults, sta
 ### 4. Existing F.1 configuration workflow
 
 - Keep the three Configuration checks and reservation wording.
+- Align the separate occupancy warning from “connected to another MAKO session” to reservation-only language, because the current check proves MAKO occupancy rather than an active SRT connection.
 - Replace the current Configuration disclaimer with: “Configuration checks validate the information MAKO can confirm before monitoring begins. They do not test SRT network reachability.”
 - Keep caller-first **Check Configuration** and add: “Checks address format, port and MAKO session reservation. Network reachability is not tested.”
 - Preserve the legacy Test Connection branch exactly; caller-first checks still make no probe, route creation, handshake attempt, or additional backend request.
