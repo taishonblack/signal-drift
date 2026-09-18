@@ -5,6 +5,7 @@ import { SortableContext } from "@dnd-kit/sortable";
 import SignalTile from "@/components/SignalTile";
 import DraggableSignalTile from "@/components/session/DraggableSignalTile";
 import InspectorPanel from "@/components/InspectorPanel";
+import AudioSilenceMonitor from "@/components/incidents/AudioSilenceMonitor";
 import SessionToolbar, { type Layout } from "@/components/session/SessionToolbar";
 import FullscreenOverlay from "@/components/session/FullscreenOverlay";
 import TimelinePanel from "@/components/session/TimelinePanel";
@@ -1238,6 +1239,20 @@ const SessionRoom = () => {
               </span>
             </div>
           )}
+
+          {/* Phase E.5B — headless audio-silence detection per runtime route. */}
+          {session.inputs
+            .filter((i) => i.enabled && i.runtimeRouteId && i.streamName)
+            .map((i) => (
+              <AudioSilenceMonitor
+                key={`silence-${i.runtimeRouteId}`}
+                sessionId={session.id}
+                runtimeRouteId={i.runtimeRouteId}
+                slot={i.slot ?? null}
+                sourceName={i.label}
+                streamName={i.streamName}
+              />
+            ))}
 
           {showInspector && (
             <InspectorPanel
