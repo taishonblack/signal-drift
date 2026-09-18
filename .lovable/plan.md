@@ -24,7 +24,9 @@ LiveCamera WHEP negotiation/reconnect logic (read-only additions only via the re
 
 Timeline entries cannot carry detector version, thresholds, start/end/duration, evidence snapshots or investigation state without abusing `metadata`. Recommend two new tables (created in a later phase, not now):
 
-- `signal_incidents` — id, session_id, runtime_route_id, slot, source_name, incident_type, detector_id, detector_version, threshold jsonb, observation_point, severity, state (`open|recovered`), workflow_status (`new|acknowledged|investigating|resolved`), detected_at, started_at, ended_at, duration_ms, recovery_note, acked_by/at, assigned_to, resolution_note, created_at.
+- `signal_incidents` — id, session_id, runtime_route_id, slot, source_name, incident_type, detector_id, detector_version, threshold jsonb, observation_point, state (`open|recovered`), workflow_status (`new|acknowledged|investigating|resolved`), observed_started_at / observed_ended_at (browser-measured), detected_at, server_received_at / server_persisted_at, duration_ms, recovery_note, acked_by/at, assigned_to, resolution_note, created_at.
+- No detector-chosen severity. Detectors record objective classification and duration only; severity becomes workflow/configuration logic in a later phase, never inferred inside the detector.
+- Deduplication identity: `(session_id, runtime_route_id, incident_type, observed_started_at window)`. The first detector client to satisfy the threshold establishes the incident via an idempotent server write (e.g. an upsert keyed on that identity); other engineers' clients corroborate the same incident (corroboration count) rather than creating duplicates.
 - `signal_incident_evidence` — id, incident_id, phase (`pre|event|post`), captured_at, observation_point, payload jsonb (telemetry snapshot only), optional still_image_path.
 
 One Timeline entry is written per incident as a cross-reference so engineers see incidents in the collaboration stream; the incident row stays the source of truth. Types: `black_video`, `frozen_video`, `audio_silence`, `signal_loss`, `format_change`. `video_corruption` deferred.
