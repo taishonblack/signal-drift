@@ -16,6 +16,17 @@ import {
   METER_SCALE_TICKS,
 } from "@/lib/telemetry/browser-audio-levels";
 import { useBrowserAudioLevels } from "@/hooks/use-browser-audio-levels";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import type { LiveCameraState } from "@/components/LiveCamera";
+import {
+  observationFromPlaybackState,
+  subscribePlaybackState,
+} from "@/lib/diagnostics/playback-state-registry";
+import { buildPlaybackDiagnostic } from "@/lib/diagnostics/signal-diagnostic";
+import { buildDiagnosticSummary } from "@/lib/diagnostics/diagnostic-summary";
+import SignalDiagnosticCard from "@/components/diagnostics/SignalDiagnosticCard";
+import { Button } from "@/components/ui/button";
 
 interface InspectorPanelProps {
   input: StreamInput;
@@ -29,6 +40,13 @@ interface InspectorPanelProps {
    * stream LiveCamera already received; injectable for tests.
    */
   audioLevel?: BrowserAudioLevelSnapshot | null;
+  /**
+   * Phase F.1 — observed playback state for this source. Normally read from the
+   * registry LiveCamera publishes to; injectable for tests.
+   */
+  playbackState?: LiveCameraState | null;
+  /** Opens the source's configuration. */
+  onConfigureSource?: () => void;
 }
 
 /**
