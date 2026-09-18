@@ -11,11 +11,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { renderHook, waitFor } from "@testing-library/react";
 
-const rpc = vi.fn();
-const order = vi.fn();
-const eq = vi.fn(() => ({ order }));
-const select = vi.fn(() => ({ eq }));
-const from = vi.fn(() => ({ select }));
+const rpc = vi.fn<(fn: string, args: Record<string, unknown>) => Promise<unknown>>();
+const order = vi.fn<(col: string, opts: { ascending: boolean }) => Promise<unknown>>();
+const eq = vi.fn((_col: string, _val: unknown) => ({ order }));
+const select = vi.fn((_cols: string) => ({ eq }));
+const from = vi.fn((_table: string) => ({ select }));
 
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
