@@ -16,7 +16,7 @@ const FieldGuidance = ({ title, body, open, onOpenChange }: FieldGuidanceProps) 
         type="button"
         variant="ghost"
         size="icon"
-        aria-label={`About ${title.toLowerCase()}`}
+        aria-label={title.toLowerCase().startsWith("about ") ? title : `About ${title.toLowerCase()}`}
         className="h-7 w-7 min-h-11 min-w-11 shrink-0 text-muted-foreground hover:text-foreground sm:min-h-7 sm:min-w-7"
         onMouseEnter={() => onOpenChange(true)}
         onMouseLeave={() => onOpenChange(false)}

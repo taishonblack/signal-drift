@@ -63,34 +63,34 @@ describe("Phase F.1A Create Session guidance", () => {
   it("defines session naming, Purpose and UTC without changing transport meaning", async () => {
     renderPage();
 
-    openGuidance("About about session names");
+    openGuidance("About session names");
     expect(await screen.findByText(/Signed-in operators can return to saved sessions from Recent Sessions/i)).toBeVisible();
     await closeGuidance();
 
-    openGuidance("About about session purpose");
+    openGuidance("About session purpose");
     expect(await screen.findByText(/does not change the incoming signal, SRT connection, or media processing/i)).toBeVisible();
     await closeGuidance();
 
-    openGuidance("About about event time");
-    expect(await screen.findByText(/UTC remains the underlying recorded reference/i)).toBeVisible();
-    expect(screen.getByText(/does not alter recorded event time/i)).toBeVisible();
+    openGuidance("About event time");
+    expect(await screen.findByText(/UTC as the consistent underlying time reference/i)).toBeVisible();
+    expect(screen.getByText(/does not change the underlying recorded event time/i)).toBeVisible();
   });
 
   it("defines caller addressing and UDP without claiming network evidence", async () => {
     renderPage();
 
-    openGuidance("About about source names");
-    expect(await screen.findByText(/human-readable label/i)).toBeVisible();
-    expect(screen.getByText(/does not affect SRT transport/i)).toBeVisible();
+    openGuidance("About source names");
+    expect(await screen.findByText(/human-readable name/i)).toBeVisible();
+    expect(screen.getByText(/does not affect the SRT connection/i)).toBeVisible();
     await closeGuidance();
 
-    openGuidance("About about the srt address");
+    openGuidance("About the SRT address");
     const addressBody = await screen.findByText(/MAKO operates as the SRT Caller/i);
     expect(addressBody).toHaveTextContent(/private LAN addresses/i);
     expect(addressBody).toHaveTextContent(/does not prove reachability/i);
     await closeGuidance();
 
-    openGuidance("About about the srt port");
+    openGuidance("About the SRT port");
     const portBody = await screen.findByText(/UDP port assigned to the remote SRT Listener/i);
     expect(portBody).toHaveTextContent(/remote engineering team may need to confirm/i);
 
