@@ -264,7 +264,7 @@ describe("F.1 UI rendering", () => {
     expect(screen.getByText(/Address format valid/i)).toBeInTheDocument();
     expect(screen.getByText(/Port valid/i)).toBeInTheDocument();
     expect(screen.getByText(/Available to MAKO/i)).toBeInTheDocument();
-    expect(screen.getByText(/does not test network\s+reachability/i)).toBeInTheDocument();
+    expect(screen.getByText(/do not test SRT network\s+reachability/i)).toBeInTheDocument();
   });
 
   it("configuration block reports invalid syntax instead of availability", () => {
