@@ -78,7 +78,7 @@ describe("E.5B.1 — Signal Inspector has no deferred Transport section", () => 
   it("still renders genuine Audio and output metadata", () => {
     renderPanel();
     expect(screen.getByText("aac (LC)")).toBeTruthy();
-    expect(screen.getByText("48 kHz")).toBeTruthy();
+    expect(screen.getAllByText("48 kHz").length).toBe(2); // source + output rates
     expect(screen.getByText("opus")).toBeTruthy();
     expect(screen.getByText("128 kb/s (configured)")).toBeTruthy();
   });
