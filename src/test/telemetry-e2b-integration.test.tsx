@@ -213,7 +213,8 @@ describe("Phase E.2B — Inspector shows the observation truthfully", () => {
     expect(screen.getByText("29.97 fps")).toBeTruthy();
     expect(screen.getByText("progressive")).toBeTruthy();
     expect(screen.getByText("opus")).toBeTruthy();
-    // Source audio and the whole Transport section stay not measured.
-    expect(screen.getAllByText("Not measured").length).toBeGreaterThan(0);
+    // The deferred Transport section is removed; unmeasured source-audio fields show "—".
+    expect(screen.queryByText("Transport")).toBeNull();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 });

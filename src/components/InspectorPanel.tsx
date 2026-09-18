@@ -54,8 +54,9 @@ interface InspectorPanelProps {
  *
  * Phase E.2: reads the typed telemetry contract. Only genuinely observed values
  * render; anything MAKO does not measure stays `—` with the quiet "Not measured"
- * caption. Transport carries no measurements in this phase, and MAKO's own
- * output audio is shown separately from the source's audio.
+ * caption. MAKO's own output audio is shown separately from the source's audio.
+ * No Transport section is shown: SRT transport telemetry is deferred (E.4). If
+ * genuinely measured transport values arrive, a Transport section can return.
  */
 const InspectorPanel = ({
   input,
@@ -104,11 +105,6 @@ const InspectorPanel = ({
     { label: "Color Space", text: hasValue(t?.video.colorSpace) ? String(t!.video.colorSpace.value) : null },
   ];
 
-  const transportFields: Field[] = [
-    { label: "Bitrate", text: null },
-    { label: "Packet Loss", text: null },
-    { label: "RTT", text: null },
-  ];
 
   const audioFields: Field[] = [
     { label: "Codec", text: codecText(t?.audioSource.codec, undefined) },
@@ -192,7 +188,6 @@ const InspectorPanel = ({
       )}
 
       <Section title="Video" fields={videoFields} />
-      <Section title="Transport" fields={transportFields} />
       <Section title="Audio" fields={audioFields} />
 
       <BrowserAudioLevelSection levels={levels} />
