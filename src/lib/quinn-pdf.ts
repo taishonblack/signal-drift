@@ -6,15 +6,13 @@ import {
   getEventsForIncident,
 } from "@/lib/quinn-store";
 
+// Deterministic detector classifications MAKO intends to observe (Phase E.5B+).
 const eventTypeLabels: Record<string, string> = {
-  packet_loss_spike: "Packet Loss Spike",
-  bitrate_drop: "Bitrate Drop",
-  freeze_detected: "Freeze Detected",
-  pts_jump: "PTS Jump",
-  audio_clipping: "Audio Clipping",
-  black_frames: "Black Frames",
-  resolution_change: "Resolution Change",
-  codec_change: "Codec Change",
+  black_video: "Black Video",
+  frozen_video: "Frozen Video",
+  audio_silence: "Audio Silence",
+  signal_loss: "Signal Loss",
+  format_change: "Format Change",
 };
 
 function fmtTs(utc: string): string {
