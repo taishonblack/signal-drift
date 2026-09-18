@@ -213,9 +213,8 @@ export class AudioSilenceReporter {
     task.attempts += 1;
     this.recoverCalls += 1;
 
-    let result: IncidentRecoveryResult;
-    try {
-      result = await this.deps.recover({
+    const result: IncidentRecoveryResult = await this.deps
+      .recover({
         incidentId: this.incidentId,
         observedEndedAt: task.observedEndedAt,
         // Existing contract: post-condition snapshot is the `post` phase.
@@ -229,13 +228,14 @@ export class AudioSilenceReporter {
             task.observedEndedAt,
           ),
         },
-      });
-    } catch (e) {
-      result = { ok: false, error: e instanceof Error ? e.message : "recover_failed" };
-    }
+      })
+      .catch((e: unknown) => ({
+        ok: false as const,
+        error: e instanceof Error ? e.message : "recover_failed",
+      }));
     if (this.disposed) return;
 
-    if (result.ok) {
+    if (result.ok === true) {
       task.state = "persisted";
       return;
     }
