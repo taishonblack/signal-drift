@@ -51,7 +51,10 @@ describe("caller-only operator workflow", () => {
       target: { value: "174.166.29.128" },
     });
     fireEvent.change(screen.getByPlaceholderText("8890"), { target: { value: "8000" } });
-    expect(screen.getByRole("button", { name: "Test Connection" })).toBeDisabled();
+    // Phase F.1 — a caller-first input offers a truthful configuration check
+    // instead of a playback probe of an unrelated legacy path.
+    expect(screen.queryByRole("button", { name: "Test Connection" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check Configuration" })).toBeEnabled();
   });
 
   it("does not include Sources in desktop navigation", () => {
