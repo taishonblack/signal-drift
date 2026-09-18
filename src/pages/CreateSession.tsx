@@ -35,7 +35,20 @@ import {
   saveSessionRemote,
   type RuntimeSlotIntent,
 } from "@/lib/sessions-remote";
-import { useEndpointAvailability } from "@/hooks/use-endpoint-availability";
+import { useEndpointReservation } from "@/hooks/use-endpoint-availability";
+import ConfigurationStatus from "@/components/session/ConfigurationStatus";
+import SignalDiagnosticCard from "@/components/diagnostics/SignalDiagnosticCard";
+import {
+  endpointSyntaxValid,
+  validateAddress,
+  validatePort,
+} from "@/lib/diagnostics/endpoint-validation";
+import {
+  buildConfigurationDiagnostic,
+  buildProvisioningFailureDiagnostic,
+  formatEndpoint,
+  type SignalDiagnostic,
+} from "@/lib/diagnostics/signal-diagnostic";
 import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 import { toast } from "@/components/ui/sonner";
 import { probeStream, streamNameForSlot } from "@/lib/stream-paths";
@@ -151,6 +164,12 @@ const CreateSession = () => {
     Record<number, { state: "testing" | "available" | "no_publisher" | "misconfigured" | "failed"; detail?: string }>
 
   >({});
+  /** Phase F.1 — per-slot configuration diagnostic from Check Configuration. */
+  const [configDiagnostic, setConfigDiagnostic] = useState<Record<number, SignalDiagnostic>>({});
+  /** Phase F.1 — MAKO-side provisioning failure, shown in diagnostic form. */
+  const [provisioningDiagnostic, setProvisioningDiagnostic] = useState<SignalDiagnostic | null>(
+    null,
+  );
   /** True while MAKO is connecting to the operator's external SRT listeners. */
   const [starting, setStarting] = useState(false);
   const [pendingActiveSession, setPendingActiveSession] = useState<SessionRecord | null>(null);
@@ -181,7 +200,8 @@ const CreateSession = () => {
    * listener is busy: never the other session's name, owner or identity. The
    * real guarantee is server-side, so two operators cannot both win a race.
    */
-  const endpointBusy = useEndpointAvailability(activeHost, activePort);
+  const reservation = useEndpointReservation(activeHost, activePort);
+  const endpointBusy = reservation === "in_use";
 
   const setHostPort = (host: string, port: string) => {
     updateLine({ srtAddress: composeSrt(host, port) });
@@ -248,16 +268,32 @@ const CreateSession = () => {
     updateLine({ enabled: false });
   };
 
+  /**
+   * Phase F.1 — Check Configuration.
+   *
+   * For a caller-first slot MAKO reports ONLY what it can observe without the
+   * network: address syntax, port syntax and its own reservation state. It does
+   * not probe the legacy camN path (which is not this slot's feed), does not
+   * create any infrastructure, and never claims reachability.
+   */
+  const checkConfiguration = () => {
+    const slot = activeTab;
+    const line = lines.find((l) => l.id === slot)!;
+    const { host, port } = parseSrtInput(line.srtAddress);
+    const diagnostic = buildConfigurationDiagnostic({
+      host,
+      port,
+      reservation: slot === activeTab ? reservation : "not_checked",
+      sourceLabel: /^(line|source)\s*\d+$/i.test(line.label) ? `Source ${slot}` : line.label,
+    });
+    setConfigDiagnostic((prev) => ({ ...prev, [slot]: diagnostic }));
+  };
+
   const testConnection = async () => {
     const slot = activeTab;
-    // Phase C: a caller-backed slot has no playback path until MAKO has dialled
-    // the listener, and the legacy camN path is NOT this slot's feed. Probing it
-    // would report on an unrelated stream, so Test Connection is unavailable
-    // until a caller-aware test exists.
+    // Caller-first slot: configuration diagnostic only — never a camN probe.
     if (callerBacked(lines.find((l) => l.id === slot)!)) {
-      toast("Test Connection isn't available for this input yet.", {
-        description: "Start Monitoring — MAKO connects to the address and port you entered.",
-      });
+      checkConfiguration();
       return;
     }
     setTestResult((prev) => ({ ...prev, [slot]: { state: "testing" } }));
@@ -370,9 +406,17 @@ const CreateSession = () => {
         addSession(session);
         navigate(`/session/${session.id}`);
       } catch (e) {
-        toast("Could not start monitoring.", {
-          description: e instanceof Error ? e.message : "Unknown error.",
-        });
+        const detail = e instanceof Error ? e.message : null;
+        // Phase F.1 — a MAKO-side setup failure, reported as such. Cleanup and
+        // compensation upstream are unchanged.
+        setProvisioningDiagnostic(
+          buildProvisioningFailureDiagnostic({
+            endpoint: formatEndpoint(runtimeSlots[0]?.host, runtimeSlots[0]?.port),
+            sourceLabel: runtimeSlots[0]?.name ?? null,
+            detail,
+          }),
+        );
+        toast("Could not start monitoring.", { description: detail ?? "Unknown error." });
       } finally {
         setStarting(false);
       }
@@ -432,6 +476,49 @@ const CreateSession = () => {
     }
     const enabledLines = lines.filter((l) => l.enabled && isConfigured(l));
     if (enabledLines.length === 0) return;
+
+    // Phase F.1 — evaluate the non-network facts MAKO already has BEFORE
+    // provisioning, so a basic configuration problem is never discovered by
+    // failing later. Reachability is deliberately not required: F.1 cannot
+    // test it.
+    setProvisioningDiagnostic(null);
+    const invalid = enabledLines.find((l) => {
+      if (isSourceBacked(l)) return false;
+      const { host, port } = parseSrtInput(l.srtAddress);
+      return !endpointSyntaxValid(host, port);
+    });
+    if (invalid) {
+      const { host, port } = parseSrtInput(invalid.srtAddress);
+      setActiveTab(invalid.id);
+      setConfigDiagnostic((prev) => ({
+        ...prev,
+        [invalid.id]: buildConfigurationDiagnostic({
+          host,
+          port,
+          reservation: "not_checked",
+          sourceLabel: `Source ${invalid.id}`,
+        }),
+      }));
+      toast(`Source ${invalid.id} configuration is invalid.`, {
+        description: `${validateAddress(host).message} · ${validatePort(port).message}`,
+      });
+      return;
+    }
+    if (endpointBusy) {
+      // Server-authoritative exclusivity is unchanged; this only stops MAKO
+      // from attempting a provisioning it already knows will conflict.
+      setConfigDiagnostic((prev) => ({
+        ...prev,
+        [activeTab]: buildConfigurationDiagnostic({
+          host: activeHost,
+          port: activePort,
+          reservation: "in_use",
+          sourceLabel: `Source ${activeTab}`,
+        }),
+      }));
+      toast("In use — this SRT listener is reserved by another MAKO session.");
+      return;
+    }
 
     // Enforce "one active session per user"
     const active = getActiveSessionForUser(currentUser.id);
@@ -788,6 +875,12 @@ const CreateSession = () => {
                         MAKO will connect to this SRT listener.
                       </p>
                     )}
+                    {/* Phase F.1 — syntax + reservation facts only. */}
+                    <ConfigurationStatus
+                      host={activeHost}
+                      port={activePort}
+                      reservation={reservation}
+                    />
                   </>
                 )}
 
@@ -844,22 +937,37 @@ const CreateSession = () => {
                   )}
                 </div>
 
-                {/* Test Connection + Diagnostics */}
+                {/* Configuration check + Diagnostics */}
                 <div className="border-t border-border/10 pt-4 space-y-3">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={testConnection}
-                    disabled={callerBacked(activeLine) || !isConfigured(activeLine)}
+                    disabled={
+                      callerBacked(activeLine)
+                        ? !hasManualEndpoint(activeLine)
+                        : !isConfigured(activeLine)
+                    }
                     className="gap-2 border-border/30 text-foreground w-full sm:w-auto"
                   >
                     <PlugZap className="h-3.5 w-3.5" />
-                    {activeTestState === "testing"
-                      ? "Testing…"
-                      : activeIsTested
-                        ? "Re-test Connection"
-                        : "Test Connection"}
+                    {callerBacked(activeLine)
+                      ? "Check Configuration"
+                      : activeTestState === "testing"
+                        ? "Testing…"
+                        : activeIsTested
+                          ? "Re-test Connection"
+                          : "Test Connection"}
                   </Button>
+
+                  {configDiagnostic[activeTab] && callerBacked(activeLine) && (
+                    <SignalDiagnosticCard diagnostic={configDiagnostic[activeTab]} />
+                  )}
+
+                  {provisioningDiagnostic && (
+                    <SignalDiagnosticCard diagnostic={provisioningDiagnostic} />
+                  )}
+
 
                   {activeTestState && activeTestState !== "testing" && (
                     <div

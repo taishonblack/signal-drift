@@ -16,6 +16,17 @@ import {
   METER_SCALE_TICKS,
 } from "@/lib/telemetry/browser-audio-levels";
 import { useBrowserAudioLevels } from "@/hooks/use-browser-audio-levels";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import type { LiveCameraState } from "@/components/LiveCamera";
+import {
+  observationFromPlaybackState,
+  subscribePlaybackState,
+} from "@/lib/diagnostics/playback-state-registry";
+import { buildPlaybackDiagnostic } from "@/lib/diagnostics/signal-diagnostic";
+import { buildDiagnosticSummary } from "@/lib/diagnostics/diagnostic-summary";
+import SignalDiagnosticCard from "@/components/diagnostics/SignalDiagnosticCard";
+import { Button } from "@/components/ui/button";
 
 interface InspectorPanelProps {
   input: StreamInput;
@@ -29,6 +40,13 @@ interface InspectorPanelProps {
    * stream LiveCamera already received; injectable for tests.
    */
   audioLevel?: BrowserAudioLevelSnapshot | null;
+  /**
+   * Phase F.1 — observed playback state for this source. Normally read from the
+   * registry LiveCamera publishes to; injectable for tests.
+   */
+  playbackState?: LiveCameraState | null;
+  /** Opens the source's configuration. */
+  onConfigureSource?: () => void;
 }
 
 /**
@@ -46,10 +64,32 @@ const InspectorPanel = ({
   onSelect,
   telemetry,
   audioLevel,
+  playbackState,
+  onConfigureSource,
 }: InspectorPanelProps) => {
   const t = telemetry ?? null;
   const measured = useBrowserAudioLevels(input?.streamName ?? null);
   const levels = audioLevel !== undefined ? audioLevel : measured;
+
+  // Phase F.1 — passive read of the state LiveCamera already observed.
+  const [registryState, setRegistryState] = useState<LiveCameraState | null>(null);
+  const streamName = input?.streamName ?? null;
+  useEffect(() => {
+    if (!streamName) {
+      setRegistryState(null);
+      return;
+    }
+    return subscribePlaybackState(streamName, setRegistryState);
+  }, [streamName]);
+
+  const observedPlayback = playbackState !== undefined ? playbackState : registryState;
+  const routeCreated = Boolean(input?.runtimeRouteId);
+  const diagnostic = buildPlaybackDiagnostic({
+    observation: observationFromPlaybackState(observedPlayback),
+    routeCreated,
+    endpoint: input?.srtAddress || null,
+    sourceLabel: input?.label ?? null,
+  });
 
   const resolution =
     t && hasValue(t.video.width) && hasValue(t.video.height)
@@ -113,6 +153,43 @@ const InspectorPanel = ({
       </div>
 
       <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Signal Inspector</div>
+
+      {/* Phase F.1 — only shown when MAKO has actually observed a problem. */}
+      {diagnostic && (
+        <SignalDiagnosticCard
+          diagnostic={diagnostic}
+          actions={
+            <>
+              {onConfigureSource && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onConfigureSource}
+                  className="h-7 text-[10px] border-border/30"
+                >
+                  Configure Source
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={async () => {
+                  const text = buildDiagnosticSummary(diagnostic);
+                  try {
+                    await navigator.clipboard.writeText(text);
+                    toast("Diagnostic summary copied.");
+                  } catch {
+                    toast("Could not copy the summary.");
+                  }
+                }}
+                className="h-7 text-[10px]"
+              >
+                Copy Diagnostic Summary
+              </Button>
+            </>
+          }
+        />
+      )}
 
       <Section title="Video" fields={videoFields} />
       <Section title="Transport" fields={transportFields} />
