@@ -82,5 +82,13 @@ export function useEndpointReservation(host: string, port: string): ReservationS
     };
   }, [host, port]);
 
-  return busy;
+  return state;
+}
+
+/**
+ * Backwards-compatible boolean form: true only when the server explicitly
+ * reports the endpoint as reserved by another MAKO runtime route.
+ */
+export function useEndpointAvailability(host: string, port: string): boolean {
+  return useEndpointReservation(host, port) === "in_use";
 }
