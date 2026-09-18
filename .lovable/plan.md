@@ -1,162 +1,72 @@
-# Phase E.5A — Signal Evidence & History Architecture Audit
+# Phase E.5B — Browser Audio Silence Incident Detector
 
-Audit only. Nothing was implemented, deployed, published, or migrated in this turn.
+First real detector. It connects the existing E.3 browser audio measurement to the existing incident ledger and proves: real observation → deterministic detector → persisted incident → recovery. No AI, no new tables, no UI redesign.
 
-Important correction up front: the persistent incident/evidence foundation you asked me to audit **already exists in this project** (built in the previous E.5A build). This audit therefore reports what is actually present, what is genuinely missing, and where the first detector should attach.
+Confirmed present by inspection, so nothing new is created: `signal_incidents`, `signal_incident_evidence`, `submit_signal_incident`, `recover_signal_incident`, participant RLS via `is_session_owner` / `has_session_access`, server-owned correlation window, and `src/lib/incidents/*` typed contracts.
 
 ---
 
-## 1. Existing telemetry architecture
+## What gets built
 
-### E.2 — server media metadata (`rtsp_publication`)
-Path, as implemented:
+### 1. Pure detector module — `src/lib/incidents/audio-silence-detector.ts` (new)
+A framework-free state machine. No React, no timers, no I/O. It is fed one measurement at a time as `(snapshot, observedAtMs)` and returns the state plus any action to take (`submit` / `recover` / nothing).
 
-```text
-MAKO caller API  GET /pull-sources/{src_id}/telemetry/media
-  -> supabase/functions/media-telemetry/index.ts   (JWT required; authorize.ts checks
-     route owner OR non-revoked shared access; MAKO_API_TOKEN stays server-side;
-     returns only {source_id, playback_path, observed_at, observation_point, video, audio_output})
-  -> src/lib/telemetry/media-metadata.ts           (defensive parse, rational frame rate)
-  -> src/lib/telemetry/provider.ts                 (MediaTelemetryBridgeProvider, typed failures)
-  -> src/hooks/use-media-telemetry.ts              (keyed by session_runtime_routes.id,
-     fetch ONCE per route + bounded retries [2000,4000], cached per route id, no polling,
-     late responses from replaced routes discarded)
-  -> src/components/InspectorPanel.tsx
+States: `normal`, `pending_silence`, `silence`, `pending_recovery`.
+
+Transitions:
+- `normal` → below `enterDbfs` → `pending_silence`, recording the first qualifying observation time.
+- `pending_silence` sustained ≥ `enterMs` → `silence`, emitting exactly one `submit` with `observedStartedAt` = the first qualifying observation, `detectedAt` = the observation that satisfied the duration.
+- `pending_silence` rising above `enterDbfs` before `enterMs` → back to `normal`, no incident.
+- `silence` → above `exitDbfs` → `pending_recovery`, recording the first qualifying recovery observation.
+- `pending_recovery` sustained ≥ `exitMs` → `normal`, emitting exactly one `recover` with `observedEndedAt` = the first qualifying recovery observation.
+- `pending_recovery` falling back below `exitDbfs` → `silence`, no recovery.
+- Any `not_measured`, `unavailable`, `stale`, absent snapshot, or missing channel: pending timers are discarded and no state is advanced. Never silence, never recovery.
+
+### 2. Named configuration
+Exported `AUDIO_SILENCE_DETECTOR_CONFIG` with `enterDbfs`, `enterMs`, `exitDbfs`, `exitMs`, `detectorId`, `detectorVersion`; the detector accepts a config override so nothing is hard-coded in UI.
+
+Proposed conservative defaults, chosen against the existing E.3 behaviour (`DBFS_FLOOR = -60`, `isEffectivelySilent` at the floor, fast attack / 300 ms visual release):
+- `enterDbfs: -55` — above the −60 floor so a genuine measurement at or near the floor qualifies, without treating quiet-but-present programme audio as silence.
+- `enterMs: 3000` — three seconds of continuously measured floor-level audio; long enough that speech pauses, ad transitions and slates never trigger.
+- `exitDbfs: -45` — 10 dB of hysteresis above the enter threshold, so a value hovering near one number cannot flap.
+- `exitMs: 1000` — a full second of measured audio before the incident is closed.
+Stereo: the loudest of L/R is used, so one live channel prevents a false silence.
+
+### 3. React binding — `src/hooks/use-audio-silence-detection.ts` (new)
+Subscribes to the existing E.3 snapshot for one runtime route, feeds the detector, and performs submissions through the existing `submitIncidentCandidate` / `recoverIncident` helpers only. Never writes to the tables directly. It supplies session id, runtime route id, slot, friendly-name snapshot, `observation_point: "browser_webrtc_pcm"`, threshold config and detector id/version; owner identity comes from the server routine, never the browser.
+
+Route scoping: the hook is keyed by `runtimeRouteId`. On route replacement, stream removal, teardown or unmount, detector state and any tracked open incident id are dropped, so an incident opened on Route A can never be recovered by Route B.
+
+Observation gaps: elapsed time is computed from observation timestamps, never from frame counts. A gap longer than a configured `maxObservationGapMs` (default 2000 ms) invalidates the pending window — MAKO records what it observed and refuses to claim what happened while it was not measuring. A hidden/throttled tab therefore produces no fabricated silence or recovery.
+
+Wiring: mounted where the E.3 measurement already runs, with no visual change. Existing meters behave exactly as today.
+
+### 4. Evidence payload (one `event` snapshot per incident, one on recovery)
+```json
+{
+  "observation_point": "browser_webrtc_pcm",
+  "status": "observed",
+  "unit": "dBFS",
+  "channel_mode": "mono | stereo",
+  "levels": { "mono": { "rms_dbfs": -60, "peak_dbfs": -60 } },
+  "captured_at": "<E.3 observedAt>",
+  "detector": { "id": "...", "version": "...", "config": { "enterDbfs": -55, "enterMs": 3000, "exitDbfs": -45, "exitMs": 1000 } }
+}
 ```
+Only fields E.3 actually provides. No sample streams are persisted; two evidence rows maximum per incident lifecycle.
 
-Contract: `src/lib/telemetry/contract.ts` — `Observed<T>` = `{value, observedAt, source, status}`; status `observed | unavailable | stale | not_measured`; observation point `ffmpeg_input | rtsp_publication`; `freshness()` downgrades to `stale` after 30 s; `snapshotForRoute()` resolves strictly by route id. Transport and receiver groups are all `not_measured` (E.4 deferred). Source audio stays `unavailable`.
+### 5. Incident type
+`audio_silence`, from the existing `IncidentType` union. No severity is assigned — objective classification and duration only.
 
-**Where it disappears:** entirely. It lives in a React `useRef` cache inside the hook. Unmounting the Session Room, refreshing, or route teardown erases every observation. There is exactly one probe per route, so there is currently no second observation to compare against — this is the gating gap for format-change detection.
+### 6. Deduplication
+Entirely server-owned: several engineers watching the same slot each submit, and `submit_signal_incident` matches an existing open/recent incident on `session_id` + `runtime_route_id` + `incident_type` inside the correlation window and records corroboration instead of a new row. Nothing is deduplicated in localStorage or React state.
 
-### E.3 — browser audio level (`browser_webrtc_pcm`)
-```text
-LiveCamera WHEP RTCPeerConnection (one per playback path; long-lived MediaStream)
-  -> src/lib/telemetry/browser-audio-registry.ts (publish/clear/subscribe by playback path)
-  -> src/hooks/use-browser-audio-levels.ts (AudioContext -> MediaStreamAudioSourceNode ->
-     splitter + 2 analysers; passive, never connected to destination; stereo claimed only
-     when the two PCM blocks actually differ; rAF tick)
-  -> src/components/InspectorPanel.tsx (BROWSER AUDIO LEVEL meters)
-```
-Contract: `src/lib/telemetry/browser-audio-contract.ts` (separate from E.2, correctly). Math: `src/lib/telemetry/browser-audio-levels.ts` (RMS/peak, dBFS floor −60, ceiling 0).
+### 7. Tests — `src/test/audio-silence-detector.test.ts` (new)
+All 18 required cases: normal audio, brief dip, sustained silence produces one incident, no duplicate submissions, brief recovery keeps the incident open, sustained recovery recovers once, `not_measured` never silence, `unavailable` never silence, gap does not manufacture silence, gap does not manufacture recovery, hysteresis prevents flapping, configuration override honoured, route replacement resets pending state, Route B cannot recover Route A, multiple observers rely on server dedupe, evidence payload carries `browser_webrtc_pcm` provenance and dBFS units, `observedStartedAt` is the qualifying boundary rather than submission time, `observedEndedAt` is the qualifying recovery boundary. Existing tests are not weakened.
 
-**Where it disappears:** every frame. Nothing is retained beyond the current React state; the Inspector must be mounted for the measurement to exist at all.
+Then the full suite and TypeScript check.
 
 ---
 
-## 2. Existing database/history systems
-
-| TABLE | PURPOSE / KEY COLUMNS | RLS | WRITERS | READERS / UI | E.5 REUSE |
-|---|---|---|---|---|---|
-| `signal_incidents` | the incident ledger: type, detector id/version, threshold jsonb, observation_point, state, workflow_status, `observed_started_at/ended_at`, `detected_at`, `server_received_at/persisted_at`, duration_ms, corroboration_count, workflow fields | SELECT only for participants; no client INSERT/UPDATE/DELETE | `submit_signal_incident`, `recover_signal_incident` (SECURITY DEFINER) | `use-signal-incidents.ts` (not yet mounted in any screen) | **primary target** |
-| `signal_incident_evidence` | pre/event/post snapshots: phase, captured_at, observation_point, payload jsonb, still_image_path | SELECT follows parent incident | same two routines | `fetchIncidentEvidence` | **primary target** |
-| `session_timeline_entries` | human/Quinn narrative: author, source_id/name, entry_type, message, severity, parent_id, status, resolved_*, metadata | participant SELECT; participant INSERT; author/owner UPDATE/DELETE | client + Quinn | `use-session-timeline`, `TimelinePanel` | cross-reference only |
-| `session_runtime_routes` / `_history` | live vs archived caller identity, lifecycle/connection status | owner-scoped, service-role writes | provisioning / teardown | Session Room | identity anchor |
-| `session_sources`, `sessions`, `shared_session_access`, `session_lease_holders` | attachment snapshots, session state, collaboration grants, per-tab leases | owner/participant | existing flows | existing UI | unchanged |
-
-No table stores raw telemetry samples, and none should.
-
----
-
-## 3. Timeline audit
-
-Timeline today is **narrative**: manually authored operator notes plus Quinn commentary, persisted per session for signed-in users, ephemeral (BroadcastChannel) for guests. It has severity, threading, resolution, and source name/id, but no observation point, no detector identity, no threshold, no dual observed/server timestamps, and no evidence rows.
-
-Recommendation: **D (combination), weighted to C.** Incidents stay in `signal_incidents` as the engineering system of record; one Timeline entry per incident acts as a human-visible cross-reference so engineers keep a single conversational thread. Reusing Timeline as the ledger would lose provenance and re-open the fabricated-metric risk; ignoring Timeline entirely would split collaboration into two feeds.
-
----
-
-## 4. Collaboration architecture
-
-Reuse as-is: `is_session_owner()`, `has_session_access()`, `shared_session_access` (with `revoked_at`), `sessions.pin_hash` + `verify_session_pin`, anonymous Supabase identities for Temporary Operators, and the Timeline RLS pattern. The incident policies already follow exactly this model, so authorized participants see that session's incidents and nothing else — no Sources library, no other sessions, no infrastructure controls (those remain service-role only).
-
-Gap: incident **workflow** writes (acknowledge/assign/resolve) have no path yet — SELECT is the only client privilege. That belongs in E.5F via a definer routine, not a broadened policy.
-
----
-
-## 5. Session / source / slot identity
-
-- PERMANENT: `owner_id`, `sessions.id`, incident/evidence ids.
-- SESSION-SCOPED: slot, `session_sources` attachment.
-- RUNTIME-ONLY: `session_runtime_routes.id`, `playback_path` (`src_xxxxxx-opus`), `infrastructure_source_id`. Routes are archived and deleted on teardown; `session_sources.runtime_route_id` is nulled for detached historical rows.
-- HISTORICAL: `session_runtime_route_history`.
-- USER-EDITABLE: friendly name.
-
-Consequence, already handled correctly in the ledger: `runtime_route_id` is a **plain nullable reference with no FK cascade**, and `source_name` + `slot` are **snapshotted onto the incident row**. Evidence therefore survives teardown, session completion, refresh, and logout.
-
----
-
-## 6. Evidence provenance
-
-Already represented: `observed_at`, observation point, source/provider, status (`observed|unavailable|stale|not_measured`), value, unavailable/not-measured semantics, staleness. `IncidentObservationPoint` deliberately keeps `browser_webrtc_pcm`, `browser_decoded_video`, `rtsp_publication`, `ffmpeg_input`, `playback_state` distinct and never merges them.
-
-Missing for a truthful persisted record: **units are implicit** (dBFS, Hz, px, ms live only in field names), and evidence payloads are free-form `jsonb` with no schema enforcement. A small documented payload shape per observation point is the only provenance work E.5 needs.
-
----
-
-## 7. Change-detection layers (feasibility only)
-
-| Observation | Correct layer |
-|---|---|
-| audio floor reached / recovered / material level change | pure state machine over the existing E.3 hook output — thresholds and durations configurable, `not_measured` never counts as silence |
-| black video, freeze | sampled canvas reads of the existing received video (2–4 Hz), gated on a live track and advancing frames |
-| resolution / frame rate / codec change | comparison of two trusted E.2 observations — **blocked today**: only one probe per route exists, so E.2 needs bounded re-observation first; a first observation is a baseline, never a change |
-| video/audio metadata disappeared | E.2 `observed -> unavailable` transition = a gap, not a change |
-| signal unavailable / recovered | existing `LiveCameraState` playback state |
-
-Only transitions are persisted; sample streams never are.
-
----
-
-## 8. Browser telemetry trust boundary
-
-Every writer must be an authenticated Supabase identity (including anonymous Temporary Operators), and `submit_signal_incident` already re-checks `is_session_owner OR has_session_access` inside the definer routine and ignores any client-claimed identity. Browser observations are **trusted as browser observations only** — persisted with `browser_webrtc_pcm` / `browser_decoded_video` provenance, plus separate `server_received_at` / `server_persisted_at`, so a submitted value can never be presented as a server measurement. Server-owned dedupe (same `session_id` + `runtime_route_id` + `incident_type` within the correlation window) means four engineers watching Camera 3 corroborate one incident instead of creating four.
-
----
-
-## 9. Engineering annotation capability
-
-`session_timeline_entries` already supports threaded, authored, resolvable notes and is the right home for free-text engineering commentary. Incident-bound outcomes (`recovery_note`, `resolution_note`, `acked_by`, `assigned_to`) already exist on the incident row. No new annotation model is needed; the missing piece is a link field or Timeline `metadata.incident_id` cross-reference.
-
----
-
-## 10. Quinn boundary
-
-Today `supabase/functions/quinn-chat/index.ts` accepts an incident/event `context` **from the client** and only forbids invention by prompt. The needed boundary: Quinn reads persisted incidents and evidence server-side by session id, under the same authorization, and receives no client-supplied telemetry at all. Not part of E.5B.
-
----
-
-## 11. Persistence strategy
-
-- **A raw samples** — rejected: unbounded growth, no engineering benefit.
-- **B transitions only** — safe and cheap, but reconstruction is thin.
-- **C transitions + bounded pre/event/post snapshots** — **recommended**; already what the schema expresses.
-- **D reuse Timeline** — rejected as the ledger for the provenance reasons in §3.
-
-## Recommended E.5 architecture
-
-Keep exactly what exists: detector (pure state machine) → trusted definer submit/recover with server dedupe → `signal_incidents` + up to three `signal_incident_evidence` rows → Timeline cross-reference → Quinn last. Add nothing structural.
-
-## Confirmed gaps
-
-1. No detector exists — the ledger is unreachable in normal operation.
-2. `use-signal-incidents` is not mounted in any screen; `IncidentList` still reads the emptied `quinn-store`.
-3. No client path for workflow transitions (ack/assign/resolve).
-4. E.2 observes each route once, so format change is not yet possible.
-5. Evidence payload shapes and units are undocumented.
-6. Quinn context still arrives from the client.
-
-## Risks
-
-Fabrication regression, write storms from an unbounded detector, hidden-tab rAF throttling producing false recovery, teardown identity loss (mitigated by snapshotted name/slot), guest identity lifespan, duplicate event systems, provenance flattening in reports.
-
----
-
-## Proposed E.5B scope (small, next build)
-
-1. Pure, unit-tested audio-silence state machine over existing E.3 output: configurable `enterDbfs`, `enterMs`, `exitDbfs`, `exitMs`; `not_measured`/`unavailable` never counts as silence.
-2. One submission on threshold satisfaction with `observedStartedAt` + `detectedAt` and a single `event` evidence snapshot; one `recover_signal_incident` call on exit with `observedEndedAt`.
-3. Documented evidence payload shape for `browser_webrtc_pcm` (dBFS values with units, channel mode).
-4. Repoint `IncidentList` at `useSignalIncidents`, keeping "No signal incidents observed." when empty.
-5. Tests: state machine, threshold configurability, unavailable-never-triggers, one incident from multiple observers, survival across refresh.
-
-Out of scope for E.5B: black/freeze detection, format change, workflow writes, export, Quinn, E.4 transport.
+## Explicitly not in this phase
+Black video, freeze, format change, transport/E.4, Quinn, Timeline, workflow ack/assign/resolve, exports, `IncidentList` repointing, any E.2 change, any schema/RLS/Edge Function/auth/session-lifecycle/SRT-caller change. Nothing is published or deployed.
