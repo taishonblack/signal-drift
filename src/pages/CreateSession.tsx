@@ -875,6 +875,12 @@ const CreateSession = () => {
                         MAKO will connect to this SRT listener.
                       </p>
                     )}
+                    {/* Phase F.1 — syntax + reservation facts only. */}
+                    <ConfigurationStatus
+                      host={activeHost}
+                      port={activePort}
+                      reservation={reservation}
+                    />
                   </>
                 )}
 
@@ -931,22 +937,37 @@ const CreateSession = () => {
                   )}
                 </div>
 
-                {/* Test Connection + Diagnostics */}
+                {/* Configuration check + Diagnostics */}
                 <div className="border-t border-border/10 pt-4 space-y-3">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={testConnection}
-                    disabled={callerBacked(activeLine) || !isConfigured(activeLine)}
+                    disabled={
+                      callerBacked(activeLine)
+                        ? !hasManualEndpoint(activeLine)
+                        : !isConfigured(activeLine)
+                    }
                     className="gap-2 border-border/30 text-foreground w-full sm:w-auto"
                   >
                     <PlugZap className="h-3.5 w-3.5" />
-                    {activeTestState === "testing"
-                      ? "Testing…"
-                      : activeIsTested
-                        ? "Re-test Connection"
-                        : "Test Connection"}
+                    {callerBacked(activeLine)
+                      ? "Check Configuration"
+                      : activeTestState === "testing"
+                        ? "Testing…"
+                        : activeIsTested
+                          ? "Re-test Connection"
+                          : "Test Connection"}
                   </Button>
+
+                  {configDiagnostic[activeTab] && callerBacked(activeLine) && (
+                    <SignalDiagnosticCard diagnostic={configDiagnostic[activeTab]} />
+                  )}
+
+                  {provisioningDiagnostic && (
+                    <SignalDiagnosticCard diagnostic={provisioningDiagnostic} />
+                  )}
+
 
                   {activeTestState && activeTestState !== "testing" && (
                     <div
