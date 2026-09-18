@@ -20,7 +20,6 @@ const FieldGuidance = ({ title, body, open, onOpenChange }: FieldGuidanceProps) 
         className="h-7 w-7 min-h-11 min-w-11 shrink-0 text-muted-foreground hover:text-foreground sm:min-h-7 sm:min-w-7"
         onMouseEnter={() => onOpenChange(true)}
         onMouseLeave={() => onOpenChange(false)}
-        onFocus={() => onOpenChange(true)}
       >
         <Info className="h-3.5 w-3.5" aria-hidden="true" />
       </Button>

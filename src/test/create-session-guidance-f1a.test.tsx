@@ -35,6 +35,8 @@ const openGuidance = (name: string) => {
   return button;
 };
 
+const closeGuidance = () => fireEvent.keyDown(document, { key: "Escape" });
+
 describe("Phase F.1A Create Session guidance", () => {
   it("shows concise truthful helper text for every requested field and action", () => {
     renderPage();
@@ -61,9 +63,11 @@ describe("Phase F.1A Create Session guidance", () => {
     openGuidance("About session name");
     expect(await screen.findByText(/signed-in operators find this workspace in Recent Sessions/i)).toBeVisible();
     expect(screen.getByText(/Temporary sessions remain in this browser tab/i)).toBeVisible();
+    closeGuidance();
 
     openGuidance("About purpose");
     expect(await screen.findByText(/does not change the incoming signal, SRT connection, or media processing/i)).toBeVisible();
+    closeGuidance();
 
     openGuidance("About default event time zone");
     expect(await screen.findByText(/UTC remains the underlying recorded reference/i)).toBeVisible();
@@ -76,18 +80,20 @@ describe("Phase F.1A Create Session guidance", () => {
     openGuidance("About friendly name");
     expect(await screen.findByText(/human-readable label/i)).toBeVisible();
     expect(screen.getByText(/does not affect SRT transport/i)).toBeVisible();
+    closeGuidance();
 
     openGuidance("About srt address or ip");
     const addressBody = await screen.findByText(/MAKO is always the Caller/i);
     expect(addressBody).toHaveTextContent(/private LAN addresses/i);
     expect(addressBody).toHaveTextContent(/does not prove reachability/i);
+    closeGuidance();
 
     openGuidance("About port");
     const portBody = await screen.findByText(/UDP port used by the remote SRT Listener/i);
     expect(portBody).toHaveTextContent(/does not verify firewall state/i);
 
     const page = within(document.body);
-    expect(page.getByText(/Network reachability is not tested/i)).toBeInTheDocument();
+    expect(page.getByText(/do not test SRT network reachability/i)).toBeInTheDocument();
     expect(page.queryByText(/Connection successful|Endpoint reachable|SRT available|Listener detected/i)).not.toBeInTheDocument();
   });
 });

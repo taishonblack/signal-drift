@@ -16,12 +16,14 @@ const Harness = () => {
 };
 
 describe("FieldGuidance", () => {
-  it("has an accessible trigger and opens from keyboard focus", async () => {
+  it("has an accessible trigger and opens from keyboard activation", async () => {
     render(<Harness />);
     const trigger = screen.getByRole("button", { name: "About session name" });
     expect(trigger).toBeInTheDocument();
 
-    fireEvent.focus(trigger);
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "Enter", code: "Enter" });
+    fireEvent.click(trigger);
     expect(await screen.findByText("Signed-in sessions appear in Recent Sessions.")).toBeVisible();
   });
 
