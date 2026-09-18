@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("@/lib/identity", async () => {
@@ -35,7 +35,10 @@ const openGuidance = (name: string) => {
   return button;
 };
 
-const closeGuidance = () => fireEvent.keyDown(document, { key: "Escape" });
+const closeGuidance = async () => {
+  fireEvent.keyDown(document, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+};
 
 describe("Phase F.1A Create Session guidance", () => {
   it("shows concise truthful helper text for every requested field and action", () => {
@@ -63,11 +66,11 @@ describe("Phase F.1A Create Session guidance", () => {
     openGuidance("About session name");
     expect(await screen.findByText(/signed-in operators find this workspace in Recent Sessions/i)).toBeVisible();
     expect(screen.getByText(/Temporary sessions remain in this browser tab/i)).toBeVisible();
-    closeGuidance();
+    await closeGuidance();
 
     openGuidance("About purpose");
     expect(await screen.findByText(/does not change the incoming signal, SRT connection, or media processing/i)).toBeVisible();
-    closeGuidance();
+    await closeGuidance();
 
     openGuidance("About default event time zone");
     expect(await screen.findByText(/UTC remains the underlying recorded reference/i)).toBeVisible();
@@ -80,13 +83,13 @@ describe("Phase F.1A Create Session guidance", () => {
     openGuidance("About friendly name");
     expect(await screen.findByText(/human-readable label/i)).toBeVisible();
     expect(screen.getByText(/does not affect SRT transport/i)).toBeVisible();
-    closeGuidance();
+    await closeGuidance();
 
     openGuidance("About srt address or ip");
     const addressBody = await screen.findByText(/MAKO is always the Caller/i);
     expect(addressBody).toHaveTextContent(/private LAN addresses/i);
     expect(addressBody).toHaveTextContent(/does not prove reachability/i);
-    closeGuidance();
+    await closeGuidance();
 
     openGuidance("About port");
     const portBody = await screen.findByText(/UDP port used by the remote SRT Listener/i);
