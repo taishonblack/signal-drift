@@ -54,8 +54,8 @@ const ConfigurationStatus = ({
         ))}
       </ul>
       <p className="text-[10px] text-muted-foreground/60">
-        Availability checks MAKO session reservation only. It does not test network
-        reachability.
+        Configuration checks validate the information MAKO can confirm before monitoring
+        begins. They do not test SRT network reachability.
       </p>
     </div>
   );

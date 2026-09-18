@@ -38,6 +38,7 @@ import {
 import { useEndpointReservation } from "@/hooks/use-endpoint-availability";
 import ConfigurationStatus from "@/components/session/ConfigurationStatus";
 import SignalDiagnosticCard from "@/components/diagnostics/SignalDiagnosticCard";
+import FieldGuidance from "@/components/session/FieldGuidance";
 import {
   endpointSyntaxValid,
   validateAddress,
@@ -159,6 +160,7 @@ const CreateSession = () => {
   const [lines, setLines] = useState<SrtLine[]>(() => seedLines());
   const [activeTab, setActiveTab] = useState(1);
   const [advancedOpen, setAdvancedOpen] = useState<Record<number, boolean>>({});
+  const [guidanceOpen, setGuidanceOpen] = useState<string | null>(null);
   const [tested, setTested] = useState<Record<number, boolean>>({});
   const [testResult, setTestResult] = useState<
     Record<number, { state: "testing" | "available" | "no_publisher" | "misconfigured" | "failed"; detail?: string }>
@@ -574,6 +576,14 @@ const CreateSession = () => {
   const activeAdvancedOpen = !!advancedOpen[activeTab] || !!activeLine.passphrase;
   const activeTestState = testResult[activeTab]?.state;
   const activeIsTested = !!tested[activeTab] && isConfigured(activeLine) && activeLine.enabled;
+  const guidance = (key: string, title: string, body: string) => (
+    <FieldGuidance
+      title={title}
+      body={body}
+      open={guidanceOpen === key}
+      onOpenChange={(open) => setGuidanceOpen(open ? key : null)}
+    />
+  );
 
   const pageTitle =
     mode === "create"
@@ -655,31 +665,36 @@ const CreateSession = () => {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                Name <span className="normal-case tracking-normal font-normal">(optional)</span>
-              </label>
+              <div className="flex items-center gap-1">
+                <label htmlFor="session-name" className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                  Name <span className="normal-case tracking-normal font-normal">(optional)</span>
+                </label>
+                {guidance("name", "Session name", "A recognizable name helps signed-in operators find this workspace in Recent Sessions. Temporary sessions remain in this browser tab. If left blank, MAKO uses the first configured source name.")}
+              </div>
               <Input
+                id="session-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Super Bowl LIX — Main Feed Review"
                 className="bg-muted/20 border-border/20 text-foreground placeholder:text-muted-foreground/40"
               />
-              <p className="text-[10px] text-muted-foreground/60">
-                If left blank, MAKO names it after the first source.
-              </p>
+              <p className="text-[10px] text-muted-foreground/60">Give this monitoring session a recognizable name.</p>
             </div>
 
             <div className="space-y-1.5 sm:col-span-2">
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                Purpose
-              </label>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Purpose</span>
+                {guidance("purpose", "Purpose", "Purpose gives collaborators operational context. It does not change the incoming signal, SRT connection, or media processing.")}
+              </div>
               <PurposeSelect value={purpose} onChange={setPurpose} />
+              <p className="text-[10px] text-muted-foreground/60">Describe how this session will be used.</p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                Default Event Time Zone
-              </label>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Default Event Time Zone</span>
+                {guidance("timezone", "Default event time zone", "UTC remains the underlying recorded reference. This setting converts timestamps for operator display; changing it does not alter recorded event time.")}
+              </div>
               <Select value={defaultOriginTimeZone} onValueChange={setDefaultOriginTimeZone}>
                 <SelectTrigger className="bg-muted/20 border-border/20 text-foreground">
                   <SelectValue />
@@ -691,14 +706,15 @@ const CreateSession = () => {
                 </SelectContent>
               </Select>
               <p className="text-[10px] text-muted-foreground/60">
-                Master clock — every timestamp, note, and marker references this.
+                Controls how event timestamps are displayed.
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-                Session Duration
-              </label>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Session Duration</span>
+                {guidance("duration", "Session duration", "Sets the planned session end. It does not change the SRT signal, encoding, or source connection settings.")}
+              </div>
               <DurationPicker
                 value={scheduledEndAt}
                 onChange={(iso, mins) => {
@@ -706,7 +722,7 @@ const CreateSession = () => {
                   setPresetMinutes(mins);
                 }}
               />
-
+              <p className="text-[10px] text-muted-foreground/60">Sets the planned duration of this monitoring session.</p>
             </div>
           </div>
         </div>
@@ -716,7 +732,7 @@ const CreateSession = () => {
           <SectionHeader
             eyebrow="Feeds"
             title="Sources"
-            hint="Tell MAKO where each feed lives — it discovers codec, resolution, bitrate, and latency automatically."
+            hint="Tell MAKO where to connect to each feed. Signal details that MAKO can directly observe will appear automatically once monitoring begins."
           />
 
           {/* Tabs */}
@@ -808,22 +824,26 @@ const CreateSession = () => {
                 )}
               </div>
             </div>
+            <p className="text-[10px] text-muted-foreground/60">Address Book: Reuse previously saved endpoint information.</p>
 
             {activeLine.enabled && (
               <>
                 {/* Friendly Name */}
                 <div className="space-y-1">
-                  <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Friendly Name
-                  </label>
+                  <div className="flex items-center gap-1">
+                    <label htmlFor={`source-name-${activeTab}`} className="text-[10px] uppercase tracking-wider text-muted-foreground">Friendly Name</label>
+                    {guidance("friendly-name", "Friendly name", "This human-readable label appears throughout the Session Room, diagnostics, and collaboration tools. It does not affect SRT transport or media processing.")}
+                  </div>
                   <Input
+                    id={`source-name-${activeTab}`}
                     value={/^Line \d+$/.test(activeLine.label) ? "" : activeLine.label}
                     onChange={(e) =>
                       updateLine({ label: e.target.value || `Line ${activeTab}` })
                     }
-                    placeholder="e.g. NBC Program, Truck A, Camera ISO"
+                    placeholder="e.g. Program Feed, Truck A, Camera ISO"
                     className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40"
                   />
+                  <p className="text-[10px] text-muted-foreground/60">Name this source so operators can identify it quickly.</p>
                 </div>
 
                 {/* Existing legacy attachments remain loadable but are not
@@ -832,27 +852,33 @@ const CreateSession = () => {
                   <>
                     <div className="grid gap-4 sm:grid-cols-[1fr_auto_auto] items-end">
                       <div className="space-y-1 min-w-0">
-                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                          SRT Address / IP
-                        </label>
+                        <div className="flex items-center gap-1">
+                          <label htmlFor={`srt-address-${activeTab}`} className="text-[10px] uppercase tracking-wider text-muted-foreground">SRT Address / IP</label>
+                          {guidance("address", "SRT address or IP", "Enter the hostname or IP of the remote SRT Listener. MAKO is always the Caller. The address must be reachable from the public internet; typical private LAN addresses may require remote NAT or UDP forwarding. Format validation does not prove reachability.")}
+                        </div>
                         <Input
+                          id={`srt-address-${activeTab}`}
                           value={activeHost}
                           onChange={(e) => handleHostChange(e.target.value)}
                           placeholder="134.209.119.136"
                           className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
                         />
+                        <p className="text-[10px] text-muted-foreground/60">Remote SRT Listener address. MAKO connects as Caller.</p>
                       </div>
                       <div className="space-y-1 sm:w-28">
-                        <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                          Port
-                        </label>
+                        <div className="flex items-center gap-1">
+                          <label htmlFor={`srt-port-${activeTab}`} className="text-[10px] uppercase tracking-wider text-muted-foreground">Port</label>
+                          {guidance("port", "Port", "Enter the UDP port used by the remote SRT Listener. The address and port identify one endpoint; remote network routing may need to forward that UDP port. MAKO does not verify firewall state here.")}
+                        </div>
                         <Input
+                          id={`srt-port-${activeTab}`}
                           value={activePort}
                           onChange={(e) => handlePortChange(e.target.value)}
                           placeholder="8890"
                           inputMode="numeric"
                           className="bg-muted/15 border-border/15 text-sm text-foreground placeholder:text-muted-foreground/40 font-mono"
                         />
+                        <p className="text-[10px] text-muted-foreground/60">UDP port exposed by the remote SRT Listener.</p>
                       </div>
                       <Button
                         variant="outline"
@@ -864,11 +890,11 @@ const CreateSession = () => {
                       >
                         <Plus className="h-3.5 w-3.5" /> Save Source
                       </Button>
+                      <p className="text-[10px] text-muted-foreground/60 sm:col-start-3">Save this source configuration for future sessions.</p>
                     </div>
                     {endpointBusy ? (
                       <p className="text-[10px] text-[hsl(var(--warning))] -mt-2">
-                        In use — this SRT listener is currently connected to another MAKO
-                        session.
+                        In use — this endpoint is reserved by another MAKO session.
                       </p>
                     ) : (
                       <p className="text-[10px] text-muted-foreground/50 -mt-2">
@@ -921,6 +947,9 @@ const CreateSession = () => {
                     )}
                     Advanced
                   </button>
+                  <p className="mt-1 text-[10px] text-muted-foreground/60">
+                    Optional connection settings for workflows that require them. Most sessions should use the defaults.
+                  </p>
                   {activeAdvancedOpen && (
                     <div className="mt-3 space-y-1">
                       <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -959,6 +988,11 @@ const CreateSession = () => {
                           ? "Re-test Connection"
                           : "Test Connection"}
                   </Button>
+                  {callerBacked(activeLine) && (
+                    <p className="text-[10px] text-muted-foreground/60">
+                      Checks address format, port and MAKO session reservation. Network reachability is not tested.
+                    </p>
+                  )}
 
                   {configDiagnostic[activeTab] && callerBacked(activeLine) && (
                     <SignalDiagnosticCard diagnostic={configDiagnostic[activeTab]} />
@@ -1050,6 +1084,11 @@ const CreateSession = () => {
               <Eraser className="h-4 w-4" /> Clear Source
             </Button>
           </div>
+          {(mode === "create" || !isActiveConfigure) && (
+            <p className="text-[10px] leading-relaxed text-muted-foreground/60">
+              Start Monitoring validates the configuration, creates MAKO routes, and attempts Caller connections. Valid configuration does not prove network reachability; signal observations appear after monitoring begins.
+            </p>
+          )}
         </div>
 
         <p className="text-[10px] text-muted-foreground/50 text-center">
