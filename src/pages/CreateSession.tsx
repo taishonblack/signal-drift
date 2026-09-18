@@ -406,9 +406,17 @@ const CreateSession = () => {
         addSession(session);
         navigate(`/session/${session.id}`);
       } catch (e) {
-        toast("Could not start monitoring.", {
-          description: e instanceof Error ? e.message : "Unknown error.",
-        });
+        const detail = e instanceof Error ? e.message : null;
+        // Phase F.1 — a MAKO-side setup failure, reported as such. Cleanup and
+        // compensation upstream are unchanged.
+        setProvisioningDiagnostic(
+          buildProvisioningFailureDiagnostic({
+            endpoint: formatEndpoint(runtimeSlots[0]?.host, runtimeSlots[0]?.port),
+            sourceLabel: runtimeSlots[0]?.name ?? null,
+            detail,
+          }),
+        );
+        toast("Could not start monitoring.", { description: detail ?? "Unknown error." });
       } finally {
         setStarting(false);
       }
@@ -468,6 +476,49 @@ const CreateSession = () => {
     }
     const enabledLines = lines.filter((l) => l.enabled && isConfigured(l));
     if (enabledLines.length === 0) return;
+
+    // Phase F.1 — evaluate the non-network facts MAKO already has BEFORE
+    // provisioning, so a basic configuration problem is never discovered by
+    // failing later. Reachability is deliberately not required: F.1 cannot
+    // test it.
+    setProvisioningDiagnostic(null);
+    const invalid = enabledLines.find((l) => {
+      if (isSourceBacked(l)) return false;
+      const { host, port } = parseSrtInput(l.srtAddress);
+      return !endpointSyntaxValid(host, port);
+    });
+    if (invalid) {
+      const { host, port } = parseSrtInput(invalid.srtAddress);
+      setActiveTab(invalid.id);
+      setConfigDiagnostic((prev) => ({
+        ...prev,
+        [invalid.id]: buildConfigurationDiagnostic({
+          host,
+          port,
+          reservation: "not_checked",
+          sourceLabel: `Source ${invalid.id}`,
+        }),
+      }));
+      toast(`Source ${invalid.id} configuration is invalid.`, {
+        description: `${validateAddress(host).message} · ${validatePort(port).message}`,
+      });
+      return;
+    }
+    if (endpointBusy) {
+      // Server-authoritative exclusivity is unchanged; this only stops MAKO
+      // from attempting a provisioning it already knows will conflict.
+      setConfigDiagnostic((prev) => ({
+        ...prev,
+        [activeTab]: buildConfigurationDiagnostic({
+          host: activeHost,
+          port: activePort,
+          reservation: "in_use",
+          sourceLabel: `Source ${activeTab}`,
+        }),
+      }));
+      toast("In use — this SRT listener is reserved by another MAKO session.");
+      return;
+    }
 
     // Enforce "one active session per user"
     const active = getActiveSessionForUser(currentUser.id);
