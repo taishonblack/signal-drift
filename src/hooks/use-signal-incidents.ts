@@ -1,7 +1,7 @@
 // Phase E.5A — read-only access to the persistent incident ledger.
 //
 // Loads authorized incidents for a session, newest first. There is no demo
-// fallback, no quinn-store fallback and no synthesized value: an empty ledger
+// fallback, no fallback to retired mock incident data, and no synthesized value: an empty ledger
 // reports empty.
 
 import { useCallback, useEffect, useState } from "react";
