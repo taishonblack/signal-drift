@@ -2,19 +2,17 @@
 import jsPDF from "jspdf";
 import {
   type Incident,
-  type QuinnEvent,
   getEventsForIncident,
+  NO_INCIDENTS_OBSERVED,
 } from "@/lib/quinn-store";
 
+// Deterministic detector classifications MAKO intends to observe (Phase E.5B+).
 const eventTypeLabels: Record<string, string> = {
-  packet_loss_spike: "Packet Loss Spike",
-  bitrate_drop: "Bitrate Drop",
-  freeze_detected: "Freeze Detected",
-  pts_jump: "PTS Jump",
-  audio_clipping: "Audio Clipping",
-  black_frames: "Black Frames",
-  resolution_change: "Resolution Change",
-  codec_change: "Codec Change",
+  black_video: "Black Video",
+  frozen_video: "Frozen Video",
+  audio_silence: "Audio Silence",
+  signal_loss: "Signal Loss",
+  format_change: "Format Change",
 };
 
 function fmtTs(utc: string): string {
@@ -26,52 +24,32 @@ function fmtTsShort(utc: string): string {
   return new Date(utc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+// Investigation suggestions only. These are never presented as MAKO's own
+// findings and never imply a cause MAKO has established.
 const recommendedChecks: Record<string, string[]> = {
-  packet_loss_spike: [
-    "Verify network path stability (traceroute / MTR)",
-    "Check SRT sender buffer and latency settings",
-    "Confirm no bandwidth contention on shared links",
-    "Review encoder bitrate vs. available headroom",
-  ],
-  bitrate_drop: [
-    "Check encoder health and CPU/GPU utilization",
-    "Verify CBR/VBR mode and min-bitrate settings",
-    "Look for upstream congestion or rate limiting",
-    "Confirm source signal is stable (no black/freeze at input)",
-  ],
-  freeze_detected: [
-    "Inspect decoder buffer underrun counters",
-    "Check for PTS discontinuities around freeze window",
-    "Verify source encoder is not dropping frames",
-    "Review SRT too-late-to-play packet stats",
-  ],
-  pts_jump: [
-    "Check encoder clock source stability",
-    "Verify no signal interruption at source",
-    "Review SRT stats for retransmit spikes around event",
-    "Inspect GOP structure for irregularities",
-  ],
-  audio_clipping: [
-    "Review audio input levels at source",
-    "Check limiter/compressor settings in the chain",
-    "Verify audio reference level alignment (-20 dBFS = 0 VU)",
-    "Monitor LUFS loudness over sliding window",
-  ],
-  black_frames: [
+  black_video: [
     "Check physical cable / SDI connection at source",
     "Verify encoder input signal presence",
     "Review upstream switcher / router configuration",
-    "Check for HDCP or format mismatch issues",
   ],
-  resolution_change: [
-    "Confirm intentional format change with production",
-    "Verify downstream decoders handle resolution switch",
-    "Check auto-scaling / ABR ladder configuration",
+  frozen_video: [
+    "Verify the source encoder is still advancing frames",
+    "Confirm the content was not legitimately static",
+    "Correlate the observed window against upstream logs",
   ],
-  codec_change: [
-    "Confirm intentional codec switch with engineering",
-    "Verify decoder compatibility with new codec profile",
-    "Check for encoder failover or redundancy switch",
+  audio_silence: [
+    "Review audio levels at the source",
+    "Confirm the correct audio channels are embedded",
+    "Verify no upstream mute or breakaway is applied",
+  ],
+  signal_loss: [
+    "Confirm the source device is still sending",
+    "Verify network reachability to MAKO's receiver",
+    "Correlate the observed window against network logs",
+  ],
+  format_change: [
+    "Confirm the format change was intentional with production",
+    "Verify downstream decoders handle the new format",
   ],
 };
 
@@ -166,6 +144,13 @@ export function generateIncidentPDF(incident: Incident): void {
 
   doc.setFont("helvetica", "normal");
   doc.setTextColor(30, 30, 30);
+  if (events.length === 0) {
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text(NO_INCIDENTS_OBSERVED, margin + 1, y);
+    doc.setTextColor(30, 30, 30);
+    y += 5;
+  }
   events.forEach((ev) => {
     checkPage(8);
     doc.setFontSize(8);
@@ -179,7 +164,11 @@ export function generateIncidentPDF(incident: Incident): void {
     doc.text(ev.severity.toUpperCase(), margin + 72, y);
     doc.setTextColor(30, 30, 30);
 
-    doc.text(`${(ev.confidence * 100).toFixed(0)}%`, margin + 95, y);
+    doc.text(
+      ev.confidence === null ? "—" : `${(ev.confidence * 100).toFixed(0)}%`,
+      margin + 95,
+      y,
+    );
 
     const evStr = Object.entries(ev.evidence).map(([k, v]) => `${k}: ${v}`).join(", ");
     const evLines = doc.splitTextToSize(evStr, contentW - 120);

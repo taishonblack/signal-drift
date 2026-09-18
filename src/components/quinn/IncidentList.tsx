@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { type Incident, severityBg, statusBg } from "@/lib/quinn-store";
+import { type Incident, severityBg, statusBg, NO_INCIDENTS_OBSERVED } from "@/lib/quinn-store";
 import { Zap, AlertTriangle, Info } from "lucide-react";
 
 const SeverityIcon = ({ severity }: { severity: string }) => {
@@ -15,7 +15,7 @@ interface Props {
 
 export default function IncidentList({ incidents, onSelect }: Props) {
   if (incidents.length === 0) {
-    return <p className="text-xs text-muted-foreground py-4 text-center">No incidents recorded.</p>;
+    return <p className="text-xs text-muted-foreground py-4 text-center">{NO_INCIDENTS_OBSERVED}</p>;
   }
 
   const ts = (utc: string) => new Date(utc).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });

@@ -1,7 +1,11 @@
 // Session-level report PDF for expired/ended sessions
 import jsPDF from "jspdf";
 import { type Session } from "@/lib/mock-data";
-import { getIncidentsForSession, getEventsForIncident } from "@/lib/quinn-store";
+import {
+  getIncidentsForSession,
+  getEventsForIncident,
+  NO_INCIDENTS_OBSERVED,
+} from "@/lib/quinn-store";
 
 function fmtTs(utc: string): string {
   return new Date(utc).toLocaleString([], { dateStyle: "medium", timeStyle: "medium" });
@@ -100,7 +104,7 @@ export function generateSessionReportPDF(session: Session): void {
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100, 100, 100);
-    doc.text("No incidents recorded for this session.", margin, y);
+    doc.text(NO_INCIDENTS_OBSERVED, margin, y);
     y += 6;
   }
 
