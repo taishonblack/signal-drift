@@ -64,4 +64,53 @@ describe("E.5B.1 — Signal Inspector has no deferred Transport section", () => 
     expect(screen.queryByText("Bitrate")).toBeNull();
     expect(screen.queryByText("Packet Loss")).toBeNull();
     expect(screen.queryByText("RTT")).toBeNull();
-et  });
+    expect(screen.queryAllByText("Not measured").length).toBe(0);
+  });
+
+  it("still renders genuine Video metadata", () => {
+    renderPanel();
+    expect(screen.getByText("h264 High")).toBeTruthy();
+    expect(screen.getByText("1920 × 1080")).toBeTruthy();
+    expect(screen.getByText("59.94 fps")).toBeTruthy();
+    expect(screen.getByText("progressive")).toBeTruthy();
+  });
+
+  it("still renders genuine Audio and output metadata", () => {
+    renderPanel();
+    expect(screen.getByText("aac (LC)")).toBeTruthy();
+    expect(screen.getByText("48 kHz")).toBeTruthy();
+    expect(screen.getByText("opus")).toBeTruthy();
+    expect(screen.getByText("128 kb/s (configured)")).toBeTruthy();
+  });
+
+  it("still renders the Browser Audio Level section", () => {
+    renderPanel();
+    expect(screen.getByText("Browser Audio Level")).toBeTruthy();
+    expect(screen.getByText("— Not measured")).toBeTruthy();
+  });
+
+  it("still renders the History section", () => {
+    renderPanel();
+    expect(screen.getByText("History")).toBeTruthy();
+    expect(screen.getByText("No telemetry history available.")).toBeTruthy();
+  });
+
+  it("still renders a diagnostic card when a playback condition exists", () => {
+    renderPanel({ playbackState: "no_video" });
+    expect(screen.getByText("Connection issue")).toBeTruthy();
+    expect(
+      screen.getByText("No media publication has been detected for this route."),
+    ).toBeTruthy();
+  });
+
+  it("introduces no transport claims MAKO cannot measure", () => {
+    const { container } = renderPanel();
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/\b\d+(\.\d+)?\s*Mbps\b/);
+    expect(text).not.toMatch(/\b\d+(\.\d+)?\s*ms\b/);
+    expect(text).not.toMatch(/packet loss/i);
+    expect(text).not.toMatch(/latency/i);
+    expect(text).not.toMatch(/network health/i);
+    expect(text).not.toMatch(/firewall/i);
+  });
+});
