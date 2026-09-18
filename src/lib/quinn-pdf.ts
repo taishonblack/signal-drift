@@ -2,8 +2,8 @@
 import jsPDF from "jspdf";
 import {
   type Incident,
-  type QuinnEvent,
   getEventsForIncident,
+  NO_INCIDENTS_OBSERVED,
 } from "@/lib/quinn-store";
 
 // Deterministic detector classifications MAKO intends to observe (Phase E.5B+).
@@ -144,6 +144,13 @@ export function generateIncidentPDF(incident: Incident): void {
 
   doc.setFont("helvetica", "normal");
   doc.setTextColor(30, 30, 30);
+  if (events.length === 0) {
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text(NO_INCIDENTS_OBSERVED, margin + 1, y);
+    doc.setTextColor(30, 30, 30);
+    y += 5;
+  }
   events.forEach((ev) => {
     checkPage(8);
     doc.setFontSize(8);
@@ -157,7 +164,11 @@ export function generateIncidentPDF(incident: Incident): void {
     doc.text(ev.severity.toUpperCase(), margin + 72, y);
     doc.setTextColor(30, 30, 30);
 
-    doc.text(`${(ev.confidence * 100).toFixed(0)}%`, margin + 95, y);
+    doc.text(
+      ev.confidence === null ? "—" : `${(ev.confidence * 100).toFixed(0)}%`,
+      margin + 95,
+      y,
+    );
 
     const evStr = Object.entries(ev.evidence).map(([k, v]) => `${k}: ${v}`).join(", ");
     const evLines = doc.splitTextToSize(evStr, contentW - 120);
