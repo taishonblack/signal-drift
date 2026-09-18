@@ -4,6 +4,10 @@ import {
   clearReceivedStream,
   publishReceivedStream,
 } from "@/lib/telemetry/browser-audio-registry";
+import {
+  clearPlaybackState,
+  publishPlaybackState,
+} from "@/lib/diagnostics/playback-state-registry";
 
 export type LiveCameraState =
   | "connecting"
@@ -59,10 +63,15 @@ const LiveCamera = ({
   const report = useCallback(
     (next: LiveCameraState) => {
       setState(next);
+      // Phase F.1 — publish the observed state for passive diagnostic readers.
+      // Reporting only; negotiation and retry behaviour are unchanged.
+      publishPlaybackState(streamName, next);
       onStateChange?.(next);
     },
-    [onStateChange],
+    [onStateChange, streamName],
   );
+
+  useEffect(() => () => clearPlaybackState(streamName), [streamName]);
 
   useEffect(() => {
     let cancelled = false;
