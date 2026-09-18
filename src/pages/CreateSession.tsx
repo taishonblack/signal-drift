@@ -35,7 +35,6 @@ import {
   saveSessionRemote,
   type RuntimeSlotIntent,
 } from "@/lib/sessions-remote";
-import { checkEndpointAvailability } from "@/lib/session-lease";
 import { useEndpointAvailability } from "@/hooks/use-endpoint-availability";
 import { COMMON_TIMEZONES, tzLabel } from "@/lib/time-utils";
 import { toast } from "@/components/ui/sonner";
