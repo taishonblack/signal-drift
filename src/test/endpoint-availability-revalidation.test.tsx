@@ -2,7 +2,7 @@
 // must stay truthful and fresh without any user action.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import type { EndpointAvailability } from "@/lib/session-lease";
 
 const checkMock = vi.fn<(host: string, port: number) => Promise<EndpointAvailability>>();
@@ -86,7 +86,10 @@ describe("useEndpointAvailability", () => {
       await Promise.resolve();
     });
     expect(checkMock).toHaveBeenCalledTimes(2);
-    await waitFor(() => expect(result.current).toBe(false));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current).toBe(false);
   });
 
   it("window focus revalidates stale state", async () => {
@@ -100,7 +103,10 @@ describe("useEndpointAvailability", () => {
       await Promise.resolve();
     });
     expect(checkMock).toHaveBeenCalledTimes(2);
-    await waitFor(() => expect(result.current).toBe(true));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current).toBe(true);
   });
 
   it("old in-flight result cannot overwrite a newer host/port result", async () => {
