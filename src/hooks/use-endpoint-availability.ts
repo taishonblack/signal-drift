@@ -42,7 +42,8 @@ export function useEndpointReservation(host: string, port: string): ReservationS
 
   useEffect(() => {
     const current = { host: host.trim(), port };
-    setBusy(false);
+    // A changed endpoint has no result yet — never inherit the previous one.
+    setState("not_checked");
 
     if (!isValidEndpoint(host, port)) return;
     const portNum = Number(current.port);
