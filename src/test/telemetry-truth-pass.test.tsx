@@ -41,7 +41,7 @@ describe("Truth Pass — no fabricated engineering telemetry", () => {
       expect(screen.queryByText(fabricated)).toBeNull();
     }
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Not measured").length).toBe(3);
+    expect(screen.getAllByText("Not measured").length).toBe(2);
     expect(screen.getByText("No telemetry history available.")).toBeTruthy();
   });
 

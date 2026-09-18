@@ -62,7 +62,7 @@ describe("Phase E.2 — Signal Inspector reads the telemetry contract", () => {
     expect(screen.getByText("128 kb/s (configured)")).toBeTruthy();
   });
 
-  it("shows transport as not measured even when media is observed", () => {
+  it("renders no Transport section even when media is observed", () => {
     renderPanel(
       snapshotFromMetadata({
         identity,
@@ -71,7 +71,11 @@ describe("Phase E.2 — Signal Inspector reads the telemetry contract", () => {
         configuredReceiverLatencyUs: 120000,
       }),
     );
-    expect(screen.getAllByText("Not measured").length).toBe(1);
+    expect(screen.queryByText("Transport")).toBeNull();
+    expect(screen.queryByText("Bitrate")).toBeNull();
+    expect(screen.queryByText("Packet Loss")).toBeNull();
+    expect(screen.queryByText("RTT")).toBeNull();
+    expect(screen.queryAllByText("Not measured").length).toBe(0);
     expect(screen.queryByText(/RTT.*ms/)).toBeNull();
     expect(screen.queryByText(/120/)).toBeNull();
     expect(screen.queryByText(/Mbps/)).toBeNull();
@@ -79,14 +83,14 @@ describe("Phase E.2 — Signal Inspector reads the telemetry contract", () => {
 
   it("shows every field as unavailable when nothing is observed", () => {
     const { container } = renderPanel(emptySnapshot(identity));
-    expect(screen.getAllByText("Not measured").length).toBe(3);
+    expect(screen.getAllByText("Not measured").length).toBe(2);
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(container.textContent).not.toMatch(/\b0(\.0+)?\s*(Mbps|ms|fps|%|kHz)/);
   });
 
   it("shows no telemetry at all when no snapshot exists for the route", () => {
     renderPanel(null);
-    expect(screen.getAllByText("Not measured").length).toBe(3);
+    expect(screen.getAllByText("Not measured").length).toBe(2);
     expect(screen.getByText("No telemetry history available.")).toBeTruthy();
   });
 
