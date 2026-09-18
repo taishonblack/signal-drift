@@ -154,6 +154,43 @@ const InspectorPanel = ({
 
       <div className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Signal Inspector</div>
 
+      {/* Phase F.1 — only shown when MAKO has actually observed a problem. */}
+      {diagnostic && (
+        <SignalDiagnosticCard
+          diagnostic={diagnostic}
+          actions={
+            <>
+              {onConfigureSource && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onConfigureSource}
+                  className="h-7 text-[10px] border-border/30"
+                >
+                  Configure Source
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={async () => {
+                  const text = buildDiagnosticSummary(diagnostic);
+                  try {
+                    await navigator.clipboard.writeText(text);
+                    toast("Diagnostic summary copied.");
+                  } catch {
+                    toast("Could not copy the summary.");
+                  }
+                }}
+                className="h-7 text-[10px]"
+              >
+                Copy Diagnostic Summary
+              </Button>
+            </>
+          }
+        />
+      )}
+
       <Section title="Video" fields={videoFields} />
       <Section title="Transport" fields={transportFields} />
       <Section title="Audio" fields={audioFields} />
