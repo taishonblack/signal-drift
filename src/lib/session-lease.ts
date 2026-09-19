@@ -29,20 +29,37 @@ export function getClientInstanceId(): string {
   }
 }
 
-/** Renew this tab's presence. Silent best-effort: expiry is the safety net. */
-export async function renewSessionLease(sessionId: string): Promise<boolean> {
+export type LeaseRenewal = {
+  renewed: boolean;
+  /** "session_terminal" means the session is over: stop renewing. */
+  reason?: string;
+};
+
+/**
+ * Renew this tab's presence. Silent best-effort: expiry is the safety net.
+ *
+ * A verified user JWT is required by the function, so the current access token
+ * is attached explicitly. Without a session we do not call at all — invoking
+ * with only the publishable key would be rejected as unauthorized.
+ */
+export async function renewSessionLease(sessionId: string): Promise<LeaseRenewal> {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return { renewed: false, reason: "no_session" };
     const { data, error } = await supabase.functions.invoke("session-lease", {
       body: {
         action: "renew",
         session_id: sessionId,
         client_instance_id: getClientInstanceId(),
       },
+      headers: { Authorization: `Bearer ${token}` },
     });
-    if (error) return false;
-    return Boolean((data as { renewed?: boolean } | null)?.renewed ?? true);
+    if (error) return { renewed: false, reason: "invoke_failed" };
+    const body = (data ?? {}) as { renewed?: boolean; reason?: string };
+    return { renewed: Boolean(body.renewed ?? true), reason: body.reason };
   } catch {
-    return false;
+    return { renewed: false, reason: "invoke_failed" };
   }
 }
 

@@ -29,12 +29,17 @@ export function usePresenceLifecycle() {
   // active session. Never gated on user interaction.
   useEffect(() => {
     let cancelled = false;
+    // Sessions the server has declared over: never renewed again.
+    const terminal = new Set<string>();
     const renew = async () => {
       const s = readCurrentSession();
-      if (!s || s.status !== "active") return;
-      const { data } = await supabase.auth.getUser();
-      if (!data?.user || cancelled) return; // guest sessions hold no lease
-      await renewSessionLease(s.id);
+      if (!s || s.status !== "active" || terminal.has(s.id)) return;
+      const { data } = await supabase.auth.getSession();
+      if (!data?.session || cancelled) return; // no verified user, no lease
+      const result = await renewSessionLease(s.id);
+      if (!result.renewed && result.reason === "session_terminal") {
+        terminal.add(s.id);
+      }
     };
     void renew();
     const timer = window.setInterval(() => void renew(), LEASE_RENEW_MS);
